@@ -31,7 +31,7 @@ skills/     8 global skills (available in any session, any project)
 agents/     AGENTS.md — global instructions for every agent (single source)
 claude/     CLAUDE.md pointer + shareable settings.json
 archon/     canonical source of the Archon flow (headless tlc) — imported, not linked
-hooks/      empty for now
+hooks/      provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
 install.sh
 ```
 
