@@ -41,7 +41,7 @@ The code and console output are English. The **report** (terminal, job summary, 
 - `cycles.mts` → `ALIAS_PREFIXES` (non-relative import prefixes resolved as internal; default `@/` → repo root).
 - `vitest.quality.config.ts` → the wide coverage slice and suite includes.
 - `gate.mts` → `ROOT` assumes `scripts/quality/` depth; `measureDuplication` scans `src`.
-- `dependency-cruiser.example.cjs` → the layer globs, and the **cross-feature policy** (three options documented in the file — pick one).
+- `dependency-cruiser.example.cjs` → the layer globs. The cross-feature policy is canon: **public API only** (the feature's root `index.ts`) — adapt only if a project must deviate, and record why.
 
 ## Adding a new metric
 
