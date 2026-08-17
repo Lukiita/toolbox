@@ -1,0 +1,89 @@
+# Configuração do Archon para este repositório.
+#
+# `baseBranch` fica fixado aqui, e não no banco do Archon, por um motivo
+# medido no projeto de origem: o Archon grava `default_branch` no registro do
+# projeto com a branch que por acaso estava em check-out no momento do
+# registro. Se essa branch não existir no remoto, a v0.6.0 recusa criar
+# worktree e derruba qualquer `--branch` na largada.
+#
+# Fixar `main` aqui deixa a decisão visível e versionada, em vez de depender do
+# que ficou gravado no banco de uma máquina só.
+worktree:
+  baseBranch: main
+
+# Aliases de modelo por PAPEL. Um nó usa com `model: "@nome"` — o campo é
+# `model:`, NÃO `alias:`, que o Archon ignora calado (verificado no `archon
+# validate workflows` da v0.6.0: alias desconhecido em `model:` vira erro; um
+# `alias:` solto passa sem reclamar).
+#
+# Ficam aqui, e não no `archon ai alias set`, porque assim são versionados e
+# viajam com o repo. Config do repo ganha do global.
+#
+# **Alias diz papel; tier diz porte.** `small`/`medium`/`large` continuam
+# valendo e são globais — nó mecânico (extract-slug, create-pr) usa tier, porque
+# ali a pergunta é só "quão capaz precisa ser". Nó com papel no desenho usa
+# alias, porque a pergunta é "quem faz esse trabalho", e a resposta pode mudar
+# de família sem mudar de porte.
+#
+# Um alias por papel, e não um por família, justamente para dois papéis da mesma
+# família poderem divergir: `@author` e `@fixer` são os dois Claude, mas o
+# autor parte de uma spec e o consertador parte de uma lista precisa de
+# `arquivo:linha` — trabalho diferente, porte diferente.
+#
+# Custo: os dois provedores vêm de assinatura, não de chave de API. O Archon
+# dirige os BINÁRIOS locais (`archon doctor` confirma: "Claude binary … Codex
+# binary …", com "AI credentials: none connected"), então quem autentica é o
+# `claude` e o `codex` já logados na máquina.
+aliases:
+  # ── escrevem código-fonte: Claude ──────────────────────────────────────────
+
+  # Implementa a feature a partir da spec. É o papel mais caro do fluxo: parte
+  # de um documento e decide como virar código.
+  "@author":
+    provider: claude
+    model: opus
+
+  # Aplica correções que OUTRO contexto apontou (`fix`, `fix-gaps`). Parte de
+  # uma lista precisa — `arquivo:linha` + o que está errado —, então não precisa
+  # do mesmo porte do autor: o trabalho de descobrir já foi feito.
+  "@fixer":
+    provider: claude
+    model: sonnet
+
+  # ── só leem e relatam: outra família ───────────────────────────────────────
+  #
+  # A troca de família é o ponto. `autor != revisor` deixa de ser "nó separado,
+  # mesma família" e passa a ser treino diferente com pontos cegos diferentes —
+  # a propriedade que fez o CodeRabbit achar, na PR #44, o Major de
+  # `locked-fields.ts` que a lente "regras do projeto" desta esteira declarou
+  # inexistente.
+  #
+  # Ressalvas da v0.6.0: o Codex roda sempre com `danger-full-access` (sem
+  # sandbox), e `effort` é aceito na validação mas ignorado na execução.
+  #
+  # O `danger-full-access` entra aqui com o escopo escrito, não por descuido: o
+  # diff que o `review` lê foi escrito pelo `implement` da MESMA run, nesta
+  # worktree, a partir de uma spec versionada — não é PR de terceiro. Se um dia
+  # esta esteira revisar diff de fora, este alias precisa de isolamento
+  # externo (container sem credencial) ANTES, porque instrução read-only no
+  # prompt não contém o que a sandbox conteria.
+
+  # Revisa o diff e tria (`review`). Read-only por construção: o nó que usa este
+  # alias não tem passo de escrita.
+  "@reviewer":
+    provider: codex
+    model: gpt-5.6-sol
+
+  # Verificação independente contra a spec (`verify`, `re-verify`) — trabalho
+  # mais pesado que a revisão: critérios de aceite rastreados um a um, regressão
+  # de capacidade e sensor de discriminação.
+  #
+  # DEFINIDO MAS NÃO LIGADO. Esses nós usam `output_format` (veredito
+  # estruturado que decide o `when` do `fix-gaps`), e não está verificado se o
+  # adaptador Codex honra isso. Se não honrar, o FAIL deixa de disparar a
+  # rodada de conserto e a run halta no `verdict-gate` — degradado mas seguro,
+  # porque o portão grepa o `validation.md` persistido. Ligar só depois de
+  # medir numa feature de verdade.
+  "@verifier":
+    provider: codex
+    model: gpt-5.6-sol
