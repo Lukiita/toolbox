@@ -1,33 +1,33 @@
 # Upstream - tlc-spec-driven
 
-- **Repo**: https://github.com/tech-leads-club/agent-skills (autor: Felipe Rodrigues - felipfr; licença CC-BY-4.0)
-- **Caminho lá**: `packages/skills-catalog/skills/(development)/tlc-spec-driven/`
-- **Base vendorizada aqui**: **3.3.0**, commit upstream `fe318be656b315d5b6f45cf7ea23946b2d0241b0`, no branch **`vendor/tlc-spec-driven`** deste repo (atualizada de 3.2.0 por merge 3-way em 2026-08-17)
+- **Repo**: https://github.com/tech-leads-club/agent-skills (author: Felipe Rodrigues - felipfr; CC-BY-4.0)
+- **Path there**: `packages/skills-catalog/skills/(development)/tlc-spec-driven/`
+- **Vendored base here**: **3.3.0**, upstream commit `fe318be656b315d5b6f45cf7ea23946b2d0241b0`, on this repo's **`vendor/tlc-spec-driven`** branch (updated from 3.2.0 via 3-way merge on 2026-08-17)
 
-## Delta local - por que esta cópia difere da base
+## Local delta - why this copy differs from the base
 
-1. **Integração `capability-sync`** (nasceu no project-b, jul/2026): `.specs/capabilities/` na estrutura, item (6) do Verifier no SKILL.md, Step 11 + regressão de capacidade (2b) no validate.md, tips "Sync on PASS". A skill `capability-sync` é nossa - **não existe no upstream**. Candidata a ser contribuída como skill nova no registry deles. Referências cross-skill usam o prefixo global `~/.agents/skills/capability-sync/` (instalação por-projeto troca o prefixo).
-2. **Carimbo do commit verificado** (project-b): item 2 do Step 9 do validate.md - `**Commit verificado**` preenchido com `git log -1 --format=%H -- . ':!.specs'`, nunca HEAD cru; + tip correspondente. O fluxo archon depende desse campo (`archon/commands/tlc-verify-feature.md`).
-3. **Refinamento do gatilho de Discuss** (project-b): dimensão *presente* não dispara; dimensão *não resolvida* dispara (SKILL.md + discuss.md). O upstream ainda dispara em qualquer dimensão presente. Candidato a PR upstream.
-4. **Guard do `penalize` no lessons.py** (project-b): só lição `confirmed` pode ser penalizada - candidata nunca foi carregada como guidance, logo não pode ter "falhado quando aplicada"; + frase correspondente no lessons.md. Candidato a PR upstream.
-5. **Pontes com `domain-modeling`** (toolbox, 2026-08-17): `CONTEXT.md` e `docs/adr/` no Step 2 da Knowledge Chain; glossário no specify.md; ADRs + vocabulário no design.md; no memory.md, a regra "onde mora a substância" (vocabulário → CONTEXT.md; decisão que passa o teste triplo → ADR com AD-NNN de ponteiro, em repos com diretório de ADR). Candidatos a PR upstream em forma condicional.
-6. **Tip "List Files Touched"** no design.md (project-b). Candidato a PR upstream.
+1. **`capability-sync` integration** (born in project-b, Jul/2026): `.specs/capabilities/` in the structure, Verifier item (6) in SKILL.md, Step 11 + capability regression (2b) in validate.md, "Sync on PASS" tips. The `capability-sync` skill is ours - **it does not exist upstream**. Candidate for contribution as a new skill in their registry. Cross-skill references use the global `~/.agents/skills/capability-sync/` prefix (per-project installs swap the prefix).
+2. **Verified-commit stamp** (project-b): item 2 of validate.md Step 9 - `**Commit verificado**` filled with `git log -1 --format=%H -- . ':!.specs'`, never raw HEAD; plus the matching tip. The archon flow depends on this field (`archon/commands/tlc-verify-feature.md`).
+3. **Discuss trigger refinement** (project-b): a dimension being *present* does not trigger; a dimension being *unresolved* does (SKILL.md + discuss.md). Upstream still triggers on any present dimension. PR candidate.
+4. **`penalize` guard in lessons.py** (project-b): only a `confirmed` lesson can be penalized - a candidate was never loaded as guidance, so it cannot have "failed when applied"; plus the matching sentence in lessons.md. PR candidate.
+5. **`domain-modeling` bridges** (toolbox, 2026-08-17): `CONTEXT.md` and `docs/adr/` in Knowledge Chain Step 2; glossary in specify.md; ADRs + vocabulary in design.md; in memory.md, the "where the substance lives" rule (vocabulary → CONTEXT.md; a decision passing the three-part test → ADR with a pointer AD-NNN, in repos with an ADR directory). PR candidates in conditional form.
+6. **"List Files Touched" tip** in design.md (project-b). PR candidate.
 
-## Aposentados no update para 3.3.0 (o upstream resolveu melhor)
+## Retired in the 3.3.0 update (upstream solved it better)
 
-- Prefixo `~/.agents/skills/` para scripts próprios → substituído pela resolução `<skill-dir>` do upstream (issue #158).
-- Fold de diacríticos no `_norm` do lessons.py → superado pelo fix upstream (casefold + any-script + selftest embarcado).
-- Exemplo com `pnpm` na matriz de cobertura do tasks.md → voltou ao exemplo upstream (era só ilustrativo; o real deriva do repo).
+- The `~/.agents/skills/` prefix for the skill's own scripts → replaced by upstream's `<skill-dir>` resolution (issue #158).
+- The diacritic fold in lessons.py `_norm` → superseded by the upstream fix (casefold + any-script + built-in selftest).
+- The `pnpm` example in the tasks.md coverage matrix → back to the upstream example (illustrative only; the real one derives from the repo).
 
-## Como atualizar (3-way merge via vendor branch)
+## How to update (3-way merge via the vendor branch)
 
-1. Clone raso do upstream e extraia a versão nova no layout deste repo:
+1. Shallow-clone the upstream and extract the new version in this repo's layout:
    `git archive <commit> 'packages/skills-catalog/skills/(development)/tlc-spec-driven' | tar -x --strip-components=4 -C <tmp>`
-2. No branch `vendor/tlc-spec-driven`: substitua `skills/tlc-spec-driven/` pelo conteúdo extraído e commit
-   `vendor: tlc-spec-driven X.Y.Z (upstream <hash-completo>)`.
-3. No `main`: `git merge vendor/tlc-spec-driven`. O git faz o 3-way contra a base - o delta local sobrevive sozinho ou conflita às claras. **Leia a saída completa do merge (nunca truncada)** e zere os marcadores em TODOS os arquivos antes de commitar; ao resolver, prefira a forma upstream quando ela cobre o mesmo problema - **delta bom é delta que encolhe**.
-4. Rode os smoke tests: `python3 skills/tlc-spec-driven/scripts/lessons.py selftest` e o `--help` de cada script.
-5. Atualize este arquivo: nova base, patches aposentados, patches novos.
-6. Push de `main` **e** do branch vendor. `install.sh` não precisa rodar de novo (os symlinks já apontam para cá).
+2. On the `vendor/tlc-spec-driven` branch: replace `skills/tlc-spec-driven/` with the extracted content and commit
+   `vendor: tlc-spec-driven X.Y.Z (upstream <full-hash>)`.
+3. On `main`: `git merge vendor/tlc-spec-driven`. Git runs the 3-way against the base - the local delta survives on its own or conflicts in the open. **Read the full merge output (never truncated)** and clear the markers in ALL files before committing; when resolving, prefer the upstream form when it covers the same problem - **good delta is shrinking delta**.
+4. Run the smoke tests: `python3 skills/tlc-spec-driven/scripts/lessons.py selftest` and each script's `--help`.
+5. Update this file: new base, retired patches, new patches.
+6. Push `main` **and** the vendor branch. `install.sh` does not need to run again (the symlinks already point here).
 
-**Regra dura:** nunca editar a skill no branch vendor - ele é upstream puro, sempre. Todo patch local acontece no main. Um patch que valha para qualquer usuário da skill vira issue/PR no upstream antes de virar delta permanente aqui.
+**Hard rule:** never edit the skill on the vendor branch - it is pure upstream, always. Every local patch happens on main. A patch useful to any user of the skill becomes an upstream issue/PR before becoming permanent delta here.

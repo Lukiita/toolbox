@@ -1,40 +1,42 @@
 #!/usr/bin/env bash
 #
-# Instala o toolbox nesta máquina: liga o ambiente global a este repo por
-# symlink. Idempotente — rodar duas vezes produz o mesmo estado.
+# Installs the toolbox on this machine: links the global environment to this
+# repo through symlinks. Idempotent - running it twice produces the same state.
 #
-# O que ele liga:
+# What it links:
 #   ~/.claude/skills    -> skills/            (Claude Code)
-#   ~/.agents/skills    -> skills/            (caminho canônico multi-agente;
-#                                              tlc, capability-sync e
-#                                              pr-review-triage referenciam ele)
-#   ~/.claude/CLAUDE.md -> claude/CLAUDE.md   (instruções globais)
+#   ~/.agents/skills    -> skills/            (canonical multi-agent path;
+#                                              tlc, capability-sync and
+#                                              pr-review-triage reference it)
+#   ~/.agents/AGENTS.md -> agents/AGENTS.md   (agent-agnostic global rules)
+#   ~/.codex/AGENTS.md  -> agents/AGENTS.md
+#   ~/.claude/CLAUDE.md -> claude/CLAUDE.md   (a one-line pointer to AGENTS.md)
 #
-# settings.json NÃO é symlink de propósito: o Claude Code reescreve esse
-# arquivo sozinho (ex.: /model salva nele), e uma escrita atômica do app
-# substituiria o link por arquivo real, quebrando a fonte única em silêncio.
-# Então: copia quando não existe; quando existe e diverge, mostra o diff e
-# deixa a decisão com você.
+# settings.json is deliberately NOT a symlink: Claude Code rewrites that file
+# on its own (e.g. /model saves into it), and an atomic write by the app would
+# replace the link with a real file, silently breaking the single source.
+# So: copy when absent; when present and divergent, show the diff and leave
+# the decision to you.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-link() { # link <alvo-no-repo> <destino-no-home>
-  local alvo="$1" destino="$2"
-  mkdir -p "$(dirname "$destino")"
-  if [ -L "$destino" ]; then
-    if [ "$(readlink -f "$destino")" = "$(readlink -f "$alvo")" ]; then
-      echo "ok:     $destino"
+link() { # link <target-in-repo> <destination-in-home>
+  local target="$1" dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  if [ -L "$dest" ]; then
+    if [ "$(readlink -f "$dest")" = "$(readlink -f "$target")" ]; then
+      echo "ok:     $dest"
       return
     fi
-    rm "$destino"
-  elif [ -e "$destino" ]; then
-    local bak="$destino.pre-toolbox.$(date +%Y%m%d%H%M%S)"
-    echo "backup: $destino -> $bak"
-    mv "$destino" "$bak"
+    rm "$dest"
+  elif [ -e "$dest" ]; then
+    local bak="$dest.pre-toolbox.$(date +%Y%m%d%H%M%S)"
+    echo "backup: $dest -> $bak"
+    mv "$dest" "$bak"
   fi
-  ln -s "$alvo" "$destino"
-  echo "link:   $destino -> $alvo"
+  ln -s "$target" "$dest"
+  echo "link:   $dest -> $target"
 }
 
 link "$REPO_DIR/skills" "$HOME/.claude/skills"
@@ -47,12 +49,12 @@ SETTINGS_REPO="$REPO_DIR/claude/settings.json"
 SETTINGS_HOME="$HOME/.claude/settings.json"
 if [ ! -e "$SETTINGS_HOME" ]; then
   cp "$SETTINGS_REPO" "$SETTINGS_HOME"
-  echo "copia:  $SETTINGS_HOME (novo)"
+  echo "copy:   $SETTINGS_HOME (new)"
 elif cmp -s "$SETTINGS_REPO" "$SETTINGS_HOME"; then
   echo "ok:     $SETTINGS_HOME"
 else
-  echo "AVISO:  $SETTINGS_HOME diverge do repo — resolva na mão (o install não sobrescreve):"
+  echo "WARNING: $SETTINGS_HOME diverges from the repo - resolve by hand (install never overwrites):"
   diff -u "$SETTINGS_HOME" "$SETTINGS_REPO" || true
 fi
 
-echo "toolbox instalado."
+echo "toolbox installed."

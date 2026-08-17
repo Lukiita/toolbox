@@ -1,7 +1,7 @@
-# Upstream — domain-modeling
+# Upstream - domain-modeling
 
-- **Origem**: importada do agregador skills.sh em jul/2026 (o repo-fonte real não foi confirmado; skills.sh agrega skills de repos de terceiros).
-- **Base pristine**: não guardada — a cópia importada foi patchada antes do toolbox existir como repo.
-- **Delta local conhecido** (2026-08-17): frontmatter `metadata.origin`; seção "Three memories, three jobs" (ponte com o fluxo tlc); regra de respeitar diretório de ADR existente (SKILL.md e ADR-FORMAT.md).
+- **Origin**: imported from the skills.sh aggregator in Jul/2026 (the real source repo was never confirmed; skills.sh aggregates third-party skills).
+- **Pristine base**: not kept - the imported copy was patched before the toolbox existed as a repo.
+- **Known local delta** (2026-08-17): `metadata.origin` frontmatter; the "Three memories, three jobs" section (bridge to the tlc flow); the respect-existing-ADR-directory rule (SKILL.md and ADR-FORMAT.md).
 
-Quando o repo-fonte for identificado, aplicar aqui o mesmo contrato do tlc (`skills/tlc-spec-driven/UPSTREAM.md`): branch `vendor/domain-modeling` com a versão pristine + merge 3-way no main.
+Once the source repo is identified, apply the same contract as tlc here (`skills/tlc-spec-driven/UPSTREAM.md`): a `vendor/domain-modeling` branch with the pristine version + 3-way merges into main.

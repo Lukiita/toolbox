@@ -1,105 +1,88 @@
 # toolbox
 
-Meu ambiente de desenvolvimento pessoal, versionado. Este repo é a **fonte
-única**: a máquina consome daqui por symlink, e qualquer deriva aparece no
-`git status` em vez de se esconder em cópias.
+My personal development environment, versioned. This repo is the **single source**: the machine consumes it through symlinks, and any drift shows up in `git status` instead of hiding in copies.
 
-O padrão veio do `.agents/skills/` do Project A, que aprendeu na prática que
-cópia-por-provider deriva — quando as skills vieram para cá, a única diferença
-entre as cópias do `tlc-spec-driven` no project-b e no Project A era o prefixo
-de caminho dos scripts.
+The pattern came from Project A's `.agents/skills/`, which learned the hard way that copy-per-provider drifts — when the skills were rescued into this repo, the only difference between the `tlc-spec-driven` copies in project-b and Project A was the script path prefix.
 
-## Instalar numa máquina nova
+## Installing on a new machine
 
 ```bash
 git clone git@github.com:Lukiita/toolbox.git
 cd toolbox && ./install.sh
 ```
 
-Idempotente: rodar de novo só confirma o estado. O que ele liga:
+Idempotent: running it again only confirms the state. What it links:
 
-| destino | alvo | como |
+| target | source | how |
 |---|---|---|
 | `~/.claude/skills` | `skills/` | symlink |
-| `~/.agents/skills` | `skills/` | symlink (caminho canônico que as skills referenciam) |
-| `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` | symlink |
-| `~/.claude/settings.json` | `claude/settings.json` | **cópia** — o Claude Code reescreve esse arquivo sozinho; symlink seria quebrado pela primeira escrita atômica do app. Divergência vira aviso com diff, nunca sobrescrita. |
+| `~/.agents/skills` | `skills/` | symlink (the canonical path skills reference) |
+| `~/.agents/AGENTS.md` | `agents/AGENTS.md` | symlink (agent-agnostic global instructions) |
+| `~/.codex/AGENTS.md` | `agents/AGENTS.md` | symlink |
+| `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` | symlink (a one-line pointer to AGENTS.md) |
+| `~/.claude/settings.json` | `claude/settings.json` | **copy** — Claude Code rewrites this file on its own; a symlink would be destroyed by the app's first atomic write. Divergence becomes a warning with a diff, never an overwrite. |
 
-O que existia antes vira backup `*.pre-toolbox.<timestamp>` ao lado.
+Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 
-## Estrutura
+## Structure
 
 ```
-skills/     8 skills globais (valem em qualquer sessão, qualquer projeto)
-claude/     CLAUDE.md global + settings.json compartilhável
-archon/     fonte canônica do fluxo Archon (tlc headless) — importado, não linkado
-hooks/      vazio por ora
+skills/     8 global skills (available in any session, any project)
+agents/     AGENTS.md — global instructions for every agent (single source)
+claude/     CLAUDE.md pointer + shareable settings.json
+archon/     canonical source of the Archon flow (headless tlc) — imported, not linked
+hooks/      empty for now
 install.sh
 ```
 
 ## Skills
 
-| skill | papel |
+| skill | role |
 |---|---|
-| `grilling` | entrevista implacável para stress-testar uma decisão |
-| `grill-with-docs` | grilling + domain-modeling (gera glossário e ADRs no caminho) |
-| `domain-modeling` | linguagem ubíqua (`CONTEXT.md`) + ADRs (`docs/adr/`) |
-| `tlc-spec-driven` | Specify → Design → Tasks → Execute com Verifier independente (`.specs/`) |
-| `capability-sync` | contrato vivo de comportamento (`.specs/capabilities/`) |
-| `code-review` | revisão do diff antes do PR, duas lentes + triagem |
-| `pr-review-triage` | triagem dos comentários de PR aberto (CodeRabbit etc.) |
-| `skill-creator` | cria e avalia skills novas |
+| `grilling` | relentless interview to stress-test a decision |
+| `grill-with-docs` | grilling + domain-modeling (produces glossary and ADRs along the way) |
+| `domain-modeling` | ubiquitous language (`CONTEXT.md`) + ADRs (`docs/adr/`) |
+| `tlc-spec-driven` | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`) |
+| `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
+| `code-review` | pre-PR diff review, two lenses + triage |
+| `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
+| `skill-creator` | creates and evaluates new skills |
 
-**Como elas conversam** (harmonizado em 2026-08-17): specs e designs do tlc
-usam os termos do `CONTEXT.md`; designs conformam com ADRs aceitos em
-`docs/adr/`; decisão `AD-NNN` do `STATE.md` que passa no teste triplo de ADR
-vira ADR com o AD apontando para ele; e os comandos de script usam o prefixo
-canônico `~/.agents/skills/` (que o install.sh garante).
+**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees.
 
-## Skills de terceiros — contrato de upstream
+## Third-party skills — the upstream contract
 
-`tlc-spec-driven` tem upstream vivo ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0) e `domain-modeling` veio do skills.sh. Para não divergir em silêncio nem perder melhorias de lá:
+`tlc-spec-driven` has a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0) and `domain-modeling` came from skills.sh. To avoid silent divergence without losing upstream improvements:
 
-- a versão pristine do upstream vive num branch **`vendor/<skill>`** (nunca editado);
-- o delta local é documentado no **`UPSTREAM.md`** dentro da skill — cada patch com o porquê;
-- **atualizar** = commitar a versão nova no branch vendor + `git merge` no main: o 3-way faz os patches locais sobreviverem ou conflitarem às claras, nunca sumirem;
-- patch local genérico vira issue/PR no upstream — delta bom é delta que encolhe.
+- the pristine upstream version lives on a **`vendor/<skill>`** branch (never edited);
+- the local delta is documented in the skill's **`UPSTREAM.md`** — every patch with its why;
+- **updating** = commit the new version on the vendor branch + `git merge` into main: the 3-way merge lets local patches survive or conflict in the open, never vanish;
+- a generic local patch becomes an upstream issue/PR — good delta is shrinking delta.
 
-O procedimento passo a passo está em `skills/tlc-spec-driven/UPSTREAM.md`.
+The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 
-## Global vs por-projeto
+## Global vs per-project
 
-Skills daqui são **globais**. Projeto que precisa delas em runtime headless
-(ex.: worktrees do Archon, CI) leva **cópia** em `.agents/skills/` do repo,
-importada daqui — e dentro do projeto, o padrão é `.claude/skills` e
-`.cursor/skills` como symlinks relativos para `.agents/skills/` (como o
-Project A faz). O toolbox é o árbitro: melhoria feita numa cópia volta para cá.
+Skills here are **global**. A project that needs them at headless runtime (e.g. Archon worktrees, CI) carries a **copy** in the repo's `.agents/skills/`, imported from here — and inside the project, the pattern is `.claude/skills` and `.cursor/skills` as relative symlinks to `.agents/skills/` (as Project A does). The toolbox is the arbiter: an improvement made in a copy comes back here.
 
-## archon/ — como importar num projeto
+## archon/ — importing into a project
 
-O fluxo é intrinsecamente por-projeto (worktrees, gate do repo, AGENTS.md),
-por isso é importado, não linkado:
+The flow is intrinsically per-project (worktrees, repo gate, AGENTS.md), so it is imported, not linked:
 
-1. copie `archon/` para `.archon/` do projeto;
-2. adapte `scripts/repo-gate.sh` (o gate de lint/typecheck/teste do repo) e
-   `config.yaml` (aliases de modelo por papel);
-3. garanta `tlc-spec-driven`, `capability-sync` e `code-review` em
-   `.agents/skills/` do projeto — os worktrees precisam delas dentro do repo;
-4. revise os `commands/` (eles citam convenções do repo de origem — AGENTS.md,
-   `pnpm gate`, política de idioma) e rode
+1. copy `archon/` to the project's `.archon/`;
+2. adapt `scripts/repo-gate.sh` (the repo's lint/typecheck/test gate) and `config.yaml` (model aliases per role);
+3. make sure `tlc-spec-driven`, `capability-sync` and `code-review` exist in the project's `.agents/skills/` (copied from here) — Archon worktrees need them inside the repo;
+4. review the `commands/` (they cite the source repo's conventions — AGENTS.md, `pnpm gate`, language policy) and run
    `archon validate workflows && archon validate commands`.
 
-O `archon/README.md` e o `WORKFLOWS.md` documentam o desenho e já foram
-escritos para viajar entre projetos.
+`archon/README.md` and `WORKFLOWS.md` document the design and were written to travel between projects.
 
-## Nunca versionar aqui
+## Never version here
 
-- `settings.local.json`, `.env*` — segredo e aprovação local;
-- `~/.claude/projects/`, histórico, sessões — estado de máquina, não ambiente;
-- aprovações de permissão acumuladas de sessões — o `claude/settings.json`
-  guarda só preferência estável.
+- `settings.local.json`, `.env*` — secrets and local approvals;
+- `~/.claude/projects/`, history, sessions — machine state, not environment;
+- permission approvals accumulated from sessions — `claude/settings.json` keeps stable preferences only.
 
-## Próximo passo
+## Next step
 
-Construir a skill `ddd-tatico` (via `skill-creator`) e pilotá-la no Project A
-modelando o agregado Assinatura+Plano.
+Build the `ddd-tatico` skill (via `skill-creator`) and pilot it on Project A, modeling the Assinatura+Plano aggregate.
