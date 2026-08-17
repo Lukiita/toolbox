@@ -1,6 +1,6 @@
 # hooks — provider-neutral agent guards
 
-Canonical source of the coding-agent hooks, born in Project A. Imported per project (like `archon/` and `quality-gate/`), because hooks run inside a repo and their wiring lives in the repo's settings.
+Canonical source of the coding-agent hooks, born in Project A. Imported per project (like `archon/` and `quality-gate/`), because hooks run inside a repo and their wiring lives in the repo's settings — with one exception: **`guard-bash-secrets.mjs` is global.** The installer links `~/.agents/hooks` → this directory and the shared `~/.claude/settings.json` wires the secrets rule for every session in every repo (it is the one universal rule; push rules stay per-project because branch flow varies). A project that also wires the full guard runs both — a double denial is harmless.
 
 ## The two hooks
 

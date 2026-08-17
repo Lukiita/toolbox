@@ -17,6 +17,8 @@
  * bypassing RLS). A concrete reason lands harder than a generic one.
  */
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // The .env suffix carries a negative lookahead: .env.example is committed on purpose and
 // is exactly what the denial message points to.
@@ -25,12 +27,20 @@ const READERS = String.raw`(cat|bat|less|more|head|tail|nl|strings|xxd|od|grep|r
 
 const PROTECTED_BRANCHES = String.raw`(main|develop)`;
 
+/**
+ * Exported alone because this rule is universal - no project of ours wants a
+ * live credential in the transcript. `guard-bash-secrets.mjs` applies just it
+ * as a GLOBAL hook (user-level settings), while the push rules below stay
+ * per-project: branch flow varies, secrets do not.
+ */
+export const SECRET_RULE = {
+  pattern: new RegExp(String.raw`(^|[|;&]\s*)${READERS}\s+[^|;&]*${SECRET_FILES}`),
+  reason:
+    'These files hold live credentials. Reading one pulls it into the conversation, from where it can reach a log, a pull request or a summary. If you need the shape of the file, read .env.example or list only the key names.',
+};
+
 const RULES = [
-  {
-    pattern: new RegExp(String.raw`(^|[|;&]\s*)${READERS}\s+[^|;&]*${SECRET_FILES}`),
-    reason:
-      'These files hold live credentials. Reading one pulls it into the conversation, from where it can reach a log, a pull request or a summary. If you need the shape of the file, read .env.example or list only the key names.',
-  },
+  SECRET_RULE,
   {
     pattern: /\bgit\s+push\b(?=[^|;&]*(--force(?!-with-lease)|\s-f\b))/,
     reason:
@@ -43,7 +53,7 @@ const RULES = [
   },
 ];
 
-function readCommand() {
+export function readCommand() {
   try {
     const raw = readFileSync(0, 'utf-8');
     if (!raw.trim()) return '';
@@ -53,11 +63,8 @@ function readCommand() {
   }
 }
 
-function main() {
-  const command = readCommand();
-  if (!command) return;
-
-  const violated = RULES.find((rule) => rule.pattern.test(command));
+export function denyIfViolated(command, rules) {
+  const violated = rules.find((rule) => rule.pattern.test(command));
   if (!violated) return;
 
   process.stdout.write(
@@ -71,4 +78,14 @@ function main() {
   );
 }
 
-main();
+function main() {
+  const command = readCommand();
+  if (!command) return;
+  denyIfViolated(command, RULES);
+}
+
+// Entrypoint guard so `guard-bash-secrets.mjs` can import the rules without
+// this file firing its full rule set on load.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

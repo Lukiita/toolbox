@@ -41,6 +41,7 @@ link() { # link <target-in-repo> <destination-in-home>
 
 link "$REPO_DIR/skills" "$HOME/.claude/skills"
 link "$REPO_DIR/skills" "$HOME/.agents/skills"
+link "$REPO_DIR/hooks" "$HOME/.agents/hooks"
 link "$REPO_DIR/agents/AGENTS.md" "$HOME/.agents/AGENTS.md"
 link "$REPO_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
