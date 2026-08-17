@@ -46,7 +46,8 @@ install.sh
 | `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
 | `code-review` | pre-PR diff review, two lenses + triage |
 | `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
-| `skill-creator` | creates and evaluates new skills |
+
+Not carried here: `skill-creator` — it is Anthropic's official skill, unpatched by us; vendoring it would be drift without value. Install it from the official channel when needed.
 
 **How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees.
 
