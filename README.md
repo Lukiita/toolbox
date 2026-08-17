@@ -56,6 +56,17 @@ usam os termos do `CONTEXT.md`; designs conformam com ADRs aceitos em
 vira ADR com o AD apontando para ele; e os comandos de script usam o prefixo
 canônico `~/.agents/skills/` (que o install.sh garante).
 
+## Skills de terceiros — contrato de upstream
+
+`tlc-spec-driven` tem upstream vivo ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0) e `domain-modeling` veio do skills.sh. Para não divergir em silêncio nem perder melhorias de lá:
+
+- a versão pristine do upstream vive num branch **`vendor/<skill>`** (nunca editado);
+- o delta local é documentado no **`UPSTREAM.md`** dentro da skill — cada patch com o porquê;
+- **atualizar** = commitar a versão nova no branch vendor + `git merge` no main: o 3-way faz os patches locais sobreviverem ou conflitarem às claras, nunca sumirem;
+- patch local genérico vira issue/PR no upstream — delta bom é delta que encolhe.
+
+O procedimento passo a passo está em `skills/tlc-spec-driven/UPSTREAM.md`.
+
 ## Global vs por-projeto
 
 Skills daqui são **globais**. Projeto que precisa delas em runtime headless
