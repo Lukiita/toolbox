@@ -39,6 +39,8 @@ link() { # link <alvo-no-repo> <destino-no-home>
 
 link "$REPO_DIR/skills" "$HOME/.claude/skills"
 link "$REPO_DIR/skills" "$HOME/.agents/skills"
+link "$REPO_DIR/agents/AGENTS.md" "$HOME/.agents/AGENTS.md"
+link "$REPO_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 
 SETTINGS_REPO="$REPO_DIR/claude/settings.json"
