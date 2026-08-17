@@ -1,94 +1,82 @@
-// O relatório em markdown — a mesma coisa que sai no terminal, no sumário do
-// job e no comentário do PR.
+// The markdown report - the same thing that goes to the terminal, the job
+// summary and the PR comment.
 //
-// Puro de propósito: relatório é o que a pessoa lê para decidir, então ele tem
-// teste. E o marcador HTML no topo é o que permite ao CI **editar** o mesmo
-// comentário a cada push em vez de empilhar um por commit.
+// Pure on purpose: the report is what a person reads to decide, so it has a
+// test. And the HTML marker at the top is what lets CI **edit** the same
+// comment on every push instead of stacking one per commit.
 
 import type { Baseline, Failure } from './compare.mts';
+import type { GateStrings } from './locale.mts';
 
-export const MARCADOR = '<!-- portao-de-qualidade -->';
+export const MARKER = '<!-- quality-gate -->';
 
-export interface DetalheDoRelatorio {
-  titulo: string;
-  itens: string[];
+export interface ReportDetail {
+  title: string;
+  items: string[];
 }
 
 export interface ReportInput {
   baseline: Baseline;
-  atual: Record<string, number>;
-  falhas: readonly Failure[];
-  detalhes?: readonly DetalheDoRelatorio[];
-  geradoEm: string;
-  /** De onde veio o baseline: `origin/main` no CI, o worktree no local. */
-  origemDoBaseline?: string;
-  /** O PR mexeu no `quality-baseline.json` — precisa de olho humano. */
-  baselineAlterado?: boolean;
+  current: Record<string, number>;
+  failures: readonly Failure[];
+  details?: readonly ReportDetail[];
+  generatedAt: string;
+  /** Where the baseline came from: `origin/main` in CI, the worktree locally. */
+  baselineOrigin?: string;
+  /** The PR touched `quality-baseline.json` - needs human eyes. */
+  baselineChanged?: boolean;
 }
 
-function delta(valor: number, base: number, unit?: string): string {
-  const d = Math.round((valor - base) * 100) / 100;
+function delta(value: number, base: number, unit?: string): string {
+  const d = Math.round((value - base) * 100) / 100;
   if (d === 0) return '—';
   return `${d > 0 ? '+' : ''}${d}${unit ?? ''}`;
 }
 
-export function buildReport(input: ReportInput): string {
-  const { baseline, atual, falhas, geradoEm } = input;
-  const linhas: string[] = [MARCADOR, '', '## Portão de qualidade', ''];
+export function buildReport(input: ReportInput, t: GateStrings): string {
+  const { baseline, current, failures, generatedAt } = input;
+  const lines: string[] = [MARKER, '', t.reportTitle, ''];
 
-  linhas.push(
-    falhas.length === 0
-      ? '**Status:** ✅ Aprovado'
-      : `**Status:** ❌ Reprovado — ${falhas.length} regressão(ões)`,
-    '',
-  );
+  lines.push(failures.length === 0 ? t.statusPassed : t.statusFailed(failures.length), '');
 
-  if (input.baselineAlterado) {
-    linhas.push(
-      '> ⚠️ Este PR altera o `quality-baseline.json`. Recongelar é legítimo, mas é',
-      '> decisão — confira o motivo no corpo do commit antes de aprovar.',
-      '',
-    );
+  if (input.baselineChanged) {
+    lines.push(...t.baselineChangedNotice, '');
   }
 
-  // Uma tabela por seção, na ordem em que as métricas aparecem no baseline.
-  const secoes: string[] = [];
+  // One table per section, in the order the metrics appear in the baseline.
+  const sections: string[] = [];
   for (const m of Object.values(baseline.metrics)) {
-    if (!secoes.includes(m.section)) secoes.push(m.section);
+    if (!sections.includes(m.section)) sections.push(m.section);
   }
 
-  for (const secao of secoes) {
-    linhas.push(`### ${secao}`, '');
-    linhas.push('| Métrica | Baseline | Atual | Δ |', '| --- | ---: | ---: | ---: |');
-    for (const [nome, m] of Object.entries(baseline.metrics)) {
-      if (m.section !== secao) continue;
-      const valor = atual[nome];
-      if (valor === undefined) continue;
+  for (const section of sections) {
+    lines.push(`### ${section}`, '');
+    lines.push(t.tableHeader, '| --- | ---: | ---: | ---: |');
+    for (const [name, m] of Object.entries(baseline.metrics)) {
+      if (m.section !== section) continue;
+      const value = current[name];
+      if (value === undefined) continue;
       const u = m.unit ?? '';
-      linhas.push(`| ${m.label} | ${m.value}${u} | ${valor}${u} | ${delta(valor, m.value, u)} |`);
+      lines.push(`| ${m.label} | ${m.value}${u} | ${value}${u} | ${delta(value, m.value, u)} |`);
     }
-    linhas.push('');
+    lines.push('');
   }
 
-  if (falhas.length > 0) {
-    linhas.push('### Regressões', '');
-    for (const f of falhas) linhas.push(`- ${f.message}`);
-    linhas.push('');
-    linhas.push(
-      'A catraca só anda num sentido. Se a piora for deliberada, recongele com',
-      '`pnpm quality --update-baseline` e explique o motivo no corpo do commit.',
-      '',
-    );
+  if (failures.length > 0) {
+    lines.push(t.regressionsTitle, '');
+    for (const f of failures) lines.push(`- ${f.message}`);
+    lines.push('');
+    lines.push(...t.ratchetAdvice, '');
   }
 
-  for (const d of input.detalhes ?? []) {
-    if (d.itens.length === 0) continue;
-    linhas.push(`<details><summary>${d.titulo}</summary>`, '');
-    for (const item of d.itens) linhas.push(`- ${item}`);
-    linhas.push('', '</details>', '');
+  for (const d of input.details ?? []) {
+    if (d.items.length === 0) continue;
+    lines.push(`<details><summary>${d.title}</summary>`, '');
+    for (const item of d.items) lines.push(`- ${item}`);
+    lines.push('', '</details>', '');
   }
 
-  const origem = input.origemDoBaseline ? ` · baseline de \`${input.origemDoBaseline}\`` : '';
-  linhas.push(`<sub>Gerado por \`scripts/quality/gate.mts\` em ${geradoEm}${origem}</sub>`);
-  return linhas.join('\n');
+  const origin = input.baselineOrigin ? t.baselineOriginSuffix(input.baselineOrigin) : '';
+  lines.push(t.footer(generatedAt, origin));
+  return lines.join('\n');
 }

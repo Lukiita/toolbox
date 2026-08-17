@@ -1,73 +1,74 @@
 {
   "_readme": "Quality ratchet: these numbers are the worst accepted state. A PR may add code but may not worsen any metric - not even by one unit. Re-freezing is deliberate (`pnpm quality --update-baseline`) and the reason goes in the commit body; this file is versioned precisely so the change shows in the diff.",
   "_mode": "Every metric here uses \"baseline\" (freeze today's value, only allow improvement) - the mode for a repo with existing debt. A fresh repo may prefer \"floor\" with explicit thresholds; see compare.mts.",
+  "language": "en",
   "metrics": {
-    "cobertura-percentual": {
-      "section": "Cobertura",
-      "label": "Cobertura de linhas",
+    "coverage-percent": {
+      "section": "Coverage",
+      "label": "Line coverage",
       "mode": "baseline",
       "direction": "higher-is-better",
       "value": 0,
       "unit": "%",
       "note": "Covered lines / instrumented lines over the wide slice (vitest.quality.config.ts). Catches dilution; the per-file ratchet catches local regressions."
     },
-    "linhas-descobertas": {
-      "section": "Cobertura",
-      "label": "Linhas descobertas",
+    "uncovered-lines": {
+      "section": "Coverage",
+      "label": "Uncovered lines",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
       "gate": false,
       "note": "Informative only - the per-file ratchet (uncoveredByFile) is what fails the build."
     },
-    "arquivos-com-linha-descoberta": {
-      "section": "Cobertura",
-      "label": "Arquivos com linha descoberta",
+    "files-with-uncovered-lines": {
+      "section": "Coverage",
+      "label": "Files with uncovered lines",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
       "gate": false,
       "note": "Informative only."
     },
-    "duplicacao-percentual": {
-      "section": "Duplicação",
-      "label": "Linhas duplicadas",
+    "duplication-percent": {
+      "section": "Duplication",
+      "label": "Duplicated lines",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
       "unit": "%",
       "note": "jscpd over src/. An agent edits one copy and misses the others - duplication is refactor risk, not aesthetics."
     },
-    "duplicacao-fragmentos": {
-      "section": "Duplicação",
-      "label": "Fragmentos duplicados",
+    "duplication-fragments": {
+      "section": "Duplication",
+      "label": "Duplicated fragments",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0
     },
-    "regra-pura-fora-do-dominio": {
-      "section": "Arquitetura",
-      "label": "Regra pura fora do domínio",
+    "pure-rule-outside-domain": {
+      "section": "Architecture",
+      "label": "Pure rules outside the domain",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
       "note": "A .ts outside the rule directories WITH a unit test beside it - the signature of a business rule born at the edge. Complements the import-direction lint, which cannot see a rule that never reached domain/."
     },
-    "arquivos-acima-do-limite": {
-      "section": "Tamanho",
-      "label": "Arquivos acima do limite",
+    "files-over-limit": {
+      "section": "Size",
+      "label": "Files over the line limit",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
-      "note": "Production files over LIMITE_DE_LINHAS (size.mts). Big files are where the next agent edit turns into a mess."
+      "note": "Production files over LINE_LIMIT (size.mts). Big files are where the next agent edit turns into a mess."
     },
-    "any-explicito": {
-      "section": "Tipos",
-      "label": "`any` explícito",
+    "explicit-any": {
+      "section": "Types",
+      "label": "Explicit `any`",
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
-      "note": "AST count of `any` keyword nodes in production files (any-count.mts). AGENTS.md bans new `any`; the ratchet lets legacy debt only shrink. Exists because flipping no-explicit-any to 'error' over legacy code breaks the build on day one."
+      "note": "AST count of any-keyword nodes in production files (any-count.mts). AGENTS.md bans new `any`; the ratchet lets legacy debt only shrink. Exists because flipping no-explicit-any to 'error' over legacy code breaks the build on day one."
     }
   },
   "uncoveredByFile": {}

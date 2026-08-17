@@ -1,26 +1,29 @@
 import { describe, expect, it } from 'vitest';
 
 import { type Baseline, compareMetrics } from './compare.mts';
+import { stringsFor } from './locale.mts';
+
+const t = stringsFor('en');
 
 const BASE: Baseline = {
   metrics: {
-    descobertas: {
-      section: 'Cobertura',
-      label: 'Descobertas',
+    uncovered: {
+      section: 'Coverage',
+      label: 'Uncovered',
       mode: 'baseline',
       direction: 'lower-is-better',
       value: 10,
     },
-    cobertura: {
-      section: 'Cobertura',
-      label: 'Cobertura',
+    coverage: {
+      section: 'Coverage',
+      label: 'Coverage',
       mode: 'floor',
       direction: 'higher-is-better',
       value: 80,
     },
-    informativa: {
-      section: 'Cobertura',
-      label: 'Informativa',
+    informative: {
+      section: 'Coverage',
+      label: 'Informative',
       mode: 'baseline',
       direction: 'lower-is-better',
       value: 1,
@@ -31,41 +34,42 @@ const BASE: Baseline = {
 };
 
 describe('compareMetrics', () => {
-  it('aprova quando empata com o baseline', () => {
-    expect(compareMetrics(BASE, { descobertas: 10, cobertura: 80 })).toEqual([]);
+  it('passes when tied with the baseline', () => {
+    expect(compareMetrics(BASE, { uncovered: 10, coverage: 80 }, t)).toEqual([]);
   });
 
-  it('aprova quando melhora', () => {
-    expect(compareMetrics(BASE, { descobertas: 4, cobertura: 95 })).toEqual([]);
+  it('passes when improving', () => {
+    expect(compareMetrics(BASE, { uncovered: 4, coverage: 95 }, t)).toEqual([]);
   });
 
-  it('reprova uma unidade de piora em lower-is-better', () => {
-    const falhas = compareMetrics(BASE, { descobertas: 11 });
-    expect(falhas).toHaveLength(1);
-    expect(falhas[0]).toMatchObject({
-      metric: 'descobertas',
-      limite: 10,
-      atual: 11,
-    });
+  it('fails a single unit of regression in lower-is-better', () => {
+    const failures = compareMetrics(BASE, { uncovered: 11 }, t);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({ metric: 'uncovered', limit: 10, current: 11 });
   });
 
-  it('reprova ficar abaixo do piso em higher-is-better', () => {
-    const falhas = compareMetrics(BASE, { cobertura: 79 });
-    expect(falhas).toHaveLength(1);
-    expect(falhas[0].message).toContain('piso');
+  it('fails dropping below the floor in higher-is-better', () => {
+    const failures = compareMetrics(BASE, { coverage: 79 }, t);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].message).toContain('floor');
   });
 
-  it('chama de baseline no modo baseline e de piso no modo floor', () => {
-    expect(compareMetrics(BASE, { descobertas: 11 })[0].message).toContain('baseline');
+  it('calls it baseline in baseline mode and floor in floor mode', () => {
+    expect(compareMetrics(BASE, { uncovered: 11 }, t)[0].message).toContain('baseline');
   });
 
-  it('não reprova métrica marcada como só informativa', () => {
-    expect(compareMetrics(BASE, { informativa: 999 })).toEqual([]);
+  it('never fails a metric marked informative-only', () => {
+    expect(compareMetrics(BASE, { informative: 999 }, t)).toEqual([]);
   });
 
-  it('reprova métrica ausente do baseline — portão não aprova o que não conhece', () => {
-    const falhas = compareMetrics(BASE, { duplicacao: 3 });
-    expect(falhas).toHaveLength(1);
-    expect(falhas[0].message).toContain('--update-baseline');
+  it('fails a metric absent from the baseline - the gate never approves what it does not know', () => {
+    const failures = compareMetrics(BASE, { duplication: 3 }, t);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].message).toContain('--update-baseline');
+  });
+
+  it('localizes the failure message when the project asks for pt', () => {
+    const pt = stringsFor('pt');
+    expect(compareMetrics(BASE, { uncovered: 11 }, pt)[0].message).toContain('passou de 10 para 11');
   });
 });

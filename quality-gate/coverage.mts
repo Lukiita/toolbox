@@ -1,17 +1,17 @@
-// Linhas não cobertas em arquivo testável.
+// Uncovered lines in testable files.
 //
-// "Testável" aqui é `src/**/*.ts` sem `.tsx`: componente React não tem
-// infraestrutura de teste neste repo, e cobrar cobertura dele produziria um
-// portão permanentemente vermelho — que é o mesmo que portão nenhum.
+// "Testable" here is `src/**/*.ts` without `.tsx`: React components have no
+// test infrastructure in this repo, and charging coverage for them would
+// produce a permanently red gate - which is the same as no gate.
 //
-// Por que a métrica é contagem absoluta e não percentual: o caso que ela
-// precisa pegar é o `actions.ts` da PR #44, onde a validação de nome e slug
-// nasceu dentro da server action sem teste. Percentual de arquivo não pega
-// isso — o arquivo já estava em 0% e continuou em 0%. Contagem de linhas
-// descobertas sobe quando alguém adiciona regra na borda e desce quando alguém
-// move a regra para a lib, que é exatamente o gradiente desejado.
+// Why the metric is an absolute count and not a percentage: the case it must
+// catch is the `actions.ts` from PR #44, where name/slug validation was born
+// inside the server action with no test. A per-file percentage misses it -
+// the file was at 0% and stayed at 0%. A count of uncovered lines goes up
+// when someone adds a rule at the edge and down when someone moves the rule
+// into the lib, which is exactly the desired gradient.
 
-/** O recorte do `coverage-final.json` (formato istanbul) que interessa aqui. */
+/** The slice of `coverage-final.json` (istanbul format) that matters here. */
 export interface CoverageEntry {
   statementMap: Record<string, { start: { line: number }; end: { line: number } }>;
   s: Record<string, number>;
@@ -20,40 +20,40 @@ export interface CoverageEntry {
 export type CoverageMap = Record<string, CoverageEntry>;
 
 /**
- * Uma linha conta como coberta se **alguma** instrução nela rodou. Linha com
- * instrução e nenhuma execução conta como descoberta; linha sem instrução
- * (comentário, chave solta, tipo) não conta para nenhum lado.
+ * A line counts as covered when **some** statement on it ran. A line with a
+ * statement and no execution counts as uncovered; a line with no statement
+ * (comment, lone brace, type) counts for neither side.
  */
-function classificarLinhas(entry: CoverageEntry): {
-  comInstrucao: Set<number>;
-  cobertas: Set<number>;
+function classifyLines(entry: CoverageEntry): {
+  instrumented: Set<number>;
+  covered: Set<number>;
 } {
-  const comInstrucao = new Set<number>();
-  const cobertas = new Set<number>();
-  for (const [id, local] of Object.entries(entry.statementMap)) {
-    // Instrução multilinha conta pela primeira linha: é onde o defeito é lido.
-    const linha = local.start.line;
-    comInstrucao.add(linha);
-    if ((entry.s[id] ?? 0) > 0) cobertas.add(linha);
+  const instrumented = new Set<number>();
+  const covered = new Set<number>();
+  for (const [id, loc] of Object.entries(entry.statementMap)) {
+    // A multi-line statement counts by its first line: where the defect is read.
+    const line = loc.start.line;
+    instrumented.add(line);
+    if ((entry.s[id] ?? 0) > 0) covered.add(line);
   }
-  return { comInstrucao, cobertas };
+  return { instrumented, covered };
 }
 
 export function uncoveredLines(entry: CoverageEntry): number[] {
-  const { comInstrucao, cobertas } = classificarLinhas(entry);
-  return [...comInstrucao].filter((l) => !cobertas.has(l)).sort((a, b) => a - b);
+  const { instrumented, covered } = classifyLines(entry);
+  return [...instrumented].filter((l) => !covered.has(l)).sort((a, b) => a - b);
 }
 
-/** Linhas com instrução e quantas rodaram — o numerador e o denominador. */
+/** Instrumented lines and how many ran - the numerator and the denominator. */
 export function lineTotals(entry: CoverageEntry): {
   total: number;
-  cobertas: number;
+  covered: number;
 } {
-  const { comInstrucao, cobertas } = classificarLinhas(entry);
-  return { total: comInstrucao.size, cobertas: cobertas.size };
+  const { instrumented, covered } = classifyLines(entry);
+  return { total: instrumented.size, covered: covered.size };
 }
 
-/** `true` para os arquivos que este repo consegue cobrir com teste unitário. */
+/** `true` for the files this repo can cover with a unit test. */
 export function isTestableFile(relPath: string): boolean {
   return (
     relPath.startsWith('src/') &&
@@ -66,56 +66,55 @@ export function isTestableFile(relPath: string): boolean {
 export interface UncoveredByFile {
   file: string;
   lines: number[];
-  /** Percentual coberto do próprio arquivo, para leitura no relatório. */
-  percentual: number;
+  /** The file's own covered percentage, for reading in the report. */
+  percent: number;
 }
 
-function percentual(cobertas: number, total: number): number {
-  // Arquivo sem instrução nenhuma conta como 100%: não há o que cobrir, e
-  // devolver 0 puxaria a média para baixo por um arquivo vazio.
+function percent(covered: number, total: number): number {
+  // A file with no statements at all counts as 100%: there is nothing to
+  // cover, and returning 0 would drag the average down for an empty file.
   if (total === 0) return 100;
-  return Math.round((cobertas / total) * 10000) / 100;
+  return Math.round((covered / total) * 10000) / 100;
 }
 
 /**
- * Cobertura de linhas do repo, só sobre arquivo testável — o número que todo
- * mundo espera ver. Ele é o par do mapa por arquivo, não o substituto: o
- * percentual pega **diluição** (apagar código bem testado não faz nenhum
- * arquivo piorar, mas derruba a média), e o mapa pega piora local, que o
- * percentual dilui quando o repo cresce.
+ * Repo line coverage over testable files only - the number everyone expects
+ * to see. It pairs with the per-file map, never replaces it: the percentage
+ * catches **dilution** (deleting well-tested code makes no file worse but
+ * drops the average), and the map catches local regressions, which the
+ * percentage dilutes as the repo grows.
  */
 export function coveragePercent(
   map: CoverageMap,
-  paraCaminhoRelativo: (absoluto: string) => string,
+  toRelativePath: (absolute: string) => string,
 ): number {
   let total = 0;
-  let cobertas = 0;
-  for (const [absoluto, entry] of Object.entries(map)) {
-    if (!isTestableFile(paraCaminhoRelativo(absoluto))) continue;
-    const t = lineTotals(entry);
-    total += t.total;
-    cobertas += t.cobertas;
+  let covered = 0;
+  for (const [absolute, entry] of Object.entries(map)) {
+    if (!isTestableFile(toRelativePath(absolute))) continue;
+    const totals = lineTotals(entry);
+    total += totals.total;
+    covered += totals.covered;
   }
-  return percentual(cobertas, total);
+  return percent(covered, total);
 }
 
 /**
- * Percorre o mapa inteiro e devolve, por arquivo testável, as linhas
- * descobertas — ordenado por quantidade, que é a ordem em que alguém
- * conserta.
+ * Walks the whole map and returns, per testable file, the uncovered lines -
+ * sorted by count, which is the order someone fixes them in.
  */
 export function uncoveredInTestableFiles(
   map: CoverageMap,
-  paraCaminhoRelativo: (absoluto: string) => string,
+  toRelativePath: (absolute: string) => string,
 ): UncoveredByFile[] {
-  const saida: UncoveredByFile[] = [];
-  for (const [absoluto, entry] of Object.entries(map)) {
-    const file = paraCaminhoRelativo(absoluto);
+  const out: UncoveredByFile[] = [];
+  for (const [absolute, entry] of Object.entries(map)) {
+    const file = toRelativePath(absolute);
     if (!isTestableFile(file)) continue;
     const lines = uncoveredLines(entry);
     if (lines.length === 0) continue;
-    const t = lineTotals(entry);
-    saida.push({ file, lines, percentual: percentual(t.cobertas, t.total) });
+    const totals = lineTotals(entry);
+    out.push({ file, lines, percent: percent(totals.covered, totals.total) });
   }
-  return saida.sort((a, b) => b.lines.length - a.lines.length || a.file.localeCompare(b.file));
+  return out.sort((a, b) => b.lines.length - a.lines.length || a.file.localeCompare(b.file));
 }

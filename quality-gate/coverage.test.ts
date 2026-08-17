@@ -9,21 +9,21 @@ import {
   uncoveredLines,
 } from './coverage.mts';
 
-function entrada(linhas: [linha: number, execucoes: number][]): CoverageEntry {
+function entry(lines: [line: number, executions: number][]): CoverageEntry {
   const statementMap: CoverageEntry['statementMap'] = {};
   const s: CoverageEntry['s'] = {};
-  linhas.forEach(([linha, execucoes], i) => {
-    statementMap[String(i)] = { start: { line: linha }, end: { line: linha } };
-    s[String(i)] = execucoes;
+  lines.forEach(([line, executions], i) => {
+    statementMap[String(i)] = { start: { line }, end: { line } };
+    s[String(i)] = executions;
   });
   return { statementMap, s };
 }
 
 describe('uncoveredLines', () => {
-  it('devolve as linhas cujas instruções nunca rodaram', () => {
+  it('returns the lines whose statements never ran', () => {
     expect(
       uncoveredLines(
-        entrada([
+        entry([
           [10, 3],
           [11, 0],
           [12, 0],
@@ -32,10 +32,10 @@ describe('uncoveredLines', () => {
     ).toEqual([11, 12]);
   });
 
-  it('linha com instrução coberta e descoberta conta como coberta', () => {
+  it('a line with one covered and one uncovered statement counts as covered', () => {
     expect(
       uncoveredLines(
-        entrada([
+        entry([
           [7, 0],
           [7, 1],
         ]),
@@ -43,10 +43,10 @@ describe('uncoveredLines', () => {
     ).toEqual([]);
   });
 
-  it('devolve vazio quando tudo rodou', () => {
+  it('returns empty when everything ran', () => {
     expect(
       uncoveredLines(
-        entrada([
+        entry([
           [1, 1],
           [2, 5],
         ]),
@@ -54,10 +54,10 @@ describe('uncoveredLines', () => {
     ).toEqual([]);
   });
 
-  it('ordena, para o relatório não depender da ordem do JSON', () => {
+  it('sorts, so the report never depends on JSON ordering', () => {
     expect(
       uncoveredLines(
-        entrada([
+        entry([
           [30, 0],
           [4, 0],
         ]),
@@ -67,97 +67,91 @@ describe('uncoveredLines', () => {
 });
 
 describe('lineTotals', () => {
-  it('conta linhas com instrução e quantas rodaram', () => {
+  it('counts instrumented lines and how many ran', () => {
     expect(
       lineTotals(
-        entrada([
+        entry([
           [1, 3],
           [2, 0],
           [3, 1],
         ]),
       ),
-    ).toEqual({
-      total: 3,
-      cobertas: 2,
-    });
+    ).toEqual({ total: 3, covered: 2 });
   });
 
-  it('não conta a mesma linha duas vezes', () => {
+  it('never counts the same line twice', () => {
     expect(
       lineTotals(
-        entrada([
+        entry([
           [5, 1],
           [5, 0],
         ]),
       ),
-    ).toEqual({
-      total: 1,
-      cobertas: 1,
-    });
+    ).toEqual({ total: 1, covered: 1 });
   });
 });
 
 describe('coveragePercent', () => {
-  const identidade = (p: string) => p;
+  const identity = (p: string) => p;
 
-  it('divide cobertas por linhas com instrução, com duas casas', () => {
+  it('divides covered by instrumented lines, two decimal places', () => {
     const pct = coveragePercent(
       {
-        'src/lib/a.ts': entrada([
+        'src/lib/a.ts': entry([
           [1, 1],
           [2, 1],
           [3, 0],
         ]),
       },
-      identidade,
+      identity,
     );
     expect(pct).toBe(66.67);
   });
 
-  it('soma o repo inteiro, não a média das médias', () => {
-    // 3 de 4 cobertas no total = 75%. Média por arquivo daria 75% também,
-    // mas com arquivos de tamanhos diferentes divergiria — este é o caso.
+  it('sums the whole repo, not the average of averages', () => {
+    // 3 of 4 covered overall = 75%... with files of different sizes the two
+    // calculations diverge - this is the case that pins the right one.
     const pct = coveragePercent(
       {
-        'src/lib/grande.ts': entrada([
+        'src/lib/big.ts': entry([
           [1, 1],
           [2, 1],
           [3, 1],
           [4, 0],
         ]),
-        'src/lib/pequeno.ts': entrada([[1, 0]]),
+        'src/lib/small.ts': entry([[1, 0]]),
       },
-      identidade,
+      identity,
     );
     expect(pct).toBe(60);
   });
 
-  it('ignora arquivo não testável no cálculo', () => {
+  it('ignores non-testable files in the calculation', () => {
     const pct = coveragePercent(
       {
-        'src/lib/a.ts': entrada([[1, 1]]),
-        'src/components/x.tsx': entrada([
+        'src/lib/a.ts': entry([[1, 1]]),
+        'src/components/x.tsx': entry([
           [1, 0],
           [2, 0],
         ]),
       },
-      identidade,
+      identity,
     );
     expect(pct).toBe(100);
   });
 
-  it('repo sem instrução nenhuma conta como 100, não como 0', () => {
-    expect(coveragePercent({}, identidade)).toBe(100);
+  it('a repo with no statements counts as 100, not 0', () => {
+    expect(coveragePercent({}, identity)).toBe(100);
   });
 });
 
 describe('isTestableFile', () => {
-  it('aceita .ts de produção sob src/', () => {
+  it('accepts production .ts under src/', () => {
     expect(isTestableFile('src/lib/address.ts')).toBe(true);
     expect(isTestableFile('src/app/app/actions.ts')).toBe(true);
   });
 
-  it('recusa .tsx, teste, declaração e o que está fora de src/', () => {
+  it('rejects .tsx, tests, declarations and anything outside src/', () => {
     expect(isTestableFile('src/components/shop-map.tsx')).toBe(false);
     expect(isTestableFile('src/lib/address.test.ts')).toBe(false);
     expect(isTestableFile('src/types.d.ts')).toBe(false);
@@ -166,49 +160,49 @@ describe('isTestableFile', () => {
 });
 
 describe('uncoveredInTestableFiles', () => {
-  const identidade = (p: string) => p;
+  const identity = (p: string) => p;
 
-  it('soma por arquivo e ordena pelo mais descoberto', () => {
-    const resultado = uncoveredInTestableFiles(
+  it('sums per file and sorts by most uncovered', () => {
+    const result = uncoveredInTestableFiles(
       {
-        'src/lib/a.ts': entrada([[1, 0]]),
-        'src/lib/b.ts': entrada([
+        'src/lib/a.ts': entry([[1, 0]]),
+        'src/lib/b.ts': entry([
           [1, 0],
           [2, 0],
         ]),
       },
-      identidade,
+      identity,
     );
-    expect(resultado).toEqual([
-      { file: 'src/lib/b.ts', lines: [1, 2], percentual: 0 },
-      { file: 'src/lib/a.ts', lines: [1], percentual: 0 },
+    expect(result).toEqual([
+      { file: 'src/lib/b.ts', lines: [1, 2], percent: 0 },
+      { file: 'src/lib/a.ts', lines: [1], percent: 0 },
     ]);
   });
 
-  it('carrega o percentual do próprio arquivo', () => {
-    const resultado = uncoveredInTestableFiles(
+  it('carries the file own covered percentage', () => {
+    const result = uncoveredInTestableFiles(
       {
-        'src/lib/a.ts': entrada([
+        'src/lib/a.ts': entry([
           [1, 1],
           [2, 1],
           [3, 0],
         ]),
       },
-      identidade,
+      identity,
     );
-    expect(resultado[0].percentual).toBe(66.67);
+    expect(result[0].percent).toBe(66.67);
   });
 
-  it('descarta arquivo não testável mesmo que o mapa o traga', () => {
-    const resultado = uncoveredInTestableFiles(
-      { 'src/components/x.tsx': entrada([[1, 0]]) },
-      identidade,
+  it('drops non-testable files even when the map brings them', () => {
+    const result = uncoveredInTestableFiles(
+      { 'src/components/x.tsx': entry([[1, 0]]) },
+      identity,
     );
-    expect(resultado).toEqual([]);
+    expect(result).toEqual([]);
   });
 
-  it('omite arquivo totalmente coberto', () => {
-    const resultado = uncoveredInTestableFiles({ 'src/lib/a.ts': entrada([[1, 2]]) }, identidade);
-    expect(resultado).toEqual([]);
+  it('omits fully covered files', () => {
+    const result = uncoveredInTestableFiles({ 'src/lib/a.ts': entry([[1, 2]]) }, identity);
+    expect(result).toEqual([]);
   });
 });

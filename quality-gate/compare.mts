@@ -1,109 +1,123 @@
-// Comparação com o baseline — o coração da catraca.
+// Comparison against the baseline - the heart of the ratchet.
 //
-// Dois modos, porque projeto novo e projeto existente precisam de coisas
-// diferentes:
+// Two modes, because a new project and an existing one need different things:
 //
-//   - `baseline`: congela o valor medido hoje e proíbe piorar. É o modo de
-//     repo com passado — não se conserta tudo de uma vez, mas também não se
-//     acrescenta mais nada.
-//   - `floor`: exige um valor mínimo/máximo escolhido, independente do que
-//     existe. É o modo de repo novo, onde não há passado para congelar e
-//     "não piorar" seria vacuamente verdadeiro.
+//   - `baseline`: freezes the value measured today and forbids getting worse.
+//     The mode for a repo with a past - you don't fix everything at once, but
+//     you don't add more debt either.
+//   - `floor`: requires a chosen minimum/maximum, regardless of what exists.
+//     The mode for a fresh repo, where there is no past to freeze and "no
+//     worse" would be vacuously true.
 //
-// A regra de ouro é a do vídeo que originou isto: um PR pode adicionar código,
-// mas não pode piorar nenhuma métrica — nem por uma unidade.
+// The golden rule is the one from the video that originated this: a PR may add
+// code, but may not worsen any metric - not even by one unit.
+
+import type { GateStrings } from './locale.mts';
 
 export type Direction = 'lower-is-better' | 'higher-is-better';
 
 export interface MetricBaseline {
-  /** Agrupa a métrica na tabela do relatório. */
+  /** Groups the metric in the report table. */
   section: string;
-  /** Como a métrica aparece na coluna "Métrica". */
+  /** How the metric shows in the "Metric" column. */
   label: string;
   mode: 'baseline' | 'floor';
   direction: Direction;
   value: number;
-  /** Sufixo na tabela. Percentual compara com duas casas. */
+  /** Suffix in the table. Percentages compare with two decimal places. */
   unit?: '%';
-  /** `false` = aparece na tabela mas não reprova. */
+  /** `false` = shows in the table but never fails the gate. */
   gate?: boolean;
-  /** Só documental: o que o número significa e por que está nesse valor. */
+  /** Documentation only: what the number means and why it holds this value. */
   note?: string;
 }
 
 export interface Baseline {
+  /** Report language for this project ('en' when absent). */
+  language?: string;
   metrics: Record<string, MetricBaseline>;
-  /** Catraca por arquivo: caminho relativo → linhas descobertas aceitas. */
+  /** Per-file ratchet: relative path → accepted uncovered lines. */
   uncoveredByFile: Record<string, number>;
 }
 
 export interface Failure {
   metric: string;
-  limite: number;
-  atual: number;
+  limit: number;
+  current: number;
   message: string;
 }
 
-function piorou(direction: Direction, limite: number, atual: number): boolean {
-  return direction === 'lower-is-better' ? atual > limite : atual < limite;
+function worsened(direction: Direction, limit: number, current: number): boolean {
+  return direction === 'lower-is-better' ? current > limit : current < limit;
 }
 
 /**
- * Catraca por arquivo. Existe porque o somatório global **não** serve: medido
- * em 2026-08-05 contra `e6d4144`, `actions.ts` subiu de 208 para 213 linhas
- * descobertas — a regressão que o CodeRabbit apontou — enquanto o total do repo
- * caía de 799 para 792, porque a mesma feature cobriu outras coisas. Um número
- * só deixa a piora local passar escondida atrás da melhora alheia.
+ * Per-file ratchet. It exists because the global sum does NOT work: measured
+ * on 2026-08-05 against `e6d4144`, `actions.ts` went from 208 to 213 uncovered
+ * lines - the regression CodeRabbit flagged - while the repo total dropped
+ * from 799 to 792, because the same feature covered other things. A single
+ * number lets the local regression hide behind someone else's improvement.
  *
- * Arquivo ausente do baseline vale 0: código novo com linha descoberta é
- * exatamente o caso a pegar. Quando for deliberado, recongela.
+ * A file absent from the baseline counts as 0: new code with uncovered lines
+ * is exactly the case to catch. When deliberate, re-freeze.
  */
 export function compareFileCounts(
   baseline: Record<string, number>,
-  atual: Record<string, number>,
+  current: Record<string, number>,
+  t: GateStrings,
 ): Failure[] {
-  const falhas: Failure[] = [];
-  for (const [file, valor] of Object.entries(atual)) {
-    const limite = baseline[file] ?? 0;
-    if (valor <= limite) continue;
-    falhas.push({
+  const failures: Failure[] = [];
+  for (const [file, value] of Object.entries(current)) {
+    const limit = baseline[file] ?? 0;
+    if (value <= limit) continue;
+    failures.push({
       metric: file,
-      limite,
-      atual: valor,
-      message: `\`${file}\` passou de ${limite} para ${valor} linhas descobertas`,
+      limit,
+      current: value,
+      message: t.fileRegressed(file, limit, value),
     });
   }
-  return falhas.sort((a, b) => b.atual - b.limite - (a.atual - a.limite));
+  return failures.sort((a, b) => b.current - b.limit - (a.current - a.limit));
 }
 
 /**
- * Devolve as métricas que regrediram. Métrica presente na medição e ausente do
- * baseline **falha**: baseline incompleto seria um portão que aprova o que não
- * conhece, e o conserto (rodar com `--update-baseline`) é uma linha.
+ * Returns the metrics that regressed. A metric present in the measurement and
+ * absent from the baseline **fails**: an incomplete baseline would be a gate
+ * that approves what it does not know, and the fix (`--update-baseline`) is
+ * one line.
  */
-export function compareMetrics(baseline: Baseline, atual: Record<string, number>): Failure[] {
-  const falhas: Failure[] = [];
-  for (const [metric, valor] of Object.entries(atual)) {
-    const esperado = baseline.metrics[metric];
-    if (!esperado) {
-      falhas.push({
+export function compareMetrics(
+  baseline: Baseline,
+  current: Record<string, number>,
+  t: GateStrings,
+): Failure[] {
+  const failures: Failure[] = [];
+  for (const [metric, value] of Object.entries(current)) {
+    const expected = baseline.metrics[metric];
+    if (!expected) {
+      failures.push({
         metric,
-        limite: Number.NaN,
-        atual: valor,
-        message: `métrica \`${metric}\` não está no baseline — rode com \`--update-baseline\` para congelá-la`,
+        limit: Number.NaN,
+        current: value,
+        message: t.metricNotInBaseline(metric),
       });
       continue;
     }
-    if (esperado.gate === false) continue;
-    if (!piorou(esperado.direction, esperado.value, valor)) continue;
-    const sufixo = esperado.unit ?? '';
-    const rotulo = esperado.mode === 'floor' ? 'piso' : 'baseline';
-    falhas.push({
+    if (expected.gate === false) continue;
+    if (!worsened(expected.direction, expected.value, value)) continue;
+    const suffix = expected.unit ?? '';
+    const kind = expected.mode === 'floor' ? t.floorWord : t.baselineWord;
+    failures.push({
       metric,
-      limite: esperado.value,
-      atual: valor,
-      message: `${esperado.label} passou de ${esperado.value}${sufixo} para ${valor}${sufixo} (${rotulo})`,
+      limit: expected.value,
+      current: value,
+      message: t.metricRegressed(
+        expected.label,
+        `${expected.value}${suffix}`,
+        `${value}${suffix}`,
+        kind,
+      ),
     });
   }
-  return falhas;
+  return failures;
 }

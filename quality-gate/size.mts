@@ -1,31 +1,33 @@
-// Arquivos acima do limite de tamanho.
+// Files over the size limit.
 //
-// Métrica preventiva, não corretiva: arquivo grande não quebra nada hoje, mas é
-// onde a próxima mudança de agente vira bagunça — o vídeo que originou a
-// catraca mostra um `app.js` de 4600 linhas crescendo 140 por PR. Aqui o maior
-// tem 733, então a catraca congela um estado saudável.
+// A preventive metric, not a corrective one: a big file breaks nothing today,
+// but it is where the next agent edit turns into a mess - the video that
+// originated the ratchet shows an `app.js` of 4600 lines growing 140 per PR.
+// The AGENTS.md target is files under 500 lines (ideally 200-300); the limit
+// here is the enforcement floor for that rule.
 
-/** Acima disto, o arquivo entra na contagem. */
-export const LIMITE_DE_LINHAS = 400;
+/** Above this, the file enters the count. */
+export const LINE_LIMIT = 400;
 
-export interface ArquivoMedido {
+export interface MeasuredFile {
   file: string;
   lines: number;
 }
 
 /**
- * Linhas de um arquivo, sem contar a quebra final como linha vazia extra —
- * `"a\nb\n".split("\n")` devolve 3 elementos para 2 linhas, e por causa disso
- * um arquivo de exatos 400 era medido como 401 e reprovava no limite.
+ * Lines of a file, without counting the final newline as an extra empty
+ * line - `"a\nb\n".split("\n")` returns 3 elements for 2 lines, and because
+ * of that a file of exactly 400 was measured as 401 and failed at the limit.
  */
-export function contarLinhas(conteudo: string): number {
-  if (conteudo === '') return 0;
-  return conteudo.replace(/\n$/, '').split('\n').length;
+export function countLines(content: string): number {
+  if (content === '') return 0;
+  return content.replace(/\n$/, '').split('\n').length;
 }
 
 /**
- * Só código de produção sob `src/`: teste grande é normal (tabela de casos) e
- * cobrá-lo empurraria na direção errada, que é cortar caso de teste.
+ * Production code under `src/` only: a big test file is normal (a case
+ * table), and charging for it would push in the wrong direction - cutting
+ * test cases.
  */
 export function isSizedFile(relPath: string): boolean {
   return (
@@ -37,12 +39,12 @@ export function isSizedFile(relPath: string): boolean {
   );
 }
 
-/** Os que passaram do limite, do maior para o menor. */
+/** The ones past the limit, largest first. */
 export function oversizedFiles(
-  medidos: readonly ArquivoMedido[],
-  limite: number = LIMITE_DE_LINHAS,
-): ArquivoMedido[] {
-  return medidos
-    .filter((m) => isSizedFile(m.file) && m.lines > limite)
+  measured: readonly MeasuredFile[],
+  limit: number = LINE_LIMIT,
+): MeasuredFile[] {
+  return measured
+    .filter((m) => isSizedFile(m.file) && m.lines > limit)
     .sort((a, b) => b.lines - a.lines || a.file.localeCompare(b.file));
 }

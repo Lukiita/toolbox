@@ -1,10 +1,11 @@
-// Duplicação de código, medida pelo jscpd.
+// Code duplication, measured by jscpd.
 //
-// Vale a métrica porque copiar-colar é o atalho natural de um agente que já
-// tem o trecho parecido no contexto — e é o tipo de piora que passa por lint,
-// typecheck e teste sem acender nada.
+// The metric earns its place because copy-paste is the natural shortcut of an
+// agent that already has the similar snippet in context - and it is the kind
+// of regression that sails through lint, typecheck and tests without lighting
+// anything up.
 
-/** O recorte do `jscpd-report.json` que interessa. */
+/** The slice of `jscpd-report.json` that matters. */
 export interface JscpdReport {
   statistics: {
     total: {
@@ -16,18 +17,19 @@ export interface JscpdReport {
 }
 
 export interface DuplicationStats {
-  /** Percentual de linhas duplicadas, com duas casas. */
-  percentual: number;
-  /** Quantidade de fragmentos clonados. */
-  fragmentos: number;
+  /** Duplicated-lines percentage, two decimal places. */
+  percent: number;
+  /** Number of cloned fragments. */
+  fragments: number;
 }
 
 export function duplicationStats(report: JscpdReport): DuplicationStats {
   const total = report.statistics.total;
   return {
-    // Duas casas porque a catraca compara número: sem arredondar, ruído de
-    // ponto flutuante reprovaria PR que não mexeu em duplicação nenhuma.
-    percentual: Math.round(total.percentage * 100) / 100,
-    fragmentos: total.clones,
+    // Two decimal places because the ratchet compares numbers: without
+    // rounding, floating-point noise would fail a PR that touched no
+    // duplication at all.
+    percent: Math.round(total.percentage * 100) / 100,
+    fragments: total.clones,
   };
 }

@@ -1,19 +1,22 @@
-// Portão de qualidade — catraca de baseline congelado.
+// Quality gate - the frozen-baseline ratchet.
 //
-// Roda com `pnpm quality`. Coleta métricas determinísticas, compara com
-// `quality-baseline.json` e sai diferente de zero quando alguma piorou. Zero
-// custo de modelo: é a mesma classe dos nós bash do fluxo do Archon, que
-// custaram US$ 0,00 numa run de US$ 21,92.
+// Runs as `pnpm quality`. Collects deterministic metrics, compares them with
+// `quality-baseline.json` and exits non-zero when any of them got worse. Zero
+// model cost: the same class as the Archon bash nodes, which cost US$ 0.00 in
+// a US$ 21.92 run.
 //
-// Opções:
-//   --update-baseline        recongela os números (ação deliberada e versionada)
-//   --skip-tests             reaproveita o coverage-quality/ já gerado
-//   --baseline-from <rev>    lê o baseline de outro commit (o CI usa a base do
-//                            PR, senão um PR que recongela aprova a si mesmo)
-//   --out <arquivo>          grava o relatório em markdown
+// Options:
+//   --update-baseline        re-freezes the numbers (deliberate, versioned action)
+//   --skip-tests             reuses the already-generated coverage report
+//   --baseline-from <rev>    reads the baseline from another commit (CI uses the
+//                            PR base, otherwise a re-freezing PR approves itself)
+//   --out <file>             writes the report to a markdown file
 //
-// Node 24 executa TypeScript direto (type stripping), então este arquivo não
-// precisa de build e ainda entra no `tsc --noEmit` junto com o resto do repo.
+// Node 24 runs TypeScript directly (type stripping), so this file needs no
+// build step and still goes through `tsc --noEmit` with the rest of the repo.
+//
+// The report language is per project: `"language": "en" | "pt"` in the
+// baseline json (see locale.mts). Console output stays English.
 
 import { execFileSync } from 'node:child_process';
 import { lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,7 +24,7 @@ import { tmpdir } from 'node:os';
 import { relative, resolve } from 'node:path';
 
 import { explicitAnyCount, type FileAnyCount, filesWithAny, isAnyCheckedFile } from './any-count.mts';
-import { ErroDeUso, parseArgs } from './args.mts';
+import { parseArgs, UsageError } from './args.mts';
 import {
   type Baseline,
   compareFileCounts,
@@ -35,286 +38,289 @@ import {
   uncoveredInTestableFiles,
 } from './coverage.mts';
 import { duplicationStats, type JscpdReport } from './duplication.mts';
-import { pureRuleFilesOutsideDomain } from './place-rule.mts';
-import { buildReport, type DetalheDoRelatorio } from './report.mts';
+import { stringsFor } from './locale.mts';
+import { pureRuleFilesOutsideDomain, RULE_DIRECTORIES } from './place-rule.mts';
+import { buildReport, type ReportDetail } from './report.mts';
 import {
-  type ArquivoMedido,
-  contarLinhas,
+  countLines,
   isSizedFile,
-  LIMITE_DE_LINHAS,
+  LINE_LIMIT,
+  type MeasuredFile,
   oversizedFiles,
 } from './size.mts';
 
-const RAIZ = resolve(import.meta.dirname, '../..');
-const BASELINE = resolve(RAIZ, 'quality-baseline.json');
+const ROOT = resolve(import.meta.dirname, '../..');
+const BASELINE_PATH = resolve(ROOT, 'quality-baseline.json');
+// The ratchet's own directory - see `reportsDirectory` in
+// vitest.quality.config.ts: sharing `coverage/` with `pnpm test:coverage`
+// made each one erase the other's report.
+const COVERAGE_PATH = resolve(ROOT, 'coverage-quality/coverage-final.json');
 
-// Metadados de cada métrica, para o `--update-baseline` poder CRIAR uma
-// entrada que ainda não existe no json. Sem isto a mensagem do compare
-// ("rode com --update-baseline para congelá-la") era uma promessa falsa: o
-// update só tocava entradas já presentes, e adotar métrica nova exigia editar
-// o baseline à mão. As entradas existentes continuam donas dos próprios
-// metadados — os defaults valem só no nascimento.
-const DEFAULTS_DE_METRICA: Record<string, Omit<MetricBaseline, 'value'>> = {
-  'cobertura-percentual': {
-    section: 'Cobertura',
-    label: 'Cobertura de linhas',
+// Metadata for each metric, so `--update-baseline` can CREATE an entry that
+// does not exist in the json yet. Without this, the compare failure message
+// ("run with --update-baseline to freeze it") was a false promise: the update
+// only touched entries already present, and adopting a new metric meant
+// editing the baseline by hand. Existing entries keep owning their own
+// metadata - the defaults apply only at birth.
+const METRIC_DEFAULTS: Record<string, Omit<MetricBaseline, 'value'>> = {
+  'coverage-percent': {
+    section: 'Coverage',
+    label: 'Line coverage',
     mode: 'baseline',
     direction: 'higher-is-better',
     unit: '%',
   },
-  'linhas-descobertas': {
-    section: 'Cobertura',
-    label: 'Linhas descobertas',
+  'uncovered-lines': {
+    section: 'Coverage',
+    label: 'Uncovered lines',
     mode: 'baseline',
     direction: 'lower-is-better',
     gate: false,
   },
-  'arquivos-com-linha-descoberta': {
-    section: 'Cobertura',
-    label: 'Arquivos com linha descoberta',
+  'files-with-uncovered-lines': {
+    section: 'Coverage',
+    label: 'Files with uncovered lines',
     mode: 'baseline',
     direction: 'lower-is-better',
     gate: false,
   },
-  'duplicacao-percentual': {
-    section: 'Duplicação',
-    label: 'Linhas duplicadas',
+  'duplication-percent': {
+    section: 'Duplication',
+    label: 'Duplicated lines',
     mode: 'baseline',
     direction: 'lower-is-better',
     unit: '%',
   },
-  'duplicacao-fragmentos': {
-    section: 'Duplicação',
-    label: 'Fragmentos duplicados',
+  'duplication-fragments': {
+    section: 'Duplication',
+    label: 'Duplicated fragments',
     mode: 'baseline',
     direction: 'lower-is-better',
   },
-  'regra-pura-fora-do-dominio': {
-    section: 'Arquitetura',
-    label: 'Regra pura fora do domínio',
+  'pure-rule-outside-domain': {
+    section: 'Architecture',
+    label: 'Pure rules outside the domain',
     mode: 'baseline',
     direction: 'lower-is-better',
   },
-  'arquivos-acima-do-limite': {
-    section: 'Tamanho',
-    label: 'Arquivos acima do limite',
+  'files-over-limit': {
+    section: 'Size',
+    label: 'Files over the line limit',
     mode: 'baseline',
     direction: 'lower-is-better',
   },
-  'any-explicito': {
-    section: 'Tipos',
-    label: '`any` explícito',
+  'explicit-any': {
+    section: 'Types',
+    label: 'Explicit `any`',
     mode: 'baseline',
     direction: 'lower-is-better',
-    note: 'Contagem de nós AnyKeyword na AST dos arquivos de produção (any-count.mts). O AGENTS.md proíbe `any` novo; a catraca deixa a dívida legada só encolher.',
+    note: 'AST count of any-keyword nodes in production files (any-count.mts). AGENTS.md bans new `any`; the ratchet lets legacy debt only shrink.',
   },
 };
-// Diretório próprio da catraca — ver `reportsDirectory` no
-// vitest.quality.config.ts: dividir `coverage/` com o `pnpm test:coverage`
-// fazia um apagar o relatório do outro.
-const COBERTURA = resolve(RAIZ, 'coverage-quality/coverage-final.json');
 
 function git(...args: string[]): string {
-  return execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' });
+  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 }
 
-// `--others --exclude-standard` além do `--cached`: arquivo novo ainda não
-// commitado precisa contar. O gate por task da tlc roda ANTES do commit, e sem
-// isso a regra de lugar não veria justamente o arquivo que acabou de nascer no
-// lugar errado — o buraco estava no ponto de integração mais valioso.
-function arquivosDoProjeto(): string[] {
+// `--others --exclude-standard` on top of `--cached`: a new file not yet
+// committed must count. The tlc per-task gate runs BEFORE the commit, and
+// without this the place rule would miss exactly the file just born in the
+// wrong place - the hole sat at the most valuable integration point.
+function projectFiles(): string[] {
   return git('ls-files', '--cached', '--others', '--exclude-standard').split('\n').filter(Boolean);
 }
 
-// Binário direto, não `pnpm vitest`: o pnpm confere lockfile contra
-// node_modules antes de executar, e isso impede rodar o portão sobre um
-// worktree de outro commit — que é exatamente como ele foi calibrado.
+// The binary directly, not `pnpm vitest`: pnpm checks the lockfile against
+// node_modules before executing, and that blocks running the gate over a
+// worktree of another commit - which is exactly how it was calibrated.
 //
-// `--config vitest.quality.config.ts`: o config padrão mede só
-// `domain/`+`application/` com os limiares do NFR-08; a catraca precisa do
-// recorte largo, sem limiar. O porquê da separação está no próprio arquivo.
-function rodarTestesComCobertura(): void {
+// `--config vitest.quality.config.ts`: the default config measures only the
+// strict slice with its own thresholds; the ratchet needs the wide slice with
+// no threshold. The why of the split lives in that file.
+function runCoveredTests(): void {
   execFileSync(
-    resolve(RAIZ, 'node_modules/.bin/vitest'),
+    resolve(ROOT, 'node_modules/.bin/vitest'),
     ['run', '--coverage', '--config', 'vitest.quality.config.ts'],
-    { cwd: RAIZ, stdio: 'inherit' },
+    { cwd: ROOT, stdio: 'inherit' },
   );
 }
 
-const paraRelativo = (absoluto: string) => relative(RAIZ, absoluto).split('\\').join('/');
+const toRelative = (absolute: string) => relative(ROOT, absolute).split('\\').join('/');
 
-function lerCobertura(): {
-  descobertos: UncoveredByFile[];
-  percentual: number;
+function readCoverage(): {
+  uncovered: UncoveredByFile[];
+  percent: number;
 } {
-  const map = JSON.parse(readFileSync(COBERTURA, 'utf8')) as CoverageMap;
+  const map = JSON.parse(readFileSync(COVERAGE_PATH, 'utf8')) as CoverageMap;
   return {
-    descobertos: uncoveredInTestableFiles(map, paraRelativo),
-    percentual: coveragePercent(map, paraRelativo),
+    uncovered: uncoveredInTestableFiles(map, toRelative),
+    percent: coveragePercent(map, toRelative),
   };
 }
 
-// Só arquivo regular: `git ls-files` também lista submódulo e link simbólico.
-// Ler diretório estoura EISDIR, e link para um dispositivo (`/dev/zero`) nunca
-// termina — `lstatSync` não segue o link, então decide antes de abrir.
-function arquivosRegulares(paths: readonly string[]): string[] {
-  return paths.filter((file) => lstatSync(resolve(RAIZ, file)).isFile());
+// Regular files only: `git ls-files` also lists submodules and symlinks.
+// Reading a directory throws EISDIR, and a link to a device (`/dev/zero`)
+// never finishes - `lstatSync` does not follow the link, so it decides
+// before opening.
+function regularFiles(paths: readonly string[]): string[] {
+  return paths.filter((file) => lstatSync(resolve(ROOT, file)).isFile());
 }
 
-function medirTamanhos(paths: readonly string[]): ArquivoMedido[] {
-  return arquivosRegulares(paths.filter(isSizedFile)).map((file) => ({
+function measureSizes(paths: readonly string[]): MeasuredFile[] {
+  return regularFiles(paths.filter(isSizedFile)).map((file) => ({
     file,
-    lines: contarLinhas(readFileSync(resolve(RAIZ, file), 'utf8')),
+    lines: countLines(readFileSync(resolve(ROOT, file), 'utf8')),
   }));
 }
 
-function medirAnys(paths: readonly string[]): FileAnyCount[] {
+function measureAnys(paths: readonly string[]): FileAnyCount[] {
   return filesWithAny(
-    arquivosRegulares(paths.filter(isAnyCheckedFile)).map((file) => ({
+    regularFiles(paths.filter(isAnyCheckedFile)).map((file) => ({
       file,
-      count: explicitAnyCount(file, readFileSync(resolve(RAIZ, file), 'utf8')),
+      count: explicitAnyCount(file, readFileSync(resolve(ROOT, file), 'utf8')),
     })),
   );
 }
 
-function medirDuplicacao() {
-  const saida = mkdtempSync(resolve(tmpdir(), 'jscpd-'));
+function measureDuplication() {
+  const out = mkdtempSync(resolve(tmpdir(), 'jscpd-'));
   try {
     execFileSync(
-      resolve(RAIZ, 'node_modules/.bin/jscpd'),
-      ['--reporters', 'json', '--output', saida, '--silent', 'src'],
-      { cwd: RAIZ, stdio: 'ignore' },
+      resolve(ROOT, 'node_modules/.bin/jscpd'),
+      ['--reporters', 'json', '--output', out, '--silent', 'src'],
+      { cwd: ROOT, stdio: 'ignore' },
     );
-    const report = JSON.parse(
-      readFileSync(resolve(saida, 'jscpd-report.json'), 'utf8'),
-    ) as JscpdReport;
+    const report = JSON.parse(readFileSync(resolve(out, 'jscpd-report.json'), 'utf8')) as JscpdReport;
     return duplicationStats(report);
   } finally {
-    // Sem isto, cada execução deixa um diretório para trás — e no gate por
-    // task da tlc são 20 por feature.
-    rmSync(saida, { recursive: true, force: true });
+    // Without this, every run leaves a directory behind - and in the tlc
+    // per-task gate that is 20 per feature.
+    rmSync(out, { recursive: true, force: true });
   }
 }
 
-function lerBaseline(rev?: string): { base: Baseline; origem?: string } {
-  if (!rev) return { base: JSON.parse(readFileSync(BASELINE, 'utf8')) };
+function readBaseline(rev?: string): { base: Baseline; origin?: string } {
+  if (!rev) return { base: JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) };
   try {
     return {
       base: JSON.parse(git('show', `${rev}:quality-baseline.json`)),
-      origem: rev,
+      origin: rev,
     };
   } catch {
-    // A base ainda não tem baseline — é o PR que introduz a catraca. Cair para
-    // o da branch é o único comportamento possível, e imprimir o motivo evita
-    // que alguém leia "aprovado" achando que houve comparação com a base.
+    // The base has no baseline yet - the PR that introduces the ratchet.
+    // Falling back to the branch's own is the only possible behavior, and
+    // printing the reason keeps anyone from reading "passed" believing the
+    // base was compared.
     console.error(
-      `aviso: ${rev} não tem quality-baseline.json (o PR que introduz a catraca).\n` +
-        'Comparando com o baseline da própria branch.',
+      `warning: ${rev} has no quality-baseline.json (the PR that introduces the ratchet).\n` +
+        "Comparing against the branch's own baseline.",
     );
-    return { base: JSON.parse(readFileSync(BASELINE, 'utf8')) };
+    return { base: JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) };
   }
 }
 
 function main(): void {
-  let opcoes;
+  let options;
   try {
-    opcoes = parseArgs(process.argv.slice(2));
+    options = parseArgs(process.argv.slice(2));
   } catch (e) {
-    if (!(e instanceof ErroDeUso)) throw e;
-    // Código 2 e não 1: erro de uso não é o mesmo que "a catraca reprovou", e
-    // quem lê o log do CI precisa distinguir os dois.
+    if (!(e instanceof UsageError)) throw e;
+    // Exit 2, not 1: a usage error is not the same as "the ratchet failed",
+    // and whoever reads the CI log needs to tell the two apart.
     console.error(
-      `${e.message}\nUso: pnpm quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <arquivo>]`,
+      `${e.message}\nUsage: pnpm quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]`,
     );
     process.exit(2);
   }
-  const { atualizar, pularTestes, baselineDe, destino } = opcoes;
+  const { updateBaseline, skipTests, baselineFrom, out } = options;
 
-  const versionados = arquivosDoProjeto();
-  const regraDeLugar = pureRuleFilesOutsideDomain(versionados);
-  const grandes = oversizedFiles(medirTamanhos(versionados));
-  const anys = medirAnys(versionados);
-  const duplicacao = medirDuplicacao();
+  const versioned = projectFiles();
+  const displacedRules = pureRuleFilesOutsideDomain(versioned);
+  const oversized = oversizedFiles(measureSizes(versioned));
+  const anys = measureAnys(versioned);
+  const duplication = measureDuplication();
 
-  if (!pularTestes) rodarTestesComCobertura();
-  const { descobertos, percentual: coberturaPercentual } = lerCobertura();
-  const porArquivo: Record<string, number> = {};
-  for (const { file, lines } of descobertos) porArquivo[file] = lines.length;
+  if (!skipTests) runCoveredTests();
+  const { uncovered, percent: coveragePercentValue } = readCoverage();
+  const byFile: Record<string, number> = {};
+  for (const { file, lines } of uncovered) byFile[file] = lines.length;
 
-  const atual: Record<string, number> = {
-    'cobertura-percentual': coberturaPercentual,
-    'linhas-descobertas': descobertos.reduce((s, f) => s + f.lines.length, 0),
-    'arquivos-com-linha-descoberta': descobertos.length,
-    'duplicacao-percentual': duplicacao.percentual,
-    'duplicacao-fragmentos': duplicacao.fragmentos,
-    'regra-pura-fora-do-dominio': regraDeLugar.length,
-    'arquivos-acima-do-limite': grandes.length,
-    'any-explicito': anys.reduce((s, f) => s + f.count, 0),
+  const current: Record<string, number> = {
+    'coverage-percent': coveragePercentValue,
+    'uncovered-lines': uncovered.reduce((s, f) => s + f.lines.length, 0),
+    'files-with-uncovered-lines': uncovered.length,
+    'duplication-percent': duplication.percent,
+    'duplication-fragments': duplication.fragments,
+    'pure-rule-outside-domain': displacedRules.length,
+    'files-over-limit': oversized.length,
+    'explicit-any': anys.reduce((s, f) => s + f.count, 0),
   };
 
-  if (atualizar) {
-    const { base } = lerBaseline();
-    for (const [nome, valor] of Object.entries(atual)) {
-      const alvo = base.metrics[nome];
-      if (alvo) {
-        alvo.value = valor;
-        continue;
-      }
-      // Métrica medida mas ausente do json: nasce agora, com os metadados
-      // registrados. É o que a mensagem de falha do compare promete.
-      const defaults = DEFAULTS_DE_METRICA[nome];
-      if (defaults) base.metrics[nome] = { ...defaults, value: valor };
+  if (updateBaseline) {
+    const { base } = readBaseline();
+    // Rebuilt from what was measured: an existing entry keeps its metadata, a
+    // new one is born from the registered defaults, and a metric no longer
+    // measured is pruned - stale entries would document a gate that no longer
+    // exists. Re-freezing is already the deliberate, versioned action.
+    const next: Record<string, MetricBaseline> = {};
+    for (const [name, value] of Object.entries(current)) {
+      const meta = base.metrics[name] ?? METRIC_DEFAULTS[name];
+      if (meta) next[name] = { ...meta, value };
     }
+    base.metrics = next;
     base.uncoveredByFile = Object.fromEntries(
-      Object.entries(porArquivo).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(byFile).sort(([a], [b]) => a.localeCompare(b)),
     );
-    writeFileSync(BASELINE, `${JSON.stringify(base, null, 2)}\n`);
-    console.log('baseline recongelado em quality-baseline.json');
+    writeFileSync(BASELINE_PATH, `${JSON.stringify(base, null, 2)}\n`);
+    console.log('baseline re-frozen in quality-baseline.json');
     return;
   }
 
-  const { base, origem } = lerBaseline(baselineDe);
-  const falhas = [
-    ...compareMetrics(base, atual),
-    ...compareFileCounts(base.uncoveredByFile ?? {}, porArquivo),
+  const { base, origin } = readBaseline(baselineFrom);
+  const t = stringsFor(base.language);
+  const failures = [
+    ...compareMetrics(base, current, t),
+    ...compareFileCounts(base.uncoveredByFile ?? {}, byFile, t),
   ];
 
-  const detalhes: DetalheDoRelatorio[] = [
+  const ruleDirs = RULE_DIRECTORIES.map((d) => `\`${d}\``).join(' / ');
+  const details: ReportDetail[] = [
     {
-      titulo: `Regra pura fora de \`src/domain/\` e \`src/application/\` (${regraDeLugar.length})`,
-      itens: regraDeLugar.map((f) => `\`${f}\``),
+      title: t.pureRulesTitle(displacedRules.length, ruleDirs),
+      items: displacedRules.map((f) => `\`${f}\``),
     },
     {
-      titulo: `Arquivos acima de ${LIMITE_DE_LINHAS} linhas (${grandes.length})`,
-      itens: grandes.map((g) => `\`${g.file}\` — ${g.lines}`),
+      title: t.filesOverLimitTitle(LINE_LIMIT, oversized.length),
+      items: oversized.map((g) => `\`${g.file}\` — ${g.lines}`),
     },
     {
-      titulo: `Arquivos com \`any\` explícito (${anys.length})`,
-      itens: anys.slice(0, 20).map((a) => `\`${a.file}\` — ${a.count}`),
+      title: t.explicitAnyTitle(anys.length),
+      items: anys.slice(0, 20).map((a) => `\`${a.file}\` — ${a.count}`),
     },
     {
-      titulo: `Arquivos com linha descoberta (${descobertos.length})`,
-      itens: descobertos
-        .slice(0, 20)
-        .map((d) => `\`${d.file}\` — ${d.lines.length} linhas · ${d.percentual}% coberto`),
+      title: t.uncoveredFilesTitle(uncovered.length),
+      items: uncovered.slice(0, 20).map((d) => t.uncoveredFileItem(d.file, d.lines.length, d.percent)),
     },
   ];
 
-  const relatorio = buildReport({
-    baseline: base,
-    atual,
-    falhas,
-    detalhes,
-    geradoEm: new Date().toISOString(),
-    origemDoBaseline: origem,
-    baselineAlterado: origem
-      ? git('diff', '--name-only', `${origem}...HEAD`).includes('quality-baseline.json')
-      : false,
-  });
+  const report = buildReport(
+    {
+      baseline: base,
+      current,
+      failures,
+      details,
+      generatedAt: new Date().toISOString(),
+      baselineOrigin: origin,
+      baselineChanged: origin
+        ? git('diff', '--name-only', `${origin}...HEAD`).includes('quality-baseline.json')
+        : false,
+    },
+    t,
+  );
 
-  console.log(relatorio);
-  if (destino) writeFileSync(resolve(RAIZ, destino), `${relatorio}\n`);
-  if (falhas.length > 0) process.exit(1);
+  console.log(report);
+  if (out) writeFileSync(resolve(ROOT, out), `${report}\n`);
+  if (failures.length > 0) process.exit(1);
 }
 
 main();

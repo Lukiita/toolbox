@@ -1,52 +1,54 @@
-// Leitura da linha de comando do portão.
+// Command-line parsing for the gate.
 //
-// Vive fora do `main()` porque é a única parte dele que decide alguma coisa —
-// o resto é encanamento (spawn, ler arquivo, imprimir). Extraída, ela ganha
-// teste; embutida, só o olho humano garantia que `--baseline-from` sem valor
-// não vira `undefined` silencioso.
+// Lives outside `main()` because it is the only part of it that decides
+// anything - the rest is plumbing (spawn, read file, print). Extracted, it
+// gets a test; inlined, only human eyes guaranteed that `--baseline-from`
+// without a value would not become a silent `undefined`.
 
-export interface OpcoesDoPortao {
-  /** Recongela os números em vez de comparar. */
-  atualizar: boolean;
-  /** Reaproveita o `coverage/` já gerado. */
-  pularTestes: boolean;
-  /** Commit de onde ler o baseline (o CI passa a base do PR). */
-  baselineDe?: string;
-  /** Arquivo onde gravar o relatório. */
-  destino?: string;
+export interface GateOptions {
+  /** Re-freeze the numbers instead of comparing. */
+  updateBaseline: boolean;
+  /** Reuse the already-generated coverage report. */
+  skipTests: boolean;
+  /** Commit to read the baseline from (CI passes the PR's base). */
+  baselineFrom?: string;
+  /** File to write the report to. */
+  out?: string;
 }
 
-/** Erro de uso — separado de "a catraca reprovou", que é `exit 1`. */
-export class ErroDeUso extends Error {}
+/** Usage error - distinct from "the ratchet failed", which is `exit 1`. */
+export class UsageError extends Error {}
 
 /**
- * Flag com valor presente e sem valor **estoura**, em vez de devolver
- * `undefined`. Devolver `undefined` seria pior do que parece nos dois casos:
+ * A flag that takes a value but got none **throws** instead of returning
+ * `undefined`. Returning `undefined` would be worse than it looks in both
+ * cases:
  *
- * - `--baseline-from` sem valor faz o portão comparar com o baseline da
- *   própria branch, sem avisar (o aviso do fallback só dispara quando há um
- *   rev que falhou), e o CI aprovaria uma regressão contra o baseline errado;
- * - `--out` sem valor não grava o relatório, e o passo do comentário no PR
- *   simplesmente não acontece — some sem barulho.
+ * - `--baseline-from` without a value makes the gate compare against the
+ *   branch's own baseline without warning (the fallback notice only fires when
+ *   a rev exists and failed), and CI would approve a regression against the
+ *   wrong baseline;
+ * - `--out` without a value writes no report, and the PR-comment step simply
+ *   never happens - it vanishes without a sound.
  *
- * Flag ausente continua devolvendo `undefined`: isso é escolha, não engano.
+ * An absent flag still returns `undefined`: that is a choice, not a mistake.
  */
-function valorDe(args: readonly string[], flag: string): string | undefined {
+function flagValue(args: readonly string[], flag: string): string | undefined {
   const i = args.indexOf(flag);
   if (i < 0) return undefined;
-  const valor = args[i + 1];
-  if (valor === undefined || valor === '' || valor.startsWith('--')) {
-    const recebido = valor === undefined ? 'nada' : `"${valor}"`;
-    throw new ErroDeUso(`${flag} exige um valor (recebeu ${recebido}).`);
+  const value = args[i + 1];
+  if (value === undefined || value === '' || value.startsWith('--')) {
+    const received = value === undefined ? 'nothing' : `"${value}"`;
+    throw new UsageError(`${flag} requires a value (received ${received}).`);
   }
-  return valor;
+  return value;
 }
 
-export function parseArgs(args: readonly string[]): OpcoesDoPortao {
+export function parseArgs(args: readonly string[]): GateOptions {
   return {
-    atualizar: args.includes('--update-baseline'),
-    pularTestes: args.includes('--skip-tests'),
-    baselineDe: valorDe(args, '--baseline-from'),
-    destino: valorDe(args, '--out'),
+    updateBaseline: args.includes('--update-baseline'),
+    skipTests: args.includes('--skip-tests'),
+    baselineFrom: flagValue(args, '--baseline-from'),
+    out: flagValue(args, '--out'),
   };
 }

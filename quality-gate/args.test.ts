@@ -1,53 +1,53 @@
 import { describe, expect, it } from 'vitest';
 
-import { ErroDeUso, parseArgs } from './args.mts';
+import { parseArgs, UsageError } from './args.mts';
 
 describe('parseArgs', () => {
-  it('sem argumento nenhum, compara com o baseline local', () => {
+  it('with no arguments, compares against the local baseline', () => {
     expect(parseArgs([])).toEqual({
-      atualizar: false,
-      pularTestes: false,
-      baselineDe: undefined,
-      destino: undefined,
+      updateBaseline: false,
+      skipTests: false,
+      baselineFrom: undefined,
+      out: undefined,
     });
   });
 
-  it('lê as flags booleanas', () => {
+  it('reads the boolean flags', () => {
     const o = parseArgs(['--update-baseline', '--skip-tests']);
-    expect(o.atualizar).toBe(true);
-    expect(o.pularTestes).toBe(true);
+    expect(o.updateBaseline).toBe(true);
+    expect(o.skipTests).toBe(true);
   });
 
-  it('lê o valor das flags com argumento', () => {
-    const o = parseArgs(['--baseline-from', 'abc123', '--out', 'rel.md']);
-    expect(o.baselineDe).toBe('abc123');
-    expect(o.destino).toBe('rel.md');
+  it('reads the value of flags that take one', () => {
+    const o = parseArgs(['--baseline-from', 'abc123', '--out', 'report.md']);
+    expect(o.baselineFrom).toBe('abc123');
+    expect(o.out).toBe('report.md');
   });
 
-  it('estoura em vez de engolir a flag seguinte como valor', () => {
-    // Devolver undefined aqui faria o portão comparar com o baseline da
-    // própria branch sem avisar, e o CI aprovaria regressão contra o baseline
-    // errado. Erro de uso tem que ser barulhento.
-    expect(() => parseArgs(['--baseline-from', '--out', 'rel.md'])).toThrow(ErroDeUso);
+  it('throws instead of swallowing the next flag as a value', () => {
+    // Returning undefined here would make the gate compare against the
+    // branch's own baseline without warning, and CI would approve a
+    // regression against the wrong baseline. Usage errors must be loud.
+    expect(() => parseArgs(['--baseline-from', '--out', 'report.md'])).toThrow(UsageError);
   });
 
-  it('estoura quando o valor falta no fim da linha', () => {
-    expect(() => parseArgs(['--baseline-from'])).toThrow(/exige um valor/);
+  it('throws when the value is missing at the end of the line', () => {
+    expect(() => parseArgs(['--baseline-from'])).toThrow(/requires a value/);
   });
 
-  it('estoura com valor vazio', () => {
-    expect(() => parseArgs(['--out', ''])).toThrow(ErroDeUso);
+  it('throws on an empty value', () => {
+    expect(() => parseArgs(['--out', ''])).toThrow(UsageError);
   });
 
-  it('--out sem valor estoura: sem relatório, o comentário do PR some calado', () => {
-    expect(() => parseArgs(['--out'])).toThrow(/--out exige um valor/);
+  it('--out without a value throws: with no report, the PR comment vanishes silently', () => {
+    expect(() => parseArgs(['--out'])).toThrow(/--out requires a value/);
   });
 
-  it('flag ausente continua sendo undefined — isso é escolha, não engano', () => {
-    expect(parseArgs(['--skip-tests']).baselineDe).toBeUndefined();
+  it('an absent flag stays undefined - that is a choice, not a mistake', () => {
+    expect(parseArgs(['--skip-tests']).baselineFrom).toBeUndefined();
   });
 
-  it('ignora argumento desconhecido em vez de estourar', () => {
-    expect(parseArgs(['--sei-la']).atualizar).toBe(false);
+  it('ignores unknown arguments instead of throwing', () => {
+    expect(parseArgs(['--whatever']).updateBaseline).toBe(false);
   });
 });
