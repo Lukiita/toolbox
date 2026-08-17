@@ -23,7 +23,7 @@ Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`
 3. `package.json` scripts:
    `"quality": "node scripts/quality/gate.mts"` and wire it into the repo gate (e.g. `"gate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm quality"`).
 4. Copy `baseline.example.json` to `quality-baseline.json` at the root, set `"language"`, then run `pnpm quality --update-baseline` to freeze today's real numbers. Commit it — the baseline is versioned so every re-freeze shows in a diff.
-5. CI runs `pnpm quality --baseline-from origin/main` — comparing against the PR's base, otherwise a PR that re-freezes approves itself.
+5. Wire the CI from `ci.example.yml` (copy into `.github/workflows/`): the ratchet against the PR's **base** (`--baseline-from`, otherwise a re-freezing PR approves itself), the report as an edited-in-place PR comment (via the `<!-- quality-gate -->` marker), the job summary, the report artifact, and a dependency audit where **critical blocks and high warns**.
 
 ## Report language
 

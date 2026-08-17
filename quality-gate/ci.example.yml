@@ -1,0 +1,107 @@
+# Example CI wiring for the quality ratchet - copy into .github/workflows/
+# and adapt (package manager, node version, branch names). Every step here is
+# proven in Project A's ci.yml; the comments carry the reasons so they survive
+# the copy.
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Quality ratchet
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # publishes and edits the report comment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The baseline that counts is the PR's BASE, not the branch's: without
+          # this, a PR that re-freezes the baseline approves itself.
+          fetch-depth: 0
+          # This job runs code coming FROM the pull request (the suite, jscpd,
+          # the branch's own scripts) before posting the comment, and it holds
+          # `pull-requests: write`. Checkout writes GITHUB_TOKEN into
+          # .git/config by default, within reach of that code. The `gh api`
+          # calls below do not depend on it: they receive GH_TOKEN explicitly.
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # the gate runs TypeScript directly (type stripping)
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # A PR may add code; it may not make any metric worse. Zero model cost -
+      # the cheapest layer of the quality control, and it catches what a model
+      # review misses out of fatigue.
+      - name: Quality ratchet
+        run: |
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            pnpm quality --baseline-from "${{ github.event.pull_request.base.sha }}" --out quality-report.md
+          else
+            pnpm quality --out quality-report.md
+          fi
+
+      - name: Job summary
+        if: always() && hashFiles('quality-report.md') != ''
+        run: cat quality-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One fixed comment, edited in place - one comment per push would pile
+      # noise onto the PR. The HTML marker at the top of the report is what
+      # allows the edit (MARKER in report.mts); changing the marker duplicates
+      # the comment instead of updating it.
+      - name: Pull request comment
+        if: always() && github.event_name == 'pull_request' && hashFiles('quality-report.md') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          ID=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- quality-gate -->")) | .id] | first // empty')
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$ID" -F body=@quality-report.md >/dev/null
+            echo "comment $ID updated"
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@quality-report.md >/dev/null
+            echo "comment created"
+          fi
+
+      # The report as an artifact: what a future agent (or the babysitting
+      # loop) downloads to read the regressions without re-running the gate.
+      - name: Upload report
+        if: always() && hashFiles('quality-report.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: quality-report.md
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Two levels on purpose. Critical BLOCKS: a failure here means something
+      # new and severe arrived through the lockfile - no known debt lives at
+      # this level, so no unrelated change gets punished. High WARNS: known
+      # debt stays visible on every run without stopping the world - name
+      # yours in the warning message so the annotation explains itself.
+      - name: Audit (critical blocks)
+        run: pnpm audit --audit-level critical
+
+      - name: Audit (high warns)
+        run: pnpm audit --audit-level high || echo "::warning::high-severity advisories present - not blocking; document the known debt"
