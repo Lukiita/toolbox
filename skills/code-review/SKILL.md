@@ -98,10 +98,16 @@ repo — `CLAUDE.md` / `AGENTS.md`, da raiz e dos diretórios tocados — e
 2. A mudança quebra algum cenário garantido em `.specs/capabilities/`? Esses
    arquivos dizem o que o sistema promete hoje; quebrar um em silêncio é a
    regressão mais cara que existe.
+3. Conascência forte atravessando fronteira de feature/módulo? Valor mágico
+   repetido em dois lugares (conascência de *significado*), ordem frágil de
+   parâmetros posicionais (*posição*), algoritmo duplicado que precisa mudar
+   junto (*algoritmo*) — aponte citando o tipo e a refatoração para a forma
+   mais fraca (constante nomeada, objeto nomeado, fonte única). Dentro do
+   mesmo módulo, tolere: conascência forte perto é menos smell que a mesma
+   espalhada.
 
-Sem esses arquivos, este revisor devolve vazio — e tudo bem. Onde o projeto não
-documenta nada, vale a regra do bom senso: convenção estabelecida no código
-vizinho vence preferência sua.
+Sem os arquivos das perguntas 1 e 2, sobram a pergunta 3 e o bom senso:
+convenção estabelecida no código vizinho vence preferência sua.
 
 ### 4. Triagem — você mesmo, sem agente novo
 

@@ -18,17 +18,36 @@ describe('pureRuleFilesOutsideDomain', () => {
     expect(pureRuleFilesOutsideDomain(files)).toEqual([]);
   });
 
-  it('ignores what already lives in src/domain', () => {
-    const files = ['src/domain/freight-split.ts', 'src/domain/freight-split.test.ts'];
-    expect(pureRuleFilesOutsideDomain(files)).toEqual([]);
-  });
-
-  it('ignores what already lives in src/application', () => {
+  it('accepts the package-by-layer layout: src/domain and src/application', () => {
     const files = [
+      'src/domain/freight-split.ts',
+      'src/domain/freight-split.test.ts',
       'src/application/generate-declaration.ts',
       'src/application/generate-declaration.test.ts',
     ];
     expect(pureRuleFilesOutsideDomain(files)).toEqual([]);
+  });
+
+  it('accepts the package-by-feature layout: the layers live inside the feature folder', () => {
+    const files = [
+      'src/processo-aduaneiro/domain/rateio.ts',
+      'src/processo-aduaneiro/domain/rateio.test.ts',
+      'src/processo-aduaneiro/application/gerar-declaracao.ts',
+      'src/processo-aduaneiro/application/gerar-declaracao.test.ts',
+      'src/shared/domain/money.ts',
+      'src/shared/domain/money.test.ts',
+    ];
+    expect(pureRuleFilesOutsideDomain(files)).toEqual([]);
+  });
+
+  it('flags a rule inside a feature folder but outside its layer dirs', () => {
+    const files = [
+      'src/processo-aduaneiro/calculo-emolumentos.ts',
+      'src/processo-aduaneiro/calculo-emolumentos.test.ts',
+    ];
+    expect(pureRuleFilesOutsideDomain(files)).toEqual([
+      'src/processo-aduaneiro/calculo-emolumentos.ts',
+    ]);
   });
 
   it('flags a pure rule in src/utils, which is as much an edge as the UI', () => {

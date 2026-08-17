@@ -2,9 +2,11 @@
 
 Canonical source of the frozen-baseline quality gate. **A PR may add code but may not worsen any metric — not even by one unit.** Deterministic, zero model cost (the same class as the Archon bash nodes), and it tests itself (every collector has a `.test.ts` beside it).
 
+In *Building Evolutionary Architectures* terms, this is an **architectural fitness function of the trend kind** — it gates on direction, not on a threshold. The threshold-kind fitness functions live beside it as templates: `eslint.fitness.example.mjs` (explicit types, complexity, depth, assertion-required tests) and `dependency-cruiser.example.cjs` (layer governance for the package-by-feature layout + cross-feature boundaries).
+
 Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`), promoted to the toolbox on 2026-08-17 with three improvements: the **explicit-`any` metric**, `--update-baseline` now **creates and prunes** metric entries instead of silently skipping them, and the **report language is per project** (`"language": "en" | "pt"` in the baseline json) while the code is all English.
 
-## The 8 metrics
+## The 10 metrics
 
 | metric | gate | what it protects |
 |---|---|---|
@@ -12,8 +14,10 @@ Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`
 | `uncoveredByFile` (per-file ratchet) | ✔ | local coverage regressions the global number hides |
 | `uncovered-lines` / `files-with-uncovered-lines` | info | context in the report |
 | `duplication-percent` / `duplication-fragments` | ✔ | copies an agent will edit inconsistently |
-| `pure-rule-outside-domain` | ✔ | business rules born outside `domain/`+`application/` (a `.ts` with a unit test beside it, outside the rule dirs) |
+| `pure-rule-outside-domain` | ✔ | business rules born outside the layer dirs (a `.ts` with a unit test beside it, outside `RULE_PATTERNS`) — works for both package-by-feature and package-by-layer layouts |
+| `circular-dependencies` | ✔ | strongly connected components in the production import graph — a cycle means nothing in it can be reused or understood alone; frozen at 0, cycles are forbidden outright |
 | `files-over-limit` | ✔ | files over the size limit — where agent edits turn into mess |
+| `cc-over-limit` | ✔ | functions over the cyclomatic-complexity limit (default 5) — every path is a test someone owes, and generative AI accumulates accidental complexity |
 | `explicit-any` | ✔ | AST count of `any` in production — type debt can only shrink |
 
 ## Importing into a project
@@ -31,10 +35,13 @@ The code and console output are English. The **report** (terminal, job summary, 
 
 ## Adaptation points (review on import)
 
-- `place-rule.mts` → `RULE_DIRECTORIES` (where business rules are allowed to live; default `src/domain/`, `src/application/`).
+- `place-rule.mts` → `RULE_PATTERNS` (where business rules may live; the default accepts both `src/<feature>/domain|application/` and the flat `src/domain|application/`).
 - `size.mts` → `LINE_LIMIT` (default 400) and the production-file window (`isSizedFile`).
+- `complexity.mts` → `CC_LIMIT` (default 5, the Richards & Ford preference; industry tolerates 10).
+- `cycles.mts` → `ALIAS_PREFIXES` (non-relative import prefixes resolved as internal; default `@/` → repo root).
 - `vitest.quality.config.ts` → the wide coverage slice and suite includes.
 - `gate.mts` → `ROOT` assumes `scripts/quality/` depth; `measureDuplication` scans `src`.
+- `dependency-cruiser.example.cjs` → the layer globs, and the **cross-feature policy** (three options documented in the file — pick one).
 
 ## Adding a new metric
 

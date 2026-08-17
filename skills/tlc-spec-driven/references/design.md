@@ -61,6 +61,8 @@ Flag any concerns found here per step 1.5 into `## Risks & Concerns`.
 
 Each component: Purpose, Location, Interfaces, Dependencies, What it reuses.
 
+**Boundary test per component (cohesion trade-off):** before splitting or merging, answer three questions — are these the only operations that belong together? Is this component expected to grow? Would splitting it demand heavy coupling between the parts? Splitting a cohesive module only buys coupling and hurts readability; when in doubt, keep it together and note the trade-off in the design.
+
 ### 5. Define Data Models
 
 If the feature involves data, define models before implementation.

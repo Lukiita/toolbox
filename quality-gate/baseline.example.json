@@ -54,6 +54,14 @@
       "value": 0,
       "note": "A .ts outside the rule directories WITH a unit test beside it - the signature of a business rule born at the edge. Complements the import-direction lint, which cannot see a rule that never reached domain/."
     },
+    "circular-dependencies": {
+      "section": "Architecture",
+      "label": "Circular dependencies",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "note": "Strongly connected components in the production import graph (cycles.mts). A cycle means no file in it can be reused or understood alone. At 0, freezing makes cycles forbidden outright."
+    },
     "files-over-limit": {
       "section": "Size",
       "label": "Files over the line limit",
@@ -61,6 +69,14 @@
       "direction": "lower-is-better",
       "value": 0,
       "note": "Production files over LINE_LIMIT (size.mts). Big files are where the next agent edit turns into a mess."
+    },
+    "cc-over-limit": {
+      "section": "Complexity",
+      "label": "Functions over the CC limit",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "note": "Functions with cyclomatic complexity above CC_LIMIT (complexity.mts, default 5 per Richards & Ford). Every path is a test someone owes; generative AI accumulates accidental complexity - the ratchet watches the model's laziness."
     },
     "explicit-any": {
       "section": "Types",

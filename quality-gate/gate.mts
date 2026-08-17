@@ -3,7 +3,9 @@
 // Runs as `pnpm quality`. Collects deterministic metrics, compares them with
 // `quality-baseline.json` and exits non-zero when any of them got worse. Zero
 // model cost: the same class as the Archon bash nodes, which cost US$ 0.00 in
-// a US$ 21.92 run.
+// a US$ 21.92 run. In Building Evolutionary Architectures terms, this is an
+// architectural fitness function of the trend kind: it gates on direction,
+// not on a threshold.
 //
 // Options:
 //   --update-baseline        re-freezes the numbers (deliberate, versioned action)
@@ -23,7 +25,7 @@ import { lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { relative, resolve } from 'node:path';
 
-import { explicitAnyCount, type FileAnyCount, filesWithAny, isAnyCheckedFile } from './any-count.mts';
+import { explicitAnyCount, filesWithAny, isAnyCheckedFile } from './any-count.mts';
 import { parseArgs, UsageError } from './args.mts';
 import {
   type Baseline,
@@ -31,23 +33,19 @@ import {
   compareMetrics,
   type MetricBaseline,
 } from './compare.mts';
+import { CC_LIMIT, functionComplexities, overComplexFunctions } from './complexity.mts';
 import {
   type CoverageMap,
   coveragePercent,
   type UncoveredByFile,
   uncoveredInTestableFiles,
 } from './coverage.mts';
+import { circularDependencies, importGraph } from './cycles.mts';
 import { duplicationStats, type JscpdReport } from './duplication.mts';
 import { stringsFor } from './locale.mts';
-import { pureRuleFilesOutsideDomain, RULE_DIRECTORIES } from './place-rule.mts';
+import { pureRuleFilesOutsideDomain } from './place-rule.mts';
 import { buildReport, type ReportDetail } from './report.mts';
-import {
-  countLines,
-  isSizedFile,
-  LINE_LIMIT,
-  type MeasuredFile,
-  oversizedFiles,
-} from './size.mts';
+import { countLines, isSizedFile, LINE_LIMIT, oversizedFiles } from './size.mts';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const BASELINE_PATH = resolve(ROOT, 'quality-baseline.json');
@@ -103,11 +101,25 @@ const METRIC_DEFAULTS: Record<string, Omit<MetricBaseline, 'value'>> = {
     mode: 'baseline',
     direction: 'lower-is-better',
   },
+  'circular-dependencies': {
+    section: 'Architecture',
+    label: 'Circular dependencies',
+    mode: 'baseline',
+    direction: 'lower-is-better',
+    note: 'Strongly connected components in the production import graph (cycles.mts). A cycle means no file in it can be reused or understood alone - the on-ramp to the Big Ball of Mud.',
+  },
   'files-over-limit': {
     section: 'Size',
     label: 'Files over the line limit',
     mode: 'baseline',
     direction: 'lower-is-better',
+  },
+  'cc-over-limit': {
+    section: 'Complexity',
+    label: 'Functions over the CC limit',
+    mode: 'baseline',
+    direction: 'lower-is-better',
+    note: 'Functions with cyclomatic complexity above CC_LIMIT (complexity.mts). Generative AI solves by brute force and accumulates accidental complexity; the ratchet freezes the debt and only lets it shrink.',
   },
   'explicit-any': {
     section: 'Types',
@@ -158,28 +170,21 @@ function readCoverage(): {
   };
 }
 
+// Every production source read once, shared by the size, any, complexity and
+// cycle collectors - four collectors re-opening the same files was the kind
+// of duplication AGENTS.md tells the agents off for.
+//
 // Regular files only: `git ls-files` also lists submodules and symlinks.
 // Reading a directory throws EISDIR, and a link to a device (`/dev/zero`)
 // never finishes - `lstatSync` does not follow the link, so it decides
 // before opening.
-function regularFiles(paths: readonly string[]): string[] {
-  return paths.filter((file) => lstatSync(resolve(ROOT, file)).isFile());
-}
-
-function measureSizes(paths: readonly string[]): MeasuredFile[] {
-  return regularFiles(paths.filter(isSizedFile)).map((file) => ({
-    file,
-    lines: countLines(readFileSync(resolve(ROOT, file), 'utf8')),
-  }));
-}
-
-function measureAnys(paths: readonly string[]): FileAnyCount[] {
-  return filesWithAny(
-    regularFiles(paths.filter(isAnyCheckedFile)).map((file) => ({
-      file,
-      count: explicitAnyCount(file, readFileSync(resolve(ROOT, file), 'utf8')),
-    })),
-  );
+function readProductionSources(paths: readonly string[]): Map<string, string> {
+  const sources = new Map<string, string>();
+  for (const file of paths.filter(isSizedFile)) {
+    if (!lstatSync(resolve(ROOT, file)).isFile()) continue;
+    sources.set(file, readFileSync(resolve(ROOT, file), 'utf8'));
+  }
+  return sources;
 }
 
 function measureDuplication() {
@@ -236,8 +241,20 @@ function main(): void {
 
   const versioned = projectFiles();
   const displacedRules = pureRuleFilesOutsideDomain(versioned);
-  const oversized = oversizedFiles(measureSizes(versioned));
-  const anys = measureAnys(versioned);
+  const sources = readProductionSources(versioned);
+  const measured = [...sources].map(([file, source]) => ({ file, source }));
+  const oversized = oversizedFiles(
+    measured.map(({ file, source }) => ({ file, lines: countLines(source) })),
+  );
+  const anys = filesWithAny(
+    measured
+      .filter(({ file }) => isAnyCheckedFile(file))
+      .map(({ file, source }) => ({ file, count: explicitAnyCount(file, source) })),
+  );
+  const complexFns = overComplexFunctions(
+    measured.flatMap(({ file, source }) => functionComplexities(file, source)),
+  );
+  const cycles = circularDependencies(importGraph(sources));
   const duplication = measureDuplication();
 
   if (!skipTests) runCoveredTests();
@@ -252,7 +269,9 @@ function main(): void {
     'duplication-percent': duplication.percent,
     'duplication-fragments': duplication.fragments,
     'pure-rule-outside-domain': displacedRules.length,
+    'circular-dependencies': cycles.length,
     'files-over-limit': oversized.length,
+    'cc-over-limit': complexFns.length,
     'explicit-any': anys.reduce((s, f) => s + f.count, 0),
   };
 
@@ -283,15 +302,22 @@ function main(): void {
     ...compareFileCounts(base.uncoveredByFile ?? {}, byFile, t),
   ];
 
-  const ruleDirs = RULE_DIRECTORIES.map((d) => `\`${d}\``).join(' / ');
   const details: ReportDetail[] = [
     {
-      title: t.pureRulesTitle(displacedRules.length, ruleDirs),
+      title: t.pureRulesTitle(displacedRules.length, '`domain/` / `application/`'),
       items: displacedRules.map((f) => `\`${f}\``),
+    },
+    {
+      title: t.cyclesTitle(cycles.length),
+      items: cycles.slice(0, 10).map((c) => [...c, c[0]].map((f) => `\`${f}\``).join(' → ')),
     },
     {
       title: t.filesOverLimitTitle(LINE_LIMIT, oversized.length),
       items: oversized.map((g) => `\`${g.file}\` — ${g.lines}`),
+    },
+    {
+      title: t.overComplexTitle(CC_LIMIT, complexFns.length),
+      items: complexFns.slice(0, 20).map((f) => `\`${f.file}:${f.line}\` ${f.name} — CC ${f.cc}`),
     },
     {
       title: t.explicitAnyTitle(anys.length),

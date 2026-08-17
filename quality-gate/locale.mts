@@ -31,6 +31,8 @@ export interface GateStrings {
   explicitAnyTitle: (count: number) => string;
   uncoveredFilesTitle: (count: number) => string;
   uncoveredFileItem: (file: string, lines: number, percent: number) => string;
+  overComplexTitle: (limit: number, count: number) => string;
+  cyclesTitle: (count: number) => string;
 }
 
 const EN: GateStrings = {
@@ -63,6 +65,8 @@ const EN: GateStrings = {
   uncoveredFilesTitle: (count) => `Files with uncovered lines (${count})`,
   uncoveredFileItem: (file, lines, percent) =>
     `\`${file}\` — ${lines} lines · ${percent}% covered`,
+  overComplexTitle: (limit, count) => `Functions over cyclomatic complexity ${limit} (${count})`,
+  cyclesTitle: (count) => `Circular dependencies (${count})`,
 };
 
 const PT: GateStrings = {
@@ -95,6 +99,8 @@ const PT: GateStrings = {
   uncoveredFilesTitle: (count) => `Arquivos com linha descoberta (${count})`,
   uncoveredFileItem: (file, lines, percent) =>
     `\`${file}\` — ${lines} linhas · ${percent}% coberto`,
+  overComplexTitle: (limit, count) => `Funções acima de complexidade ciclomática ${limit} (${count})`,
+  cyclesTitle: (count) => `Dependências circulares (${count})`,
 };
 
 const STRINGS: Record<Language, GateStrings> = { en: EN, pt: PT };
