@@ -34,6 +34,8 @@ The canonical rubric for requirements that are easy to miss. Referenced by [disc
 
 You are a thinking partner, not an interviewer. Start open - let the user dump their mental model. Follow the energy: whatever they emphasize, dig into that.
 
+**Route raw ideas upstream first.** If clarification reveals the WHAT itself is still contested - an unshaped idea, a bet that needs stress-testing, several features tangled together - a spec is premature. Suggest a `/grill-with-docs` session to the user (relentless interview plus glossary/ADRs as they crystallize; it is user-invoked) and resume Specify afterwards: the sharpened plan and any glossary terms or ADRs it produced feed this phase. A contested WHAT written straight into a spec bakes the dispute into every downstream phase.
+
 Ask conversationally (not as a checklist):
 
 - "What problem are you solving?"

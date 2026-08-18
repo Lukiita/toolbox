@@ -12,6 +12,7 @@
 4. **`penalize` guard in lessons.py** (project-b): only a `confirmed` lesson can be penalized - a candidate was never loaded as guidance, so it cannot have "failed when applied"; plus the matching sentence in lessons.md. PR candidate.
 5. **`domain-modeling` bridges** (toolbox, 2026-08-17): `CONTEXT.md` and `docs/adr/` in Knowledge Chain Step 2; glossary in specify.md; ADRs + vocabulary in design.md; in memory.md, the "where the substance lives" rule (vocabulary → CONTEXT.md; a decision passing the three-part test → ADR with a pointer AD-NNN, in repos with an ADR directory). PR candidates in conditional form.
 6. **"List Files Touched" tip** in design.md (project-b). PR candidate.
+7. **Upstream router to grilling** (toolbox, 2026-08-18): specify.md suggests a `/grill-with-docs` session when clarification reveals the WHAT itself is contested (raw idea, tangled features), resuming Specify with the sharpened plan afterwards. Depends on toolbox-local skills (`grilling`, `grill-with-docs`, `domain-modeling`) - PR candidate only in conditional form, like item 5.
 
 ## Retired in the 3.3.0 update (upstream solved it better)
 
