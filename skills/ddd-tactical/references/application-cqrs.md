@@ -80,18 +80,20 @@ export class ListActiveSubscriptionsQuery {
   public constructor(private readonly db: SupabaseClient) {}
 
   public async execute(planId?: string): Promise<ActiveSubscriptionRow[]> {
-    // join, filter, paginate - whatever the screen needs, in one round trip
+    // join, filter, paginate - whatever the screen needs. HOW the SQL stays
+    // cheap as data grows (fan-out, paginate-first) is the sql-quality skill.
     /* select from subscriptions join plans ... map to ActiveSubscriptionRow */
     return [];
   }
 }
 ```
 
-The three rules that keep the read side from rotting:
+The four rules that keep the read side from rotting:
 
 1. **A query never writes.** No insert/update/delete, ever — the moment a "read" path touches state it has become a smuggled write model, and the invariants it bypasses will break silently.
 2. **A query returns its own read model.** Never the ORM's row type (couples every consumer to the schema), never a domain aggregate (that is the write model's shape, and rehydrating it for display is the cost CQRS exists to avoid).
 3. **Cross-table reads are fine; the file still has one home.** A report may join tables owned by several features — the join mutates nothing. The query file lives in the feature that owns the *question* (the screen/report), and the cross-feature import rule stays about code, not tables.
+4. **A query's cost is bounded by its output.** Skipping the port does not mean skipping the scan bound: joins that cross independent 1:N branches, aggregation before pagination, scans with no WHERE — that whole shape discipline is its own skill. Before writing any query with a JOIN or GROUP BY, load `~/.agents/skills/sql-quality/references/query-shape.md`.
 
 ## Presentation
 

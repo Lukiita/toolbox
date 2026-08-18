@@ -27,7 +27,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 ## Structure
 
 ```
-skills/       8 global skills (available in any session, any project)
+skills/       9 global skills (available in any session, any project)
 agents/       AGENTS.md — global instructions for every agent (single source)
 claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
@@ -45,13 +45,14 @@ install.sh
 | `domain-modeling` | ubiquitous language (`CONTEXT.md`) + ADRs (`docs/adr/`) |
 | `tlc-spec-driven` | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`) |
 | `ddd-tactical` | the house tactical-DDD style as templates: aggregates, VOs, typed ids, repositories+mappers, lightweight CQRS (ships its own `evals/`) |
+| `sql-quality` | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`) |
 | `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
 | `code-review` | pre-PR diff review, two lenses + triage |
 | `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
 
 Not carried here: `skill-creator` — it is Anthropic's official skill, unpatched by us; vendoring it would be drift without value. Install it from the official channel when needed.
 
-**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees.
+**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees. Added 2026-08-18: `ddd-tactical`'s read side routes query shape into `sql-quality`, and `code-review`'s bug lens applies `sql-quality`'s review checklist when the diff touches SQL/builders/migrations.
 
 ## Third-party skills — the upstream contract
 
@@ -63,6 +64,8 @@ Not carried here: `skill-creator` — it is Anthropic's official skill, unpatche
 - a generic local patch becomes an upstream issue/PR — good delta is shrinking delta.
 
 The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
+
+`sql-quality` deliberately does NOT follow this contract: it distills github/awesome-copilot's four SQL skills (MIT) instead of vendoring them — the delta was near-total (the shape layer, everything ORM, the house integration), so a vendor branch would only manufacture merge conflicts. The credit lives in the skill's own SKILL.md.
 
 ## Global vs per-project
 

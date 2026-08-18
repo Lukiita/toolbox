@@ -89,6 +89,13 @@ Dê a ele o resultado do passo 2 como contexto, se houver.
 > e chega em outro. Bug caro raramente cabe num arquivo só — o clássico é o
 > getter que engole o erro e o chamador que trata o `null` como "não existe".
 
+**Diff tocando SQL, query builder ou migration** (dá pra ver no `--stat` e nos
+nomes dos arquivos): acrescente ao prompt do Revisor A — "carregue
+`~/.agents/skills/sql-quality/references/review-checklist.md` e aplique o
+checklist à parte SQL do diff, na ordem dele: injection e scan sem limite
+primeiro". Custa um arquivo no contexto do revisor, não um terceiro agente —
+o desenho de custo da skill não muda.
+
 **Revisor B — regras do projeto.** Confere o diff contra as regras escritas do
 repo — `CLAUDE.md` / `AGENTS.md`, da raiz e dos diretórios tocados — e
 `.specs/capabilities/`, quando existirem. Duas perguntas:

@@ -1,0 +1,61 @@
+{
+  "skill_name": "sql-quality",
+  "evals": [
+    {
+      "id": 1,
+      "name": "listagem-dois-ramos-paginada",
+      "prompt": "cria a query da listagem de obras: nome, cidade, total de documentos aprovados e total de pendências ativas, paginada e ordenada por nome — documentos e pendências são tabelas filhas de obras",
+      "expected_output": "Paginate-first: a base query with only obras+cidade ordered and limited, then one aggregation per child branch scoped by the page ids (WHERE obra_id IN ...), merged in memory. Never a single query joining documentos and pendências together under obras.",
+      "files": [],
+      "assertions": [
+        "No single query LEFT JOINs both independent 1:N branches (documentos and pendências) anchored on obras",
+        "The base query is paginated (ORDER BY + LIMIT) BEFORE any aggregation happens",
+        "Each aggregation is scoped by the page's ids (IN/ANY of the page), not by the whole table",
+        "Results are merged in memory keyed by obra id, with missing keys defaulting to 0",
+        "If a pagination helper is used, the counted base stays the trivial obras+cidade query"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "review-injection-e-scan",
+      "prompt": "revisa esse trecho antes de eu commitar:\n\nconst qb = repo.createQueryBuilder('pedido')\n  .leftJoinAndSelect('pedido.itens', 'item')\n  .leftJoinAndSelect('pedido.pagamentos', 'pag')\n  .where(`cliente.nome LIKE '%${busca}%'`)\n  .orderBy(ordenacao)\n  .limit(20).offset(pagina * 20);\n",
+      "expected_output": "Findings in severity order: (1) interpolated ${busca} is SQL injection - bind it; ordenacao as dynamic ORDER BY needs an allowlist; (2) two joined collections (itens, pagamentos) fan out; (3) limit/offset with joined collections truncates children in TypeORM - take/skip or split queries. No style nitpicks.",
+      "files": [],
+      "assertions": [
+        "The interpolated template string in where() is flagged as SQL injection, as the first/most severe finding",
+        "The dynamic orderBy(ordenacao) is flagged with an allowlist as the fix (identifiers cannot be bound)",
+        "The two joined collections on the same root are flagged as row fan-out",
+        "limit/offset combined with joined collections is flagged as silently truncating children (take/skip or per-branch queries as fix)",
+        "No formatting/style nitpicks are reported as findings"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "migration-indice-tabela-quente",
+      "prompt": "escreve a migration que adiciona a coluna quadra_id em lotes com FK pra quadras, e o índice — a tabela lotes tá em produção com escrita constante",
+      "expected_output": "A migration that creates the FK column plus an EXPLICIT index on it (PG does not index FKs), builds the index with CREATE INDEX CONCURRENTLY, opts that migration out of the runner's transaction wrapper, and guards DDL with lock_timeout (or states the retry plan).",
+      "files": [],
+      "assertions": [
+        "An index on the new FK column is created explicitly (not assumed to come with the constraint)",
+        "The index is built with CREATE INDEX CONCURRENTLY because the table is hot",
+        "The migration opts out of the transactional wrapper (CONCURRENTLY cannot run inside a transaction)",
+        "Lock behavior is handled: lock_timeout set for the DDL, or fail-and-retry explicitly stated",
+        "The INVALID-index-on-failure caveat of CONCURRENTLY is mentioned (drop and retry)"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "lenta-em-prod-instantanea-em-dev",
+      "prompt": "a listagem de núcleos tá instantânea em dev e leva 30 segundos em produção, me ajuda a achar o problema",
+      "expected_output": "Evidence-first workflow: pg_stat_statements (or vendor equivalent) to find the query, EXPLAIN (ANALYZE, BUFFERS) on prod-sized data, explicit hunt for the row-explosion fingerprint (join node rows >> final rows), classify shape vs index vs stats before proposing a fix, and no caching as first answer.",
+      "files": [],
+      "assertions": [
+        "Production evidence is requested/collected first (pg_stat_statements or equivalent), not a fix proposed from code alone",
+        "EXPLAIN (ANALYZE, BUFFERS) is run or requested on production-sized data, with dev data explicitly distrusted",
+        "The row-explosion fingerprint is checked (a join node emitting far more rows than the final result)",
+        "The problem is classified (shape vs missing index vs stale stats) before a fix is chosen",
+        "Caching is not offered as the first fix"
+      ]
+    }
+  ]
+}
