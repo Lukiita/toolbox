@@ -1,0 +1,60 @@
+{
+  "skill_name": "ddd-tactical",
+  "evals": [
+    {
+      "id": 1,
+      "name": "percentual-vo",
+      "prompt": "cria o value object Percentual pro rateio de frete — tem que ficar entre 0 e 100, com duas casas decimais",
+      "expected_output": "A percentual.vo.ts value object: private constructor, static create returning Result with a named DomainError for out-of-range/precision, immutable, behavior on the VO.",
+      "files": [],
+      "assertions": [
+        "File follows kebab-case + type suffix naming (percentual.vo.ts)",
+        "Constructor is private and performs no validation",
+        "A static create factory returns a Result (or equivalent) instead of throwing for rule refusals",
+        "The 0-100 range and two-decimal precision are validated with named, greppable error codes",
+        "The VO is immutable (readonly state; operations return new instances)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "assinatura-relogio-rolante-legado",
+      "prompt": "modela o agregado Assinatura com Plano: renovar usa relógio rolante — renovar antes do fim não encurta o período pago — e assinatura cancelada não renova. o banco é legado e tem datas inválidas, preciso conseguir ler e corrigir",
+      "expected_output": "An assinatura.aggregate.ts with private constructor, validating create, lenient restore (legacy mode) paired with a validating save/violations mechanism, typed ids, renew(now) taking time as argument, rolling-clock anchoring on the previous period end, canceled-cannot-renew as a named DomainError.",
+      "files": [],
+      "assertions": [
+        "Aggregate has a private constructor plus static create (validates) and static restore",
+        "restore is lenient (no birth validation) BECAUSE the database is legacy - and something holds the line on write (violations()/validating save)",
+        "Time enters as an argument (renew(now) or injected clock), never Date.now() inside the rule",
+        "Rolling clock: the new period anchors on the previous end when renewing early",
+        "A canceled subscription refuses renewal via a named domain error, not a throw",
+        "Ids are typed per aggregate (not raw strings everywhere)"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "credito-atomico-money",
+      "prompt": "adiciona a regra de crédito na Organizacao: débito atômico antes de qualquer chamada de IA, saldo nunca pode ficar negativo, tudo em centavos",
+      "expected_output": "A debit rule living ON the Organizacao aggregate (a named method guarding the invariant), money as integer cents (Money VO or equivalent), insufficient-balance refused via Result + named DomainError, no float arithmetic.",
+      "files": [],
+      "assertions": [
+        "The debit rule is a method ON the aggregate, not a loose function or anemic service",
+        "Money is integer minor units (cents); no float arithmetic on amounts",
+        "A debit that would go negative is refused via Result with a named error code, not a throw",
+        "No public setters - state changes only through the rule-guarding method"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "listagem-query-read-model",
+      "prompt": "cria a listagem de assinaturas ativas com o nome do plano e o fim do período — não quero carregar agregado pra isso",
+      "expected_output": "A query in application/queries going straight to the database (ORM/client inline), returning its own read model interface shaped for the screen; no repository, no aggregate loading, no writes.",
+      "files": [],
+      "assertions": [
+        "The read path is a query (application/queries), not a repository returning aggregates",
+        "The query returns its own read model type - not an ORM row type, not a domain aggregate",
+        "The query performs no insert/update/delete",
+        "The join/projection happens in the database call, not by loading aggregates and mapping in memory"
+      ]
+    }
+  ]
+}

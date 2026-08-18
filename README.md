@@ -27,11 +27,12 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 ## Structure
 
 ```
-skills/     8 global skills (available in any session, any project)
-agents/     AGENTS.md — global instructions for every agent (single source)
-claude/     CLAUDE.md pointer + shareable settings.json
-archon/     canonical source of the Archon flow (headless tlc) — imported, not linked
-hooks/      provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
+skills/       8 global skills (available in any session, any project)
+agents/       AGENTS.md — global instructions for every agent (single source)
+claude/       CLAUDE.md pointer + shareable settings.json
+archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
+hooks/        provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
+quality-gate/ ratchet engine template (frozen baseline, 10 metrics, per-file coverage) — imported per project
 install.sh
 ```
 
@@ -43,6 +44,7 @@ install.sh
 | `grill-with-docs` | grilling + domain-modeling (produces glossary and ADRs along the way) |
 | `domain-modeling` | ubiquitous language (`CONTEXT.md`) + ADRs (`docs/adr/`) |
 | `tlc-spec-driven` | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`) |
+| `ddd-tactical` | the house tactical-DDD style as templates: aggregates, VOs, typed ids, repositories+mappers, lightweight CQRS (ships its own `evals/`) |
 | `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
 | `code-review` | pre-PR diff review, two lenses + triage |
 | `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
@@ -86,4 +88,4 @@ The flow is intrinsically per-project (worktrees, repo gate, AGENTS.md), so it i
 
 ## Next step
 
-Build the `ddd-tatico` skill (via `skill-creator`) and pilot it on Project A, modeling the Assinatura+Plano aggregate.
+Pilot `ddd-tactical` on Project A, modeling the Assinatura+Plano aggregate. (The skill itself is built and benchmarked — A/B eval pass rate 100% with skill vs 70% without, faster and cheaper with it.)

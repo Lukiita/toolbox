@@ -33,7 +33,7 @@ module.exports = {
       name: 'domain-stays-pure',
       severity: 'error',
       comment:
-        'The domain OWNS the rules and imports nothing outside itself and the shared kernel - maximum stability by construction (Ce ~ 0), no metric needed.',
+        'The domain OWNS the rules and imports nothing outside itself and the shared kernel - maximum stability by construction (Ce ~ 0), no metric needed. Scoped to internal paths on purpose: pure computation libraries (date-fns, decimal.js) are allowed in the domain by policy (ddd-tactical SKILL.md) - this rule guards the layer boundary, not node_modules. Frameworks/ORMs sneaking in are caught by review and the thin-signature rule, not by this glob.',
       from: { path: '^src/([^/]+)/domain/' },
       to: {
         pathNot: ['^src/$1/domain/', '^src/shared/'],
@@ -44,11 +44,19 @@ module.exports = {
       name: 'application-orchestrates-its-own-domain',
       severity: 'error',
       comment:
-        'Use cases reach their own domain and the shared kernel; infra and presentation are below them, never imported upward.',
+        'Command handlers reach their own domain and the shared kernel; infra and presentation are below them, never imported upward. Note the deliberate asymmetry (ddd-tactical application-cqrs.md): queries import the ORM inline - that is node_modules, not an internal path, so this rule does not fight the read side.',
       from: { path: '^src/([^/]+)/application/' },
       to: {
         path: '^src/$1/(infra|presentation)/',
       },
+    },
+    {
+      name: 'presentation-skips-infra',
+      severity: 'error',
+      comment:
+        'Presentation talks to commands and queries, never to repositories or mappers directly. A controller that needs data is a query waiting to be written.',
+      from: { path: '^src/([^/]+)/presentation/' },
+      to: { path: '^src/$1/infra/' },
     },
 
     // ── Cross-feature policy (canon, decided 2026-08-17): public API only ─
