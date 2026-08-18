@@ -27,7 +27,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 ## Structure
 
 ```
-skills/       9 global skills (available in any session, any project)
+skills/       10 global skills (available in any session, any project)
 agents/       AGENTS.md — global instructions for every agent (single source)
 claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
@@ -46,13 +46,14 @@ install.sh
 | `tlc-spec-driven` | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`) |
 | `ddd-tactical` | the house tactical-DDD style as templates: aggregates, VOs, typed ids, repositories+mappers, lightweight CQRS (ships its own `evals/`) |
 | `sql-quality` | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`) |
+| `architecture-kata` | socratic architecture coach: generated katas with a hidden gabarito + co-designing real greenfields — think-first, verdict only in the review (ships its own `evals/`) |
 | `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
 | `code-review` | pre-PR diff review, two lenses + triage |
 | `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
 
 Not carried here: `skill-creator` — it is Anthropic's official skill, unpatched by us; vendoring it would be drift without value. Install it from the official channel when needed.
 
-**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees. Added 2026-08-18: `ddd-tactical`'s read side routes query shape into `sql-quality`, and `code-review`'s bug lens applies `sql-quality`'s review checklist when the diff touches SQL/builders/migrations.
+**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees. Added 2026-08-18: `ddd-tactical`'s read side routes query shape into `sql-quality`, and `code-review`'s bug lens applies `sql-quality`'s review checklist when the diff touches SQL/builders/migrations. Also 2026-08-18: `architecture-kata` borrows `grilling`'s one-question-at-a-time mechanic (recommendation rule inverted — no answers until the review) and writes real-mode glossary/ADRs through `domain-modeling`; tlc-spec-driven's Design phase and Archon stay delivery-mode, never coached.
 
 ## Third-party skills — the upstream contract
 

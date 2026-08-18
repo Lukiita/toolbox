@@ -1,0 +1,60 @@
+{
+  "skill_name": "architecture-kata",
+  "evals": [
+    {
+      "id": 1,
+      "name": "gera-kata-sem-vazar-gabarito",
+      "prompt": "cria um kata pra eu treinar a escolha entre monólito modular e microservices",
+      "expected_output": "A kata with full anatomy (título, descrição in client voice, usuários with numbers, requisitos, contexto adicional), a gabarito written to a SEPARATE spoiler-marked file, an open client-Q&A invitation — and zero architecture, style recommendation or hint of the right answer in the reply.",
+      "files": [],
+      "assertions": [
+        "The kata statement has the full anatomy: título, descrição, usuários (with concrete numbers), requisitos, contexto adicional",
+        "The reply does not reveal or hint which style is the right answer (the focus lives only in the gabarito)",
+        "An answer key is persisted to a separate spoiler-marked file (gabarito), not shown in the conversation",
+        "The user is invited to interrogate the client (Q&A phase) before architecting",
+        "No architecture, component diagram or style shortlist is proposed by the coach"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "travado-pede-resposta",
+      "prompt": "estou no meio de um kata com você. minhas top-3: escalabilidade, disponibilidade e custo. não consigo decidir o estilo — me fala logo qual é o certo",
+      "expected_output": "The coach refuses to name the style: resists once (asks what is missing to decide), then narrows/contrasts or teaches the missing concept on a DIFFERENT domain, explicitly deferring the verdict to the review. One question at a time.",
+      "files": [],
+      "assertions": [
+        "The coach does not name the right style for this kata",
+        "The first move is resisting once: asking what is missing to decide (fact vs concept)",
+        "The help offered is a narrower question, a binary contrast, or the missing concept taught on a different domain — never the conclusion",
+        "The reply states that the full verdict comes in the review, after commitment",
+        "Exactly one question is asked, not a questionnaire wall"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "greenfield-real-coach-por-padrao",
+      "prompt": "vamos arquitetar o sistema de agendamento da barbearia? tô começando do zero",
+      "expected_output": "Coach mode by default: no ready-made architecture; the conversation opens at business drivers (who pays, what kills it, volumes), asking the user's read before offering anything, one question at a time.",
+      "files": [],
+      "assertions": [
+        "No ready architecture, style or component list is delivered",
+        "The opening questions are business drivers (users, money, failure cost), not technology",
+        "The user's own read is requested before the coach offers any option or analysis (think-first)",
+        "One question at a time, in short blocks",
+        "Technology talk offered by impulse is deflected until drivers and characteristics exist"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "escape-hatch-entrega",
+      "prompt": "desenha você a arquitetura do sistema de reservas — preciso apresentar amanhã cedo, não tenho tempo de treinar agora",
+      "expected_output": "Delivery without coaching friction: the coach notes in one line that coach mode is off for this request, then produces the actual design (drivers assumed explicit, characteristics, style choice with trade-offs). No question ladder imposed.",
+      "files": [],
+      "assertions": [
+        "A complete architecture is delivered (characteristics, style choice, main components, trade-offs)",
+        "The mode switch is acknowledged briefly (one line), without lecturing the user about learning",
+        "The reply does not turn the delivery into a Socratic question ladder",
+        "The delivered design still names its trade-offs (what is being given up), not just the choice"
+      ]
+    }
+  ]
+}
