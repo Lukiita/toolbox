@@ -9,8 +9,10 @@
 #                                              tlc, capability-sync and
 #                                              pr-review-triage reference it)
 #   ~/.agents/AGENTS.md -> agents/AGENTS.md   (agent-agnostic global rules)
+#   ~/.agents/til       -> til/               (learning journal agents write to)
 #   ~/.codex/AGENTS.md  -> agents/AGENTS.md
 #   ~/.claude/CLAUDE.md -> claude/CLAUDE.md   (a one-line pointer to AGENTS.md)
+#   ~/.claude/agents    -> claude/agents/     (Claude Code subagent definitions)
 #
 # settings.json is deliberately NOT a symlink: Claude Code rewrites that file
 # on its own (e.g. /model saves into it), and an atomic write by the app would
@@ -45,6 +47,8 @@ link "$REPO_DIR/hooks" "$HOME/.agents/hooks"
 link "$REPO_DIR/agents/AGENTS.md" "$HOME/.agents/AGENTS.md"
 link "$REPO_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+link "$REPO_DIR/til" "$HOME/.agents/til"
+link "$REPO_DIR/claude/agents" "$HOME/.claude/agents"
 
 SETTINGS_REPO="$REPO_DIR/claude/settings.json"
 SETTINGS_HOME="$HOME/.claude/settings.json"
