@@ -10,7 +10,9 @@
 //   src/<feature>/application/    use cases, orchestrate the domain
 //   src/<feature>/infra/          adapters (db, http, queues)
 //   src/<feature>/presentation/   ui / controllers
-//   src/shared/                   the minimal shared kernel (Money, ids, Result)
+//   src/shared/                   the minimal shared kernel, layered like a
+//                                 feature (domain/ application/ infra/ presentation/)
+//                                 so the same direction rules apply to it
 //
 // Complementary, not redundant, with the ratchet: `cycles.mts` counts cycles
 // as a trend metric with zero config; this file adds the DIRECTION rules that
@@ -33,10 +35,10 @@ module.exports = {
       name: 'domain-stays-pure',
       severity: 'error',
       comment:
-        'The domain OWNS the rules and imports nothing outside itself and the shared kernel - maximum stability by construction (Ce ~ 0), no metric needed. Scoped to internal paths on purpose: pure computation libraries (date-fns, decimal.js) are allowed in the domain by policy (ddd-tactical SKILL.md) - this rule guards the layer boundary, not node_modules. Frameworks/ORMs sneaking in are caught by review and the thin-signature rule, not by this glob.',
+        'The domain OWNS the rules and imports nothing outside itself and the shared DOMAIN kernel - maximum stability by construction (Ce ~ 0), no metric needed. `shared/` is layered too: shared/application and shared/infra hold ApplicationError and InfrastructureError, which the domain must not know (ddd-tactical domain-errors.md). Scoped to internal paths on purpose: pure computation libraries (date-fns, decimal.js) are allowed in the domain by policy (ddd-tactical SKILL.md) - this rule guards the layer boundary, not node_modules. Frameworks/ORMs sneaking in are caught by review and the thin-signature rule, not by this glob.',
       from: { path: '^src/([^/]+)/domain/' },
       to: {
-        pathNot: ['^src/$1/domain/', '^src/shared/'],
+        pathNot: ['^src/$1/domain/', '^src/shared/domain/'],
         path: '^src/',
       },
     },
@@ -44,19 +46,22 @@ module.exports = {
       name: 'application-orchestrates-its-own-domain',
       severity: 'error',
       comment:
-        'Command handlers reach their own domain and the shared kernel; infra and presentation are below them, never imported upward. Note the deliberate asymmetry (ddd-tactical application-cqrs.md): queries import the ORM inline - that is node_modules, not an internal path, so this rule does not fight the read side.',
+        'Command handlers reach their own domain, their own application layer and the shared domain/application kernel; infra and presentation - the feature\'s AND shared\'s - are below them, never imported upward. A handler importing InfrastructureError to catch it is the smell this guards (domain-errors.md: handlers never catch the thrown channel). Note the deliberate asymmetry (ddd-tactical application-cqrs.md): queries import the ORM inline - that is node_modules, not an internal path, so this rule does not fight the read side.',
       from: { path: '^src/([^/]+)/application/' },
       to: {
-        path: '^src/$1/(infra|presentation)/',
+        path: '^src/($1|shared)/(infra|presentation)/',
       },
     },
     {
       name: 'presentation-skips-infra',
       severity: 'error',
       comment:
-        'Presentation talks to commands and queries, never to repositories or mappers directly. A controller that needs data is a query waiting to be written.',
+        'Presentation talks to commands and queries, never to repositories, gateways or mappers directly. A controller that needs data is a query waiting to be written. One exemption: the global filter must `instanceof` the thrown InfrastructureError - a TYPE crossing, not an adapter crossing.',
       from: { path: '^src/([^/]+)/presentation/' },
-      to: { path: '^src/$1/infra/' },
+      to: {
+        path: '^src/($1|shared)/infra/',
+        pathNot: ['^src/shared/infra/infrastructure-error\\.ts$'],
+      },
     },
 
     // ── Cross-feature policy (canon, decided 2026-08-17): public API only ─

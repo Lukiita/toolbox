@@ -55,6 +55,21 @@
         "The query performs no insert/update/delete",
         "The join/projection happens in the database call, not by loading aggregates and mapping in memory"
       ]
+    },
+    {
+      "id": 5,
+      "name": "erro-certo-canal-certo",
+      "prompt": "no handler de renovar assinatura eu devolvo DomainError('subscription.not-found') quando não acha, e no repositório eu devolvo Result.fail(DomainError('persistence-failed')) quando o supabase dá erro. tá certo isso?",
+      "expected_output": "A review that says both are the wrong type: not-found is an ApplicationError (the handler, not the aggregate, produces it - returned in Result, signature becomes Result<void, UseCaseError>); the Supabase failure is an InfrastructureError THROWN from the repository with the driver error as `cause`, never returned - the handler has nothing to route on, the global filter answers 503. Explains the mechanism (who routes on it) rather than citing layers.",
+      "files": [],
+      "assertions": [
+        "not-found is reclassified as an ApplicationError returned in Result, not a DomainError",
+        "The handler's return type becomes Result<void, UseCaseError> (DomainError | ApplicationError), not DomainError alone",
+        "The Supabase failure is turned into a thrown InfrastructureError, not a Result.fail",
+        "The InfrastructureError wraps the driver error as `cause` and carries a stable code",
+        "The explanation is based on who routes on the error (the handler cannot route on a db outage), not on 'it came from layer X'",
+        "No try/catch is added to the handler for the infrastructure failure"
+      ]
     }
   ]
 }

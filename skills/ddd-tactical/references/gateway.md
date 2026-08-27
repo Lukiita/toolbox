@@ -28,6 +28,7 @@ import Stripe from 'stripe';
 import { DomainError } from '@/src/shared/domain/domain-error';
 import { Result } from '@/src/shared/domain/result';
 import type { Money } from '@/src/shared/domain/money.vo';
+import { InfrastructureError } from '@/src/shared/infra/infrastructure-error';
 import type { PaymentGateway, PaymentReceipt } from '../../domain/payment.gateway';
 
 export class StripePaymentGateway implements PaymentGateway {
@@ -45,14 +46,19 @@ export class StripePaymentGateway implements PaymentGateway {
       });
       return Result.ok({ transactionId: intent.id, chargedAt: new Date() });
     } catch (error) {
-      // The adapter TRANSLATES the provider's failure into a domain error -
-      // callers route on 'payment.declined', never on a Stripe error class.
-      // Provider outages that should crash the flow may rethrow instead;
-      // that is the infra-failure row of the domain-errors table.
+      // The adapter TRANSLATES in both directions. A provider REFUSAL is a
+      // business outcome the command routes on: DomainError 'payment.declined',
+      // never a Stripe class. A provider FAILURE aborts the flow: thrown
+      // InfrastructureError, the Stripe error kept as `cause` for the log -
+      // so the SDK type does not leak on the throw channel either.
       if (error instanceof Stripe.errors.StripeCardError) {
         return Result.fail(new DomainError('payment.declined', error.message));
       }
-      throw error;
+      throw new InfrastructureError(
+        'payment.provider-unavailable',
+        `stripe charge for customer ${customerId} failed`,
+        { cause: error },
+      );
     }
   }
 }
@@ -60,7 +66,8 @@ export class StripePaymentGateway implements PaymentGateway {
 
 ## The rules
 
-- **Domain types cross the port; SDK types never do.** The port speaks `Money` and `PaymentReceipt`; `Stripe.PaymentIntent` dies inside the adapter. Swap Stripe for another provider and only `infra/gateways/` changes.
-- **Expected refusals become `DomainError`s** (`payment.declined`) so commands route on them like any rule refusal; genuine infrastructure failures may rethrow — the split follows the [domain-errors.md](domain-errors.md) table exactly.
+- **Domain types cross the port; SDK types never do — on either channel.** The port speaks `Money` and `PaymentReceipt`; `Stripe.PaymentIntent` dies inside the adapter, and so does `Stripe.errors.*` (wrapped as `cause`). Swap Stripe for another provider and only `infra/gateways/` changes.
+- **Refusals return, failures throw.** `payment.declined` is a `DomainError` in `Result` — the command routes on it like any rule refusal. An outage is a thrown `InfrastructureError` — the command cannot route on it, the global filter answers 503. The split follows the [domain-errors.md](domain-errors.md) table exactly.
+- **Retry, backoff, timeout and circuit breaker live here, around the SDK call** (AGENTS.md: defensive programming per external call). The `InfrastructureError` is what escapes *after* they give up — the adapter absorbs the transient, throws the terminal.
 - **The port lives in `domain/` when a rule depends on the capability** ("charging happens before activation"). A purely operational integration nobody's rule mentions (an analytics ping) doesn't need a port at all — call it from the command or a subscriber and keep the ceremony for where it pays.
 - Commands receive gateways the same way they receive repositories: injected through the constructor, by port type.

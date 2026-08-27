@@ -1,6 +1,6 @@
 ---
 name: ddd-tactical
-description: Tactical domain-driven design in TypeScript — model aggregates, entities, value objects, domain errors and repositories with private constructors, static create/restore factories and framework-free base classes. Use whenever the user models a domain concept, creates or refactors an aggregate, entity or value object, adds a business rule or invariant, or mentions DDD, domain layer, rich vs anemic model — and also when they just say "model X", "create the Y aggregate", "add a Z rule" without naming DDD. Reach for it too when deciding WHERE a new business rule should live, or when reviewing code where logic sits in services/SQL instead of the domain.
+description: Tactical domain-driven design in TypeScript — model aggregates, entities, value objects, domain errors and repositories with private constructors, static create/restore factories and framework-free base classes. Use whenever the user models a domain concept, creates or refactors an aggregate, entity or value object, adds a business rule or invariant, or mentions DDD, domain layer, rich vs anemic model — and also when they just say "model X", "create the Y aggregate", "add a Z rule" without naming DDD. Reach for it too when deciding WHERE a new business rule should live, whether a failure should be returned or thrown (domain vs application vs infrastructure error), or when reviewing code where logic sits in services/SQL instead of the domain.
 ---
 
 # Tactical DDD
@@ -26,7 +26,7 @@ An entity guarding its own invariant is already a single-element aggregate; that
 | A concept defined by its **value**, interchangeable, immutable (Money, Email, CPF, a date range) | Value Object | [value-object.md](references/value-object.md) |
 | A concept with **identity** that survives change (an Order, a Subscription) | Entity / Aggregate | [entity-aggregate.md](references/entity-aggregate.md) |
 | The base classes everything extends (framework-free, in the shared kernel) | `shared/domain` | [base-classes.md](references/base-classes.md) |
-| Failing without throwing — named errors the caller can route on | `Result` + `DomainError` | [domain-errors.md](references/domain-errors.md) |
+| Failing — which error type, which channel: rule refused or use case blocked → returned in `Result`; infra down → thrown | `Result` + `DomainError` / `ApplicationError` / `InfrastructureError` | [domain-errors.md](references/domain-errors.md) |
 | Loading and saving aggregates without the domain knowing the database | Repository port | [repository.md](references/repository.md) |
 | The layers around the domain — write via commands, read via direct queries, controllers, infra | Lightweight CQRS | [application-cqrs.md](references/application-cqrs.md) |
 | Calling an external service (payment, mail, third-party API) without the SDK leaking inward | Gateway port | [gateway.md](references/gateway.md) |
@@ -73,9 +73,13 @@ src/<feature>/
 │   ├── repositories/              port implementations + their mappers (subscription.mapper.ts)
 │   └── gateways/                  adapters for external services (payment, mail, third-party APIs)
 └── presentation/
-    ├── controllers/               routes/handlers - call commands/queries, map DomainError once
+    ├── controllers/               routes/handlers - call commands/queries, map the returned errors once
     └── requests/                  input contracts with SHAPE validation (zod/class-validator)
-src/shared/domain/                 the base classes + universal VOs (Money, Id, Result)
+src/shared/                        the kernel, layered like a feature (same import direction)
+├── domain/                        base classes + universal VOs (Money, Id, Result, DomainError)
+├── application/                   ApplicationError + the UseCaseError union
+├── infra/                         InfrastructureError (the only thrown house error)
+└── presentation/                  the global filter for the thrown channel
 ```
 
 The write/read asymmetry is deliberate — commands pay the port ceremony because they protect invariants; queries go straight to the database because reads have none to protect. The full contract is in [application-cqrs.md](references/application-cqrs.md).
@@ -97,6 +101,7 @@ The write/read asymmetry is deliberate — commands pay the port ceremony becaus
 | controller | `subscription.controller.ts` |
 | gateway adapter | `stripe-payment.gateway.ts` (its port: `payment.gateway.ts` in domain) |
 | domain event | `subscription-renewed.event.ts` |
+| error mapper (returned channel) / filter (thrown channel) | `use-case-error.mapper.ts` per feature / `thrown-error.filter.ts` once in shared |
 | shared-kernel base classes | no suffix (`value-object.ts`, `aggregate-root.ts`) — the name already is the type |
 
 The base classes import **no framework** — integration with NestJS (or anything else) is an adapter at the edge, never inheritance in the domain. The why and the adapter recipe are in [base-classes.md](references/base-classes.md).
