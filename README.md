@@ -41,6 +41,7 @@ quality-gate/ ratchet engine template (frozen baseline, 10 metrics, per-file cov
 til/          learning journal — one concept per note, written when Lucas asks to save an explanation
 katas/        architecture-kata practice output — one folder per kata
 install.sh
+toolbox-diff.sh   drift report for a project's copies (skills, hooks, quality-gate, archon)
 ```
 
 ## Skills
@@ -101,6 +102,8 @@ The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 ## Global vs per-project
 
 Skills here are **global**. A project that needs them at headless runtime (e.g. Archon worktrees, CI) carries a **copy** in the repo's `.agents/skills/`, imported from here — and inside the project, the pattern is `.claude/skills` and `.cursor/skills` as relative symlinks to `.agents/skills/` (as Project A does). The toolbox is the arbiter: an improvement made in a copy comes back here.
+
+Copies drift silently — `git status` only sees the symlinked half. **`./toolbox-diff.sh <project-root>`** shows the other half: per component (`.agents/skills/`, `tools/agent-hooks/`, `scripts/quality/`, `.archon/`), every file that differs from the source here, with `+added -deleted` counts and a label — *adaptation point* (the component README says that file is edited on import, so a small diff is expected and a large one is a stale copy wearing an excuse), *only in toolbox*, *only in project*. An unlabeled line is a copy that is simply behind. Run it before piloting a skill in a project and after improving a copy. Measured the day it was written (2026-08-28): Project A's `ddd-tactical` was 284 lines behind, its `code-review` a whole rewrite behind.
 
 ## archon/ — importing into a project
 
