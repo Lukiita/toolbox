@@ -1,16 +1,14 @@
 # The workflows from the inside
 
-> **Inherited document.** It came from the source project (`project-b`) together
-> with the graph, and was kept because the **reasoning** behind each node ports
-> unchanged. The **data** does not port: no number, cost, run-id, PR number or
-> file name cited here was measured in this repository. Where the text says
-> `src/lib/`, `pnpm test`, `db-change` or pgTAP, this repo's equivalent rule
-> lives in `AGENTS.md` at the root — the files Archon actually executes
-> (`workflows/`, `commands/`, `scripts/`) were already adapted; this one is
-> reading material.
->
-> When this repo has its own measurement of cost per node and of findings
-> exclusive to each layer, it replaces the one from there, and this note goes.
+> **Provenance.** Written during the flow's pilot in `project-b` (Aug/2026) and
+> kept with the template because the **reasoning** behind each node ports
+> unchanged. The **numbers** do not: every cost, run id, PR number and timing
+> below was measured in that pilot and is illustrative — a project importing the
+> flow measures its own. Where the text names `src/lib/`, `pnpm test`, the
+> `db-change` skill or pgTAP, read "the importing repo's equivalent", as set in
+> its `AGENTS.md` and `scripts/repo-gate.sh`. The files Archon actually executes
+> (`workflows/`, `commands/`, `scripts/`) are the template; this one is reading
+> material.
 
 The `README.md` in this directory says **when** to use each workflow. This one
 says **what happens inside** each of them, node by node, and why.
@@ -153,8 +151,8 @@ property that let CodeRabbit find, on PR #44, what this pipeline's
 "project rules" lens declared non-existent.
 
 The previous single node (`review-fix`, which reviewed and fixed together) left
-the workflow on 2026-08-06, but `commands/tlc-review-fix.md` stays in the repo,
-untouched, as the way back.
+the workflow on 2026-08-06; its command lives in git history (`git log --all --
+'*tlc-review-fix.md'`), so the way back is swapping the four nodes for one again.
 
 **There is no external reviewer pass before the PR, and that is a decision
 taken.** CodeRabbit reviews **on the PR**, through the GitHub app, where the
@@ -445,7 +443,6 @@ keeping. What is still standing, all of it called by `tlc-apply-feature`:
 | PR close-out (base re-target + handoff) | `scripts/pr-finalize.sh` |
 | review + triage (read-only) | `commands/tlc-review.md` |
 | must-fix correction | `commands/tlc-fix-review.md` |
-| review + fix in a single node (retired, kept for revert) | `commands/tlc-review-fix.md` |
 | tlc Verifier contract | `commands/tlc-verify-feature.md` |
 | capability contract sync | `commands/tlc-sync-capabilities.md` |
 

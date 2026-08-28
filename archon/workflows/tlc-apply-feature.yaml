@@ -297,9 +297,9 @@ nodes:
     timeout: 900000
 
   # The review was split into `review` (reads and triages) + `fix` (fixes) on
-  # 2026-08-06. The single `review-fix` node did both, and its command
-  # (`commands/tlc-review-fix.md`) stays in the repo, untouched, as the way
-  # back: reverting is swapping these four nodes for one again.
+  # 2026-08-06. The single `review-fix` node did both; its command is in git
+  # history (`git log --all -- '*tlc-review-fix.md'`), so reverting is swapping
+  # these four nodes for one again.
   #
   # The reason for the split is one rule: **writing source code stays on
   # Claude**. Separated, the reviewer can run on another model family — and
