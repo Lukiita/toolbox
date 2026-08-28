@@ -23,7 +23,7 @@ that runs after you. If your runtime has no sub-agents, the skill has the
 sequential path written down — follow it, do not improvise a third.
 
 **Pass it this node's contract**: the report goes to `$ARTIFACTS_DIR/review.md`,
-not to its default `code-review.md`, and the closing line is the one in step 3,
+not to its default under `~/.local/state/code-review/`, and the closing line is the one in step 3,
 not its `REVIEW:`. The skill yields to the caller on both points (written in its
 step 5). It is one file: the triage from step 2 is appended to the report the
 skill wrote, instead of becoming a second document that drifts from the first.

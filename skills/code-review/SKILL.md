@@ -178,9 +178,25 @@ deserve action, so the list gets read instead of skimmed.
 
 ### 5. Report
 
-Write `code-review.md` (in the artifacts directory, if there is one; otherwise
-at the root) and end with a line that is exactly `REVIEW: CLEAN` or
-`REVIEW: FINDINGS` — an automated step downstream usually reads it.
+The report is state of the *branch*, not of the code, so it lives outside the
+working tree — the same home `pr-review-triage` uses for PR state, one level
+up. A file in the repo root rides into the next `git add .`, and git history is
+not asked to keep review state.
+
+```bash
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/code-review"
+SLUG=$(git remote get-url origin 2>/dev/null | sed -E 's#^.*[:/]([^/]+)/([^/]+)$#\1/\2#; s#\.git$##')
+BRANCH=$(git branch --show-current)
+OUT="$STATE/${SLUG:-$(basename "$(git rev-parse --show-toplevel)")}/${BRANCH:-$(git rev-parse --short HEAD)}"
+mkdir -p "$OUT"                                   # the report: $OUT/code-review.md
+```
+
+No remote → the directory name stands in for `<owner>/<repo>`; detached HEAD →
+the short sha stands in for the branch. A re-run on the same branch overwrites
+the previous report.
+
+Write `$OUT/code-review.md` and end with a line that is exactly `REVIEW: CLEAN`
+or `REVIEW: FINDINGS` — an automated step downstream usually reads it.
 
 **A caller that asks for another file name or another closing line wins**: write
 to their name and close with their marker instead of these. The format below
