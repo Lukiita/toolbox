@@ -13,6 +13,9 @@
 5. **`domain-modeling` bridges** (toolbox, 2026-08-17): `CONTEXT.md` and `docs/adr/` in Knowledge Chain Step 2; glossary in specify.md; ADRs + vocabulary in design.md; in memory.md, the "where the substance lives" rule (vocabulary → CONTEXT.md; a decision passing the three-part test → ADR with a pointer AD-NNN, in repos with an ADR directory). PR candidates in conditional form.
 6. **"List Files Touched" tip** in design.md (project-b). PR candidate.
 7. **Upstream router to grilling** (toolbox, 2026-08-18): specify.md suggests a `/grill-with-docs` session when clarification reveals the WHAT itself is contested (raw idea, tangled features), resuming Specify with the sharpened plan afterwards. Depends on toolbox-local skills (`grilling`, `grill-with-docs`, `domain-modeling`) - PR candidate only in conditional form, like item 5.
+8. **Test seams in Design step 4** (toolbox, 2026-08-27): each component names the public interface its tests will observe it through, confirmed in the design review; the Tasks coverage matrix inherits them. Idea from mattpocock/skills `to-spec` (MIT). PR candidate.
+9. **"No file paths or code in the spec" tip** in specify.md (toolbox, 2026-08-27), with the prototype-snippet exception. Idea from mattpocock/skills `to-spec`. PR candidate.
+10. **Expand-contract tip** for wide refactors in tasks.md (toolbox, 2026-08-27): expand → migrate in batches → contract, as dependent tasks. Idea from mattpocock/skills `to-tickets`. PR candidate.
 
 ## Retired in the 3.3.0 update (upstream solved it better)
 

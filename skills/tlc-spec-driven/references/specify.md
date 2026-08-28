@@ -228,5 +228,6 @@ How we know the feature is successful:
 - **Requirement IDs are mandatory** - Every story maps to trackable IDs
 - **Edge cases matter** - What breaks? What's empty? What's huge?
 - **Out of Scope prevents creep** - If it's not here, it doesn't get built
+- **No file paths or code in the spec** - they go stale fastest, and the spec says WHAT (the design's `Files Touched` owns WHERE). One exception: a snippet from a prototype that encodes a decision more precisely than prose can (state machine, schema, type shape), trimmed to the decision-rich part and marked as prototype-born
 - **Closure gate before confirm** - Three checks: unambiguity + precision, open-questions/assumptions closure, declined gray areas logged; scope-tiered; bounded to stated dimensions; never invents requirements
 - **Confirm after the gate passes** - Present the spec for user confirmation only after the closure gate passes (no unresolved-and-unmarked items remain) and `validate_spec.py` exits clean; user approves spec before moving to discuss phase

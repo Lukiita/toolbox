@@ -63,6 +63,8 @@ Each component: Purpose, Location, Interfaces, Dependencies, What it reuses.
 
 **Boundary test per component (cohesion trade-off):** before splitting or merging, answer three questions — are these the only operations that belong together? Is this component expected to grow? Would splitting it demand heavy coupling between the parts? Splitting a cohesive module only buys coupling and hurts readability; when in doubt, keep it together and note the trade-off in the design.
 
+**Test seams, named per component:** state the public interface through which each component's behavior will be observed - the seam the tests hit. Prefer an existing seam, take the highest one that still observes the behavior, and keep the count low. A behavior only observable *past* the interface means the component is the wrong shape: reshape it here, not in Execute. The Test Coverage Matrix in Tasks inherits these seams, so the user confirms them as part of the design review.
+
 ### 5. Define Data Models
 
 If the feature involves data, define models before implementation.

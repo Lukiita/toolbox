@@ -445,6 +445,7 @@ Pick whichever option keeps tasks atomic and cohesive. The goal: no task produce
 - **Done when = Testable** - If you can't verify it, rewrite it
 - **Requirement ID = Traceable** - Every task traces back to a spec requirement
 - **One commit per task** - Plan the commit message format in advance
+- **Wide refactor = expand-contract, never one vertical task** - a mechanical change whose blast radius crosses the codebase (rename a column, retype a shared symbol) cannot land green as a single task. Sequence it: an *expand* task adds the new form beside the old; *migrate* tasks move call sites in batches sized by blast radius (per feature, per directory), each depending on the expand; a *contract* task deletes the old form, depending on every migrate. The gate stays green batch to batch because the old form still exists
 
 ---
 
