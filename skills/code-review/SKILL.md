@@ -1,196 +1,241 @@
 ---
 name: code-review
-description: Revisa o diff da branch contra a base — ANTES de abrir o PR, sem precisar de PR. Dois revisores em paralelo (bugs, regras do projeto), triagem de confiança que descarta falso positivo, e um check determinístico de divergência da base. Use sempre que o usuário pedir revisão de código, "revisa o que eu mudei", "olha esse diff", "tem bug nisso?", antes de abrir PR, ou quando um fluxo automatizado precisar de revisão antes do PR. Também quando o usuário terminar uma implementação e for commitar/abrir PR — revisar antes é mais barato que revisar depois. NÃO use para revisar PR de terceiros já aberto no GitHub (isso é `/review`), nem para verificar se a implementação cumpre uma spec (isso é o Verifier do tlc-spec-driven).
+description: Reviews the branch diff against its base — BEFORE the PR exists, no PR needed. Independent reviewers in parallel (bugs twice over, project rules, and intent-vs-commits when there is no tlc flow), a confidence triage that drops false positives, and a deterministic base-divergence check. Use whenever the user asks for a code review, "revisa o que eu mudei", "olha esse diff", "tem bug nisso?", before opening a PR, or when an automated flow needs a review before the PR. Also when the user finishes an implementation and is about to commit or open a PR — reviewing before is cheaper than after. Do NOT use to review someone else's PR already open on GitHub (that is `/review`), nor to check that an implementation fulfils a spec (that is tlc-spec-driven's Verifier).
 ---
 
-# Code review do diff, antes do PR
+# Code review of the diff, before the PR
 
-Roda sobre `git diff <base>...HEAD` — não precisa de PR aberto, o que a torna
-usável dentro de um pipeline e em qualquer projeto.
+Runs on `git diff <base>...HEAD` — no open PR required, which makes it usable
+inside a pipeline and in any project.
 
-Duas propriedades guiam tudo aqui:
+Two properties drive everything here:
 
-**Precisão importa mais que cobertura.** Revisão que aponta dez coisas das quais
-três são reais custa mais atenção do que economiza — quem lê aprende a ignorar.
-Daí a triagem no passo 4 e a lista "o que não apontar".
+**Precision matters more than coverage.** A review that points at ten things of
+which three are real costs more attention than it saves — the reader learns to
+ignore it. Hence the triage in step 4 and the "what not to flag" list.
 
-**Contexto é o que custa dinheiro.** O diff é o objeto caro. Cada agente que o
-carrega paga por ele. Por isso o pai **nunca carrega o diff** — ele passa o
-*comando* adiante, e só dois revisores o leem, uma vez cada.
+**Reviewer and judge are separate roles.** The reviewers read the diff without
+knowing about each other, and the parent reads it only after they have reported
+— whoever sees the diff first forms an opinion and ends up defending their own
+findings instead of judging the reviewers'. So the parent passes the *command*
+along, and loads the diff only at triage.
 
-## Processo
+## Process
 
-### 1. Escopo, sem carregar o diff
+### 1. Scope, without loading the diff
 
 ```bash
-BASE="${1:-main}"                                  # origin/main se a local divergir
-git rev-parse "$BASE" >/dev/null || exit 1         # ref ruim falha aqui, não dentro dos agentes
-git diff --stat "$BASE"...HEAD                     # só o resumo
+BASE="${1:-main}"                                  # origin/main if the local branch has diverged
+git rev-parse "$BASE" >/dev/null || exit 1         # a bad ref fails here, not inside the agents
+git diff --stat "$BASE"...HEAD                     # the summary only
 git log --oneline "$BASE"..HEAD
 ```
 
-Três pontos (`A...B`) compara contra o ancestral comum — mudança que entrou na
-base depois da bifurcação não polui o diff.
+Three dots (`A...B`) compare against the common ancestor — a change that landed
+on the base after the fork does not pollute the diff.
 
-**Não rode `git diff` sem `--stat` aqui.** O diff inteiro no seu contexto é a
-maior fonte de custo desta skill, e ele já vai ser lido pelos revisores.
+**Do not run `git diff` without `--stat` here.** The full diff enters your
+context only at triage (step 4), after the reviewers — before that it turns you
+into one more reviewer, and the judge stops being independent.
 
-Diff vazio: diga e pare. Passou de ~1.500 linhas: **não fatie sozinho** —
-diga o tamanho e pergunte por qual área começar. Fatiar automaticamente
-multiplica o custo e, pior, separa arquivos que conversam entre si, perdendo
-justamente o bug que atravessa dois arquivos.
+Empty diff: say so and stop. Over ~1,500 lines: **do not slice it yourself** —
+state the size and ask which area to start with. Automatic slicing multiplies
+the cost and, worse, separates files that talk to each other, losing exactly
+the bug that spans two files.
 
-### 2. Divergência da base (determinístico, sem agente)
+### 2. Base divergence (deterministic, no agent)
 
 ```bash
 MB=$(git merge-base "$BASE" HEAD)
 git log --oneline "$MB".."$BASE" -- $(git diff --name-only "$BASE"...HEAD)
 ```
 
-Commits aqui significam: **a base ganhou mudanças nos mesmos arquivos depois que
-você bifurcou.** O merge vai conflitar, e a resolução preguiçosa pode desfazer
-uma correção que já está na base. Se retornar algo, é achado — e sai de graça,
-sem modelo.
+Commits here mean: **the base gained changes in the same files after you
+forked.** The merge will conflict, and a lazy resolution can undo a fix that is
+already on the base. Anything returned is a finding — and it comes for free,
+no model involved.
 
-### 3. As duas lentes
+### 3. The lenses
 
-São **duas lentes**, não necessariamente dois agentes. Os subagentes existem por
-economia de contexto — manter o diff fora do seu contexto para a triagem do
-passo 4 sair barata —, não porque a revisão precise de duas cabeças.
+Two fixed lenses — **bugs** and **project rules** — and a third, **intent**,
+that runs only in a project without the tlc flow. Each lens is one agent, and
+the bug lens runs in **two independent agents**: different runs find different
+bugs, and the triage in step 4 filters the union. The separation is about
+independence, not cost: a reviewer hunting bugs must not be primed by the rule
+list, the rules reviewer must not be distracted by the bug, and neither may see
+the other's findings before triage.
 
-**Se você tem subagente:** uma mensagem só, duas chamadas de Agent
-(`general-purpose`). **Passe o comando do diff, não o conteúdo** — cada um roda
-o `git diff` por conta própria, então o diff entra em dois contextos, não em
-quatro. Enquanto eles rodam, **não abra arquivo nenhum**: você não tem o que
-fazer até os dois voltarem, e investigar por conta própria carrega a superfície
-do diff no seu contexto pela porta dos fundos, que é justamente o que este
-desenho evita.
+**With sub-agents:** one message, one Agent call (`general-purpose`) per
+reviewer — three, or four with the intent lens. **Pass the diff command, not
+its content** — each one runs `git diff` on its own. While they run, prepare
+the triage without touching the diff: read the repo's written rules
+(`AGENTS.md`/`CLAUDE.md`) and the step 2 result — that is what you will need to
+confirm the findings.
 
-**Se você não tem subagente** (modelo ou runtime sem essa capacidade): leia o
-diff **uma vez** e passe as duas lentes em sequência, na mesma sessão, com o
-mesmo teto de 400 palavras cada. O resultado é o mesmo; o que muda é que o
-contexto fica pesado para o passo 4 — então na triagem confie no que você já
-leu em vez de reabrir os arquivos, e reabra só quando a nota depender de algo
-que o diff não mostra.
+**Without sub-agents** (a model or runtime without that capability): read the
+diff **once** and run the lenses in sequence, in the same session, with the
+same 400-word cap each — the bug lens once only: repeating it in the same head
+is not independent. What is lost is the independence — reviewer and judge
+become one head — so at triage treat your own findings as someone else's:
+confirm each against the file, and reopen only what the diff does not show.
 
-Não improvise um terceiro caminho: sem subagente, é sequencial na mesma sessão.
+Do not improvise a third path: without sub-agents, it is sequential in the same
+session.
 
-Peça a cada um: achados com `arquivo:linha`, o que está errado, por quê.
-**Teto de 400 palavras.** O teto não é só economia de saída: revisor com
-orçamento curto prioriza, revisor sem orçamento diverga em minúcia.
+Ask each reviewer for: findings as `file:line`, what is wrong, why. **400-word
+cap.** The cap is not only output economy: a reviewer on a short budget
+prioritises, a reviewer without one drifts into minutiae.
 
-**Revisor A — bugs.** Lê o diff e procura o que morde: condição invertida,
-off-by-one, `null`/`undefined` não tratado, `await` faltando, erro engolido,
-corrida, recurso não liberado, valor que vaza para onde não devia.
+**Reviewer A — bugs, twice over.** Reads the diff hunting for what bites:
+inverted condition, off-by-one, unhandled `null`/`undefined`, missing `await`,
+swallowed error, race, unreleased resource, a value leaking where it should not.
 
-Dê a ele o resultado do passo 2 como contexto, se houver.
+Runs in **two agents with the same prompt**, unaware of each other. Do not merge
+the reports or drop duplicates before triage: a finding both brought is signal,
+and counts in its favour in step 4.
 
-> Peça explicitamente que **siga o fio entre arquivos** quando um valor sai de um
-> e chega em outro. Bug caro raramente cabe num arquivo só — o clássico é o
-> getter que engole o erro e o chamador que trata o `null` como "não existe".
+Give them the step 2 result as context, if any.
 
-**Diff tocando SQL, query builder ou migration** (dá pra ver no `--stat` e nos
-nomes dos arquivos): acrescente ao prompt do Revisor A — "carregue
-`~/.agents/skills/sql-quality/references/review-checklist.md` e aplique o
-checklist à parte SQL do diff, na ordem dele: injection e scan sem limite
-primeiro". Custa um arquivo no contexto do revisor, não um terceiro agente —
-o desenho de custo da skill não muda.
+> Ask explicitly that it **follows the thread across files** when a value leaves
+> one and lands in another. An expensive bug rarely fits in one file — the
+> classic is the getter that swallows the error and the caller that treats the
+> `null` as "not found".
 
-**Revisor B — regras do projeto.** Confere o diff contra as regras escritas do
-repo — `CLAUDE.md` / `AGENTS.md`, da raiz e dos diretórios tocados — e
-`.specs/capabilities/`, quando existirem. Duas perguntas:
+**Diff touching SQL, a query builder or a migration** (visible in `--stat` and
+in the file names): add to Reviewer A's prompt — "load
+`~/.agents/skills/sql-quality/references/review-checklist.md` and apply the
+checklist to the SQL part of the diff, in its order: injection and unbounded
+scans first". It goes into both Reviewer A prompts — SQL is bug hunting, not a
+separate lens, so it gets no agent of its own.
 
-1. Alguma regra escrita foi violada? **Cite a regra textualmente** — regra que
-   não se consegue citar provavelmente não existe.
-2. A mudança quebra algum cenário garantido em `.specs/capabilities/`? Esses
-   arquivos dizem o que o sistema promete hoje; quebrar um em silêncio é a
-   regressão mais cara que existe.
-3. Conascência forte atravessando fronteira de feature/módulo? Valor mágico
-   repetido em dois lugares (conascência de *significado*), ordem frágil de
-   parâmetros posicionais (*posição*), algoritmo duplicado que precisa mudar
-   junto (*algoritmo*) — aponte citando o tipo e a refatoração para a forma
-   mais fraca (constante nomeada, objeto nomeado, fonte única). Dentro do
-   mesmo módulo, tolere: conascência forte perto é menos smell que a mesma
-   espalhada.
+**Reviewer B — project rules.** Checks the diff against the repo's written rules
+— `CLAUDE.md` / `AGENTS.md`, at the root and in the touched directories — and
+`.specs/capabilities/`, when they exist. Four questions:
 
-Sem os arquivos das perguntas 1 e 2, sobram a pergunta 3 e o bom senso:
-convenção estabelecida no código vizinho vence preferência sua.
+1. Was a written rule violated? **Quote the rule verbatim** — a rule that cannot
+   be quoted probably does not exist.
+2. Does the change break a scenario guaranteed in `.specs/capabilities/`? Those
+   files say what the system promises today; breaking one silently is the most
+   expensive regression there is.
+3. Strong connascence crossing a feature/module boundary? A magic value repeated
+   in two places (connascence of *meaning*), a fragile order of positional
+   parameters (*position*), a duplicated algorithm that must change together
+   (*algorithm*) — flag it naming the type and the refactor to the weaker form
+   (named constant, named object, single source). Inside the same module,
+   tolerate it: strong connascence close by is less of a smell than the same
+   thing spread out.
+4. A Fowler smell the diff **introduces**? Load
+   `~/.agents/skills/code-review/references/smells.md` (twelve smells, each
+   "what it is → how to fix") and flag it naming the smell and quoting the
+   hunk. A written repo rule overrides the baseline; it is always a judgement
+   call, never a hard violation — and what lint already catches does not count.
 
-### 4. Triagem — você mesmo, sem agente novo
+Without the files behind questions 1 and 2, questions 3 and 4 and common sense
+remain: a convention established in the neighbouring code beats your
+preference.
 
-Você não carregou o diff, então está leve o bastante para julgar aqui. Um agente
-a mais só para pontuar é custo que não se paga.
+**Reviewer C — intent (only without tlc).** If the repo has no `.specs/` — that
+is, no Verifier will check the implementation against a spec — a third reviewer
+compares the diff with what the commits say (`git log "$BASE"..HEAD`, full
+messages; the PR description, if there is one). Three questions:
 
-Para cada achado das duas fontes, dê 0 a 100:
+1. Is something the message promises missing? Half-done work, a new `TODO`, an
+   error path the commit claims to handle and does not.
+2. Did something nobody asked for get in? A refactor hitching a ride, a touched
+   file the message does not explain.
+3. Any leftovers? Debug logging, dead code, a test flag.
 
-- **0** — falso positivo, ou problema que já existia antes deste diff.
-- **25** — pode ser real, não deu para confirmar.
-- **50** — real e confirmado, mas nitpick ou raríssimo.
-- **75** — real, confirmado, acontece na prática. Importa.
-- **100** — certeza; a evidência confirma diretamente.
+Quote the commit-message line in each finding. With `.specs/` present, this
+lens **does not run**: that is tlc's Verifier, with per-criterion tracing and a
+discrimination sensor — duplicating it creates contradictions between layers.
 
-Confirme antes de pontuar alto: abra o arquivo citado e confira. Nota sem
-evidência é palpite com número. Achado que cita regra do projeto exige conferir
-que a regra diz aquilo mesmo.
+### 4. Triage — yourself, no new agent
 
-**Fique com os ≥ 80.** Corte alto de propósito: o objetivo é que todo item que
-sobra mereça ação, para que a lista seja lida em vez de escaneada.
+You are the judge: you hold the conversation context (what the change *meant*
+to do), which no new agent would have. Now load the diff — `git diff
+"$BASE"...HEAD` in full if it fits the step 1 limit; above that, only the files
+cited in the findings. It decides the most common 0: "already there before this
+diff".
 
-### 5. Relatório
+First merge duplicates: same `file:line` and same problem is **one** finding,
+and note how many reviewers brought it. Then score each finding 0 to 100:
 
-Escreva `code-review.md` (no diretório de artefatos, se houver; senão na raiz) e
-termine com uma linha exatamente `REVIEW: LIMPO` ou `REVIEW: ACHADOS` — passo
-automatizado depois costuma ler isso.
+- **0** — false positive, or a problem that existed before this diff.
+- **25** — might be real, could not confirm.
+- **50** — real and confirmed, but a nitpick or vanishingly rare.
+- **75** — real, confirmed, happens in practice. Matters.
+- **100** — certain; the evidence confirms it directly.
 
-**Chamador que pedir outro nome de arquivo ou outra linha final manda**: escreva
-no nome dele e feche com o marcador dele, em vez destes. O formato abaixo
-continua valendo — o que muda é o rótulo, não o conteúdo. Sem isso, um nó de
-pipeline com contrato próprio de artefato herdaria dois finais incompatíveis e
-teria de escolher qual desobedecer.
+Confirm before scoring high: the hunk shows what changed, the file shows what
+remains — open the cited file when the diff is not enough. A score without
+evidence is a guess with a number on it. A finding that cites a project rule
+requires checking that the rule says that. A finding both Reviewer As brought
+independently starts with evidence in its favour — confirm anyway: two
+identical guesses are still a guess.
+
+**Keep the ≥ 80.** The cut is high on purpose: every surviving item should
+deserve action, so the list gets read instead of skimmed.
+
+### 5. Report
+
+Write `code-review.md` (in the artifacts directory, if there is one; otherwise
+at the root) and end with a line that is exactly `REVIEW: CLEAN` or
+`REVIEW: FINDINGS` — an automated step downstream usually reads it.
+
+**A caller that asks for another file name or another closing line wins**: write
+to their name and close with their marker instead of these. The format below
+still holds — what changes is the label, not the content. Without this, a
+pipeline node with its own artifact contract would inherit two incompatible
+endings and have to choose which one to disobey.
+
+Write the report body in the language the user works in (for Lucas, Brazilian
+Portuguese with technical terms in English); the closing marker stays exact.
 
 ```markdown
 # Code review — <branch> vs <base>
 
-<N> arquivo(s), <M> linha(s).
+<N> file(s), <M> line(s). Lenses: bugs ×2, rules[, intent].
 
-## Achados (<K>)
+## Findings (<K>)
 
-### 1. <o que está errado, em uma linha>
-- **Onde**: `caminho/arquivo.ts:42`
-- **Por quê**: <a razão, citando a regra ou a evidência>
-- **Confiança**: 90
+### 1. <what is wrong, in one line>
+- **Where**: `path/file.ts:42`
+- **Why**: <the reason, quoting the rule or the evidence>
+- **Confidence**: 90
 
-## Descartados na triagem (<J>)
-<uma linha por item com a nota — mostra o que foi considerado e por que caiu>
+## Dropped at triage (<J>)
+<one line per item with its score — shows what was considered and why it fell>
 
-REVIEW: ACHADOS
+REVIEW: FINDINGS
 ```
 
-Na conversa devolva só o resumo: quantos achados, os títulos, o caminho do
-arquivo. O relatório é para ser lido no arquivo, não colado no terminal.
+In the conversation return only the summary: how many findings, their titles,
+the file path. The report is meant to be read in the file, not pasted into the
+terminal.
 
-## O que NÃO apontar
+## What NOT to flag
 
-Isto é metade da qualidade da revisão. Não aponte:
+This is half the quality of the review. Do not flag:
 
-- **O que lint, typecheck ou testes pegam.** Rodam no gate; comentar é ruído.
-  Não rode build você mesmo.
-- **Problema pré-existente**, em linha que este diff não tocou.
-- **Cobertura de teste, spec não cumprida, teste fraco.** Em projeto com o fluxo
-  spec-verify isso é do Verifier, que tem sensor de discriminação e rastreio por
-  critério. Duplicar gera contradição entre as camadas.
-- **Nitpick de estilo** que um sênior não levantaria numa revisão de verdade.
-- **Preferência sua** contra convenção estabelecida do projeto.
-- Mudança estranha mas **claramente intencional** dentro do escopo.
-- Coisa silenciada de propósito no código (`eslint-disable` com motivo, etc.).
+- **What lint, typecheck or tests catch.** They run in the gate; commenting is
+  noise. Do not run the build yourself.
+- **A pre-existing problem**, on a line this diff did not touch.
+- **Test coverage, unmet spec, weak test.** In a project running the spec-verify
+  flow that is the Verifier's job, with its discrimination sensor and
+  per-criterion tracing. Duplicating it creates contradictions between layers.
+- **Style nitpicks** a senior would not raise in a real review.
+- **Your preference** against an established project convention.
+- An odd but **clearly intentional** change within scope.
+- Something silenced on purpose in the code (`eslint-disable` with a reason,
+  etc.).
 
-Na dúvida genuína, prefira não apontar: a revisão roda de novo no próximo diff,
-mas confiança perdida nela não volta.
+In genuine doubt, prefer not to flag: the review runs again on the next diff,
+but trust lost in it does not come back.
 
-## Uso headless
+## Headless use
 
-Em pipeline não há quem responda. Então: não pergunte nada, escreva o relatório,
-devolva o resumo. Diff vazio ou base inexistente: diga o motivo e encerre sem
-erro. Diff grande demais: revise os arquivos de maior risco (banco, dinheiro,
-autenticação, rotas públicas) e **registre no relatório o que ficou de fora** —
-melhor um recorte honesto que um fatiamento caro.
+In a pipeline nobody answers. So: ask nothing, write the report, return the
+summary. Empty diff or missing base: state the reason and finish without error.
+Diff too large: review the highest-risk files (database, money, authentication,
+public routes) and **record in the report what was left out** — an honest cut
+beats an expensive slicing.
