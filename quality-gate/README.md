@@ -28,6 +28,7 @@ Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`
    `"quality": "node scripts/quality/gate.mts"` and wire it into the repo gate (e.g. `"gate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm quality"`).
 4. Copy `baseline.example.json` to `quality-baseline.json` at the root, set `"language"`, then run `pnpm quality --update-baseline` to freeze today's real numbers. Commit it — the baseline is versioned so every re-freeze shows in a diff.
 5. Wire the CI from `ci.example.yml` (copy into `.github/workflows/`): the ratchet against the PR's **base** (`--baseline-from`, otherwise a re-freezing PR approves itself), the report as an edited-in-place PR comment (via the `<!-- quality-gate -->` marker), the job summary, the report artifact, and a dependency audit where **critical blocks and high warns**.
+6. **Prove each threshold rule bites** before trusting it: with the fitness function wired (an ESLint rule, a dependency-cruiser boundary), inject one deliberate violation, watch the gate go red, revert, watch it go green. A rule that has never failed has never been tested — a misconfigured glob passes everything silently. The ratchet proves itself the same way: worsen one gated metric by one unit and `pnpm quality` must fail. (Step borrowed from mattpocock/skills `setup-ts-deep-modules`, 2026-08-27.)
 
 ## Report language
 
