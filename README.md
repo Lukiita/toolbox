@@ -27,7 +27,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 ## Structure
 
 ```
-skills/       10 global skills (available in any session, any project)
+skills/       15 global skills (available in any session, any project)
 agents/       AGENTS.md — global instructions for every agent (single source)
 claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
@@ -48,23 +48,34 @@ install.sh
 | `sql-quality` | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`) |
 | `architecture-kata` | socratic architecture coach: generated katas with a hidden gabarito + co-designing real greenfields — think-first, verdict only in the review (ships its own `evals/`) |
 | `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
-| `code-review` | pre-PR diff review, two lenses + triage |
+| `code-review` | pre-PR diff review: bug lens ×2 (independent), project rules + smell baseline, intent-vs-commits lens outside tlc, triage at ≥80 |
 | `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
+| `codebase-design` | deep-module vocabulary (module, interface, seam, depth, leverage, locality), the deletion test, design-it-twice — vendored from mattpocock/skills |
+| `diagnosing-bugs` | hard-bug discipline: a tight red loop before any theory, minimise, falsifiable hypotheses, regression test at a real seam — vendored from mattpocock/skills |
+| `writing-for-agents` | how to write skills and AGENTS.md: context pointers, the two loads, leading words, no-op pruning — vendored from mattpocock/skills |
+| `retro` | end-of-session retrospective of the agent's *environment*: what should become a hook, a fitness function, a reviewer rule, a pointer, or a cut (proposes, never writes) |
+| `setup-pre-commit` | Husky + lint-staged formatter, typecheck and the tlc commit-msg check, each hook proven to bite |
 
 Not carried here: `skill-creator` — it is Anthropic's official skill, unpatched by us; vendoring it would be drift without value. Install it from the official channel when needed.
+
+Evaluated and deferred (2026-08-27, full sweep of mattpocock/skills): `prototype` (throwaway HTML to feel an aggregate's transitions before coding), `wizard` (a bash wizard for the steps only a human can take — secrets, dashboards, CI) and `to-questionnaire` (a questionnaire for the one person who knows the domain answer). Each is self-contained and one command away when its problem shows up: `npx skills@latest add mattpocock/skills --skill=<name>`. Everything else there is either already here (`grilling`, `grill-with-docs`, `domain-modeling`), covered better by tlc (`to-spec`, `to-tickets`, `implement`, `research`), or maintainer tooling for an issue queue a solo dev does not have (`triage`, `wayfinder`).
 
 **How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees. Added 2026-08-18: `ddd-tactical`'s read side routes query shape into `sql-quality`, and `code-review`'s bug lens applies `sql-quality`'s review checklist when the diff touches SQL/builders/migrations. Also 2026-08-18: `architecture-kata` borrows `grilling`'s one-question-at-a-time mechanic (recommendation rule inverted — no answers until the review) and writes real-mode glossary/ADRs through `domain-modeling`; tlc-spec-driven's Design phase and Archon stay delivery-mode, never coached.
 
 **The interview method has three homes and one boundary** (mapped 2026-08-18): `grilling` stress-tests a raw idea or plan BEFORE any feature exists — and recommends answers; tlc's Discuss clarifies gray areas INSIDE an already-bounded feature (scope is sacred there); `architecture-kata` coaches greenfield architecture and recommends nothing until its review. The route for a raw idea: `/grill-with-docs` (grilling + glossary/ADRs as they crystallize) → tlc Specify consumes the sharpened plan. Specify itself suggests that route when clarification reveals the WHAT is still contested — a local tlc patch, documented in its `UPSTREAM.md`.
 
+**Added 2026-08-27** (from the mattpocock/skills sweep): `code-review` dropped its cost tuning — the parent now loads the diff at triage, the bug lens runs in two independent agents, and an intent lens (diff vs. commit messages, Matt's *Spec* axis adapted) runs only where no tlc Verifier exists; its Revisor B carries a Fowler smell baseline (`references/smells.md`; a written repo rule overrides it); `arch-review` gained a sixth lens, **depth**, and a survey mode (hot spots from recent commits → deletion test → a rejected candidate becomes an ADR) on `codebase-design`'s vocabulary; tlc got three local patches (test seams named in Design, no file paths in the spec, expand–contract for wide refactors — `UPSTREAM.md` items 8–10); `diagnosing-bugs` hands "no seam for a regression test" to `arch-review`; and `grilling` keeps one-question-at-a-time **on purpose** while upstream moved to rounds — the `architecture-kata` contract and AGENTS.md's "one idea at a time" depend on it (its `UPSTREAM.md` records the fork).
+
 ## Third-party skills — the upstream contract
 
-`tlc-spec-driven` has a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0) and `domain-modeling` came from skills.sh. To avoid silent divergence without losing upstream improvements:
+`tlc-spec-driven` has a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0); `grilling`, `grill-with-docs`, `domain-modeling`, `codebase-design`, `diagnosing-bugs` and `writing-for-agents` come from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). To avoid silent divergence without losing upstream improvements:
 
 - the pristine upstream version lives on a **`vendor/<skill>`** branch (never edited);
 - the local delta is documented in the skill's **`UPSTREAM.md`** — every patch with its why;
 - **updating** = commit the new version on the vendor branch + `git merge` into main: the 3-way merge lets local patches survive or conflict in the open, never vanish;
 - a generic local patch becomes an upstream issue/PR — good delta is shrinking delta.
+
+One upstream repo, one vendor branch: the six mattpocock skills share **`vendor/mattpocock-skills`** (same source, same commit, synced together — six per-skill branches would mean six merges per sync). Their merge base was recorded on 2026-08-27 with `git merge -s ours` (main's tree untouched, the vendor commit recorded as a parent), so the next sync 3-way merges instead of arriving as unrelated history.
 
 The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 
