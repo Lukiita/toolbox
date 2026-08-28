@@ -467,11 +467,14 @@ nodes:
 
       Same hard rules as before: read-only over code, sensor in scratch state,
       rewrite `.specs/features/<slug>/validation.md` (the `**Commit
-      verificado**` field MUST carry the full `git rev-parse HEAD` of what you
-      verified, and the `**Overall**:` line MUST contain `✅ Ready`,
-      `⚠️ Issues` or `❌ Not Ready`, and must agree with your structured
-      `verdict`: `✅ Ready` ⇔ `PASS`, the other two ⇔ `FAIL`), distill lessons,
-      commit only the verification artifacts, end with the compact summary.
+      verificado**` field MUST carry the output of
+      `git log -1 --format=%H -- . ':!.specs'` — the last commit that touched
+      CODE, never a raw `git rev-parse HEAD`, which the evidence commits move
+      before anyone can compare it — and the `**Overall**:` line MUST contain
+      `✅ Ready`, `⚠️ Issues` or `❌ Not Ready`, and must agree with your
+      structured `verdict`: `✅ Ready` ⇔ `PASS`, the other two ⇔ `FAIL`),
+      distill lessons, commit only the verification artifacts, end with the
+      compact summary.
 
       If the verdict is still FAIL, say so plainly — the workflow halts and the
       owner decides. Do not soften the verdict to let it pass.
