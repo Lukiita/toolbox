@@ -9,15 +9,7 @@ Model the domain so the rules live inside it — not scattered across services, 
 
 ## The three questions (answer before writing any code)
 
-1. **What is the aggregate?** Who is the root, what sits inside the consistency boundary?
-2. **What invariant does it protect?** The rule that can never be violated lives INSIDE the aggregate. The database (constraint, trigger, RLS) may enforce it as a second line of defense — the domain owns it.
-3. **What illegal state becomes unrepresentable?** Model with types that make invalid states impossible to construct, instead of validation scattered across callers.
-
-Write the answers as one short paragraph before coding — in the task, the design doc, or a comment. If you cannot answer them, the modeling conversation is not over; ask, don't guess.
-
-## Ceremony scales with the problem — the questions don't
-
-An entity guarding its own invariant is already a single-element aggregate; that costs nothing and is often all a small feature needs. Domain events, extra services and elaborate factories enter only when their problem shows up (cross-context effects, async side effects) — never by default. What never shrinks: the invariant lives inside the domain object, and money is never a float (integer minor units inside a `Money` value object).
+The global `AGENTS.md` (§ How I build software) fixes them — **what is the aggregate**, **what invariant does it protect**, **what illegal state becomes unrepresentable** — together with the rule that ceremony scales with the problem while the questions don't, and the money rule. They are always loaded, so this skill does not restate them; it adds the step: write the three answers as one short paragraph before coding — in the task, the design doc, or a comment. If you cannot answer them, the modeling conversation is not over; ask, don't guess.
 
 ## The building blocks
 
@@ -86,7 +78,7 @@ The write/read asymmetry is deliberate — commands pay the port ceremony becaus
 
 **What "pure" means for imports** — the domain never imports frameworks, ORMs, I/O clients or anything with runtime wiring. It MAY import **pure computation libraries** (date-fns, decimal.js, big.js): deterministic functions with no I/O are the standard library JavaScript forgot to ship, and rewriting month arithmetic or decimal math by hand to satisfy a diagram trades real correctness for fake purity. Two conditions keep this honest: the library does computation only, and its types never cross a public domain signature (compute inside, emerge holding your own types — `Money` in, `Money` out).
 
-**File naming** — kebab-case with the type as a suffix, so the structure itself is greppable:
+**File naming** — the `AGENTS.md` rule (kebab-case, the type as a suffix, so the structure itself is greppable), instantiated per block:
 
 | block | file |
 |---|---|
