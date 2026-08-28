@@ -7,6 +7,8 @@
 # the drift visible. It changes nothing.
 #
 #   ./toolbox-diff.sh <project-root>
+#   QUALITY_DIR=tools/quality ./toolbox-diff.sh <project-root>   # a component kept elsewhere
+#                                                                  # (also HOOKS_DIR, ARCHON_DIR)
 #
 # Per file that differs: `+added -deleted` (git numstat, toolbox -> project)
 # and a label:
@@ -97,15 +99,21 @@ compare_skills() { # every skill the project carries a copy of
   done
 }
 
+# Where the component READMEs say to put each copy; a project that keeps one
+# elsewhere (project-d: tools/quality/) overrides the variable.
+HOOKS_DIR="${HOOKS_DIR:-tools/agent-hooks}"
+QUALITY_DIR="${QUALITY_DIR:-scripts/quality}"
+ARCHON_DIR="${ARCHON_DIR:-.archon}"
+
 printf 'toolbox: %s\nproject: %s\n\n' "$REPO_DIR" "$PROJECT"
 compare_skills
-printf '== hooks  -> tools/agent-hooks/\n'
+printf '== hooks  -> %s/\n' "$HOOKS_DIR"
 ADAPTED='guard-bash.mjs check-missing-tests.mjs' SKIP='README.md guard-bash-secrets.mjs' \
-  compare_tree "$REPO_DIR/hooks" "$PROJECT/tools/agent-hooks"
-printf '== quality-gate  -> scripts/quality/  (vitest.quality.config.ts at the project root)\n'
+  compare_tree "$REPO_DIR/hooks" "$PROJECT/$HOOKS_DIR"
+printf '== quality-gate  -> %s/  (vitest.quality.config.ts at the project root)\n' "$QUALITY_DIR"
 ADAPTED='place-rule.mts size.mts complexity.mts cycles.mts gate.mts locale.mts vitest.quality.config.ts' \
   SKIP='README.md *.example.*' ROOT_FILES='vitest.quality.config.ts' \
-  compare_tree "$REPO_DIR/quality-gate" "$PROJECT/scripts/quality"
-printf '== archon  -> .archon/\n'
+  compare_tree "$REPO_DIR/quality-gate" "$PROJECT/$QUALITY_DIR"
+printf '== archon  -> %s/\n' "$ARCHON_DIR"
 ADAPTED='README.md WORKFLOWS.md config.yaml repo-gate.sh' SKIP="$PY_NOISE" \
-  compare_tree "$REPO_DIR/archon" "$PROJECT/.archon"
+  compare_tree "$REPO_DIR/archon" "$PROJECT/$ARCHON_DIR"
