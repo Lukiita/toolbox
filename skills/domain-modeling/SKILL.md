@@ -2,7 +2,7 @@
 name: domain-modeling
 description: Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.
 metadata:
-  origin: imported from skills.sh (third-party); reviewed and harmonized with the tlc flow in this toolbox, 2026-08-17
+  origin: mattpocock/skills (MIT) via the skills.sh aggregator; harmonized with the tlc flow in this toolbox, 2026-08-17; source confirmed and vendored on vendor/mattpocock-skills, 2026-08-27
 ---
 
 # Domain Modeling
