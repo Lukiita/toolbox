@@ -19,6 +19,10 @@ Idempotent: running it again only confirms the state. What it links:
 | `~/.agents/skills` | `skills/` | symlink (the canonical path skills reference) |
 | `~/.agents/AGENTS.md` | `agents/AGENTS.md` | symlink (agent-agnostic global instructions) |
 | `~/.codex/AGENTS.md` | `agents/AGENTS.md` | symlink |
+| `~/.codex/skills/<skill>` | `skills/<skill>` | one symlink **per skill** — Codex keeps its own `.system/` inside that directory, so the directory itself cannot be a link; dangling links are pruned |
+| `~/.agents/hooks` | `hooks/` | symlink (the global secrets guard is wired from here) |
+| `~/.agents/til` | `til/` | symlink (the learning journal agents write to) |
+| `~/.claude/agents` | `claude/agents/` | symlink (Claude Code subagent definitions) |
 | `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` | symlink (a one-line pointer to AGENTS.md) |
 | `~/.claude/settings.json` | `claude/settings.json` | **copy** — Claude Code rewrites this file on its own; a symlink would be destroyed by the app's first atomic write. Divergence becomes a warning with a diff, never an overwrite. |
 

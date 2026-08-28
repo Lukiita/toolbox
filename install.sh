@@ -13,6 +13,9 @@
 #   ~/.codex/AGENTS.md  -> agents/AGENTS.md
 #   ~/.claude/CLAUDE.md -> claude/CLAUDE.md   (a one-line pointer to AGENTS.md)
 #   ~/.claude/agents    -> claude/agents/     (Claude Code subagent definitions)
+#   ~/.codex/skills/<s> -> skills/<s>         (one link per skill: Codex keeps
+#                                              its own .system/ in that dir, so
+#                                              the dir itself cannot be a link)
 #
 # settings.json is deliberately NOT a symlink: Claude Code rewrites that file
 # on its own (e.g. /model saves into it), and an atomic write by the app would
@@ -49,6 +52,20 @@ link "$REPO_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 link "$REPO_DIR/til" "$HOME/.agents/til"
 link "$REPO_DIR/claude/agents" "$HOME/.claude/agents"
+
+# Codex discovers skills in ~/.codex/skills/, beside its own .system/ - so the
+# directory stays real and each skill gets its own link. A skill removed from
+# the repo would leave a dangling link behind, which Codex lists as broken.
+for skill in "$REPO_DIR"/skills/*/; do
+  skill="${skill%/}"
+  link "$skill" "$HOME/.codex/skills/$(basename "$skill")"
+done
+for entry in "$HOME"/.codex/skills/*; do
+  if [ -L "$entry" ] && [ ! -e "$entry" ]; then
+    rm "$entry"
+    echo "prune:  $entry (dangling)"
+  fi
+done
 
 SETTINGS_REPO="$REPO_DIR/claude/settings.json"
 SETTINGS_HOME="$HOME/.claude/settings.json"
