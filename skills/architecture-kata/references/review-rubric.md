@@ -23,7 +23,7 @@ Then, in order:
 4. **One theme to reread** — by *theme*, not chapter number (editions renumber): modularity, characteristics identification, the specific style, or decision-making. One, not a list.
 5. **Next kata's focus** — built from the weakest step; carried into the next generation's calibration.
 
-Write it to `katas/<slug>/review.md`.
+Write it to `~/.agents/katas/<slug>/review.md`.
 
 ## Real mode — no gabarito, so the review changes shape
 

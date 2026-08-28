@@ -22,6 +22,7 @@ Idempotent: running it again only confirms the state. What it links:
 | `~/.codex/skills/<skill>` | `skills/<skill>` | one symlink **per skill** — Codex keeps its own `.system/` inside that directory, so the directory itself cannot be a link; dangling links are pruned |
 | `~/.agents/hooks` | `hooks/` | symlink (the global secrets guard is wired from here) |
 | `~/.agents/til` | `til/` | symlink (the learning journal agents write to) |
+| `~/.agents/katas` | `katas/` | symlink (`architecture-kata` practice output — never a stray `katas/` inside a client repo) |
 | `~/.claude/agents` | `claude/agents/` | symlink (Claude Code subagent definitions) |
 | `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` | symlink (a one-line pointer to AGENTS.md) |
 | `~/.claude/settings.json` | `claude/settings.json` | **copy** — Claude Code rewrites this file on its own; a symlink would be destroyed by the app's first atomic write. Divergence becomes a warning with a diff, never an overwrite. |
@@ -37,6 +38,8 @@ claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
 hooks/        provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
 quality-gate/ ratchet engine template (frozen baseline, 10 metrics, per-file coverage) — imported per project
+til/          learning journal — one concept per note, written when Lucas asks to save an explanation
+katas/        architecture-kata practice output — one folder per kata
 install.sh
 ```
 

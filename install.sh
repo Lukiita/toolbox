@@ -10,6 +10,7 @@
 #                                              pr-review-triage reference it)
 #   ~/.agents/AGENTS.md -> agents/AGENTS.md   (agent-agnostic global rules)
 #   ~/.agents/til       -> til/               (learning journal agents write to)
+#   ~/.agents/katas     -> katas/             (architecture-kata practice output)
 #   ~/.codex/AGENTS.md  -> agents/AGENTS.md
 #   ~/.claude/CLAUDE.md -> claude/CLAUDE.md   (a one-line pointer to AGENTS.md)
 #   ~/.claude/agents    -> claude/agents/     (Claude Code subagent definitions)
@@ -51,6 +52,7 @@ link "$REPO_DIR/agents/AGENTS.md" "$HOME/.agents/AGENTS.md"
 link "$REPO_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
 link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 link "$REPO_DIR/til" "$HOME/.agents/til"
+link "$REPO_DIR/katas" "$HOME/.agents/katas"
 link "$REPO_DIR/claude/agents" "$HOME/.claude/agents"
 
 # Codex discovers skills in ~/.codex/skills/, beside its own .system/ - so the
