@@ -32,7 +32,7 @@ import { InfrastructureError } from '@/src/shared/infra/infrastructure-error';
 import type { PaymentGateway, PaymentReceipt } from '../../domain/payment.gateway';
 
 export class StripePaymentGateway implements PaymentGateway {
-  public constructor(private readonly stripe: Stripe) {}
+  constructor(private readonly stripe: Stripe) {}
 
   public async charge(amount: Money, customerId: string): Promise<Result<PaymentReceipt, DomainError>> {
     try {

@@ -29,7 +29,7 @@ export interface RenewSubscriptionCommand {
 export class RenewSubscriptionHandler {
   // Ports injected through the constructor (AGENTS.md) - the handler never
   // knows which database implements them.
-  public constructor(
+  constructor(
     private readonly subscriptions: SubscriptionRepository,
     private readonly clock: () => Date,
   ) {}
@@ -83,7 +83,7 @@ export interface ActiveSubscriptionRow {
 }
 
 export class ListActiveSubscriptionsQuery {
-  public constructor(private readonly db: SupabaseClient) {}
+  constructor(private readonly db: SupabaseClient) {}
 
   public async execute(planId?: string): Promise<ActiveSubscriptionRow[]> {
     // join, filter, paginate - whatever the screen needs. HOW the SQL stays

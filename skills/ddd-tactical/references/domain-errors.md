@@ -23,7 +23,7 @@ export class DomainError {
   /** Discriminant - see "Why the `kind` field" below. */
   public readonly kind = 'domain' as const;
 
-  public constructor(
+  constructor(
     /** Stable, greppable code: '<concept>.<violation>' - e.g. 'subscription.canceled'. */
     public readonly code: string,
     /** Human message carrying the offending value and the expected shape (AGENTS.md rule). */
@@ -43,7 +43,7 @@ import type { DomainError } from '../domain/domain-error';
 export class ApplicationError {
   public readonly kind = 'application' as const;
 
-  public constructor(
+  constructor(
     /** Same '<concept>.<outcome>' shape - the outcome vocabulary is small and repeats
      *  across features: 'subscription.not-found', 'subscription.forbidden', 'subscription.stale'. */
     public readonly code: string,
@@ -70,7 +70,7 @@ TypeScript typing is structural: two classes with identical members are intercha
 // THROWN, never returned - the only house error that extends Error, because
 // it is the only one that travels through the throw channel.
 export class InfrastructureError extends Error {
-  public constructor(
+  constructor(
     /** '<concept>.<failure>' - e.g. 'subscription.persistence-failed', 'payment.provider-unavailable'. */
     public readonly code: string,
     message: string,

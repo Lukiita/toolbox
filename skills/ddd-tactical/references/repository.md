@@ -73,7 +73,7 @@ import type { SubscriptionRepository } from '../../domain/subscription.repositor
 import { SubscriptionMapper, type SubscriptionRow } from './subscription.mapper';
 
 export class SupabaseSubscriptionRepository implements SubscriptionRepository {
-  public constructor(private readonly client: SupabaseClient) {}
+  constructor(private readonly client: SupabaseClient) {}
 
   public async findById(id: SubscriptionId): Promise<Subscription | null> {
     const { data } = await this.client
