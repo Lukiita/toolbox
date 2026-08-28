@@ -1,57 +1,57 @@
 #!/usr/bin/env bash
 #
-# Portão determinístico do veredito: o contrato e o PR só acontecem para uma
-# mudança cujo relatório PERSISTIDO aprova. Grep, não julgamento de modelo — um
-# agente se convence de que está bom; um grep não.
+# Deterministic verdict gate: the contract and the PR only happen for a change
+# whose PERSISTED report approves. Grep, not model judgement — an agent talks
+# itself into "it's fine"; a grep does not.
 #
-# Uso:  verdict-gate.sh <caminho-do-relatorio> <tlc|fix>
+# Usage:  verdict-gate.sh <report-path> <tlc|fix>
 #
-# Os dois modos existem porque os dois verificadores escrevem formatos
-# diferentes, e cada formato é lido pelo gate que o acompanha:
+# Two modes exist because the two verifiers write different formats, and each
+# format is read by the gate that goes with it:
 #
-#   tlc  → `.specs/features/<slug>/validation.md`, linha `**Overall**: ✅ Ready`
-#          (relatório versionado na branch, feito para ser lido por humano)
-#   fix  → `$ARTIFACTS_DIR/verification.md`, linha `VERDICT: PASS`
-#          (artefato de run, some com ela)
+#   tlc  → `.specs/features/<slug>/validation.md`, line `**Overall**: ✅ Ready`
+#          (report versioned on the branch, written to be read by a human)
+#   fix  → `$ARTIFACTS_DIR/verification.md`, line `VERDICT: PASS`
+#          (run artifact, gone with the run)
 #
-# Unificar os dois formatos seria mudança de contrato dos verificadores, não
-# desduplicação — por isso o script aceita os dois em vez de forçar um.
+# Unifying the two formats would be a contract change on the verifiers, not
+# deduplication — so the script accepts both instead of forcing one.
 set -euo pipefail
 
-REPORT="${1:?uso: verdict-gate.sh <caminho-do-relatorio> <tlc|fix>}"
-MODO="${2:?uso: verdict-gate.sh <caminho-do-relatorio> <tlc|fix>}"
+REPORT="${1:?usage: verdict-gate.sh <report-path> <tlc|fix>}"
+MODE="${2:?usage: verdict-gate.sh <report-path> <tlc|fix>}"
 
 if [ ! -f "$REPORT" ]; then
-  echo "Sem relatório de verificação em $REPORT — o nó verify deve escrevê-lo." >&2
+  echo "No verification report at $REPORT — the verify node must write it." >&2
   exit 1
 fi
 
-case "$MODO" in
+case "$MODE" in
   tlc)
-    APROVA='^\*\*Overall\*\*:.*✅ Ready'
-    MOSTRA='^\*\*Overall\*\*:'
-    CONTEXTO=0
+    APPROVES='^\*\*Overall\*\*:.*✅ Ready'
+    SHOW='^\*\*Overall\*\*:'
+    CONTEXT_LINES=0
     ;;
   fix)
-    APROVA='^VERDICT: PASS'
-    MOSTRA='^VERDICT:'
-    CONTEXTO=20
+    APPROVES='^VERDICT: PASS'
+    SHOW='^VERDICT:'
+    CONTEXT_LINES=20
     ;;
   *)
-    echo "Modo desconhecido: '$MODO' (esperado 'tlc' ou 'fix')." >&2
+    echo "Unknown mode: '$MODE' (expected 'tlc' or 'fix')." >&2
     exit 1
     ;;
 esac
 
-if grep -Eq "$APROVA" "$REPORT"; then
-  echo "verdict-gate ok: $REPORT aprova"
+if grep -Eq "$APPROVES" "$REPORT"; then
+  echo "verdict-gate ok: $REPORT approves"
   exit 0
 fi
 
-echo "verdict-gate: $REPORT não aprova — parando antes do contrato / PR." >&2
-grep -E -A"$CONTEXTO" "$MOSTRA" "$REPORT" >&2 || true
+echo "verdict-gate: $REPORT does not approve — stopping before the contract / PR." >&2
+grep -E -A"$CONTEXT_LINES" "$SHOW" "$REPORT" >&2 || true
 echo "" >&2
-echo "Corrija as lacunas (veja o relatório) e retome com \`archon workflow resume <run-id>\`," >&2
-echo "ou resolva interativamente. NÃO re-rode com \`workflow run\`: isso abre run nova e" >&2
-echo "repaga a esteira inteira (ver .archon/WORKFLOWS.md)." >&2
+echo "Fix the gaps (see the report) and resume with \`archon workflow resume <run-id>\`," >&2
+echo "or resolve interactively. Do NOT re-run with \`workflow run\`: that opens a new run and" >&2
+echo "re-pays the whole pipeline (see .archon/WORKFLOWS.md)." >&2
 exit 1

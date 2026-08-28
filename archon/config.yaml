@@ -1,89 +1,91 @@
-# Configuração do Archon para este repositório.
+# Archon configuration for this repository.
 #
-# `baseBranch` fica fixado aqui, e não no banco do Archon, por um motivo
-# medido no projeto de origem: o Archon grava `default_branch` no registro do
-# projeto com a branch que por acaso estava em check-out no momento do
-# registro. Se essa branch não existir no remoto, a v0.6.0 recusa criar
-# worktree e derruba qualquer `--branch` na largada.
+# `baseBranch` is pinned here, not in Archon's database, for a reason measured
+# in the project this came from: Archon writes `default_branch` into the
+# project record with whatever branch happened to be checked out at
+# registration time. If that branch does not exist on the remote, v0.6.0
+# refuses to create the worktree and every `--branch` dies on launch.
 #
-# Fixar `main` aqui deixa a decisão visível e versionada, em vez de depender do
-# que ficou gravado no banco de uma máquina só.
+# Pinning `main` here keeps the decision visible and versioned, instead of
+# depending on what got written into one machine's database.
 worktree:
   baseBranch: main
 
-# Aliases de modelo por PAPEL. Um nó usa com `model: "@nome"` — o campo é
-# `model:`, NÃO `alias:`, que o Archon ignora calado (verificado no `archon
-# validate workflows` da v0.6.0: alias desconhecido em `model:` vira erro; um
-# `alias:` solto passa sem reclamar).
+# Model aliases by ROLE. A node uses one with `model: "@name"` — the field is
+# `model:`, NOT `alias:`, which Archon silently ignores (checked with `archon
+# validate workflows` on v0.6.0: an unknown alias in `model:` is an error; a
+# stray `alias:` passes without a word).
 #
-# Ficam aqui, e não no `archon ai alias set`, porque assim são versionados e
-# viajam com o repo. Config do repo ganha do global.
+# They live here, not in `archon ai alias set`, so they are versioned and
+# travel with the repo. Repo config wins over global.
 #
-# **Alias diz papel; tier diz porte.** `small`/`medium`/`large` continuam
-# valendo e são globais — nó mecânico (extract-slug, create-pr) usa tier, porque
-# ali a pergunta é só "quão capaz precisa ser". Nó com papel no desenho usa
-# alias, porque a pergunta é "quem faz esse trabalho", e a resposta pode mudar
-# de família sem mudar de porte.
+# **The alias names the role; the tier names the size.** `small`/`medium`/
+# `large` still apply and are global — a mechanical node (extract-slug,
+# create-pr) uses a tier, because there the only question is "how capable does
+# it need to be". A node with a role in the design uses an alias, because the
+# question is "who does this work", and the answer can change family without
+# changing size.
 #
-# Um alias por papel, e não um por família, justamente para dois papéis da mesma
-# família poderem divergir: `@author` e `@fixer` são os dois Claude, mas o
-# autor parte de uma spec e o consertador parte de uma lista precisa de
-# `arquivo:linha` — trabalho diferente, porte diferente.
+# One alias per role, not one per family, precisely so two roles in the same
+# family can diverge: `@author` and `@fixer` are both Claude, but the author
+# starts from a spec and the fixer starts from a precise `file:line` list —
+# different work, different size.
 #
-# Custo: os dois provedores vêm de assinatura, não de chave de API. O Archon
-# dirige os BINÁRIOS locais (`archon doctor` confirma: "Claude binary … Codex
-# binary …", com "AI credentials: none connected"), então quem autentica é o
-# `claude` e o `codex` já logados na máquina.
+# Cost: both providers come from subscriptions, not API keys. Archon drives the
+# local BINARIES (`archon doctor` confirms: "Claude binary … Codex binary …",
+# with "AI credentials: none connected"), so whoever authenticates is the
+# `claude` and `codex` already logged in on the machine.
 aliases:
-  # ── escrevem código-fonte: Claude ──────────────────────────────────────────
+  # ── write source code: Claude ──────────────────────────────────────────────
 
-  # Implementa a feature a partir da spec. É o papel mais caro do fluxo: parte
-  # de um documento e decide como virar código.
+  # Implements the feature from the spec. The most expensive role in the flow:
+  # it starts from a document and decides how it becomes code.
   "@author":
     provider: claude
     model: opus
 
-  # Aplica correções que OUTRO contexto apontou (`fix`, `fix-gaps`). Parte de
-  # uma lista precisa — `arquivo:linha` + o que está errado —, então não precisa
-  # do mesmo porte do autor: o trabalho de descobrir já foi feito.
+  # Applies fixes that ANOTHER context flagged (`fix`, `fix-gaps`). It starts
+  # from a precise list — `file:line` + what is wrong — so it does not need the
+  # author's size: the discovery work is already done.
   "@fixer":
     provider: claude
     model: sonnet
 
-  # ── só leem e relatam: outra família ───────────────────────────────────────
+  # ── read and report only: another family ───────────────────────────────────
   #
-  # A troca de família é o ponto. `autor != revisor` deixa de ser "nó separado,
-  # mesma família" e passa a ser treino diferente com pontos cegos diferentes —
-  # a propriedade que fez o CodeRabbit achar, na PR #44, o Major de
-  # `locked-fields.ts` que a lente "regras do projeto" desta esteira declarou
-  # inexistente.
+  # The family swap is the point. `author != reviewer` stops being "separate
+  # node, same family" and becomes different training with different blind
+  # spots — the property that let CodeRabbit find, on PR #44, the Major in
+  # `locked-fields.ts` that this pipeline's "project rules" lens declared
+  # nonexistent.
   #
-  # Ressalvas da v0.6.0: o Codex roda sempre com `danger-full-access` (sem
-  # sandbox), e `effort` é aceito na validação mas ignorado na execução.
+  # v0.6.0 caveats: Codex always runs with `danger-full-access` (no sandbox),
+  # and `effort` is accepted at validation but ignored at execution.
   #
-  # O `danger-full-access` entra aqui com o escopo escrito, não por descuido: o
-  # diff que o `review` lê foi escrito pelo `implement` da MESMA run, nesta
-  # worktree, a partir de uma spec versionada — não é PR de terceiro. Se um dia
-  # esta esteira revisar diff de fora, este alias precisa de isolamento
-  # externo (container sem credencial) ANTES, porque instrução read-only no
-  # prompt não contém o que a sandbox conteria.
+  # `danger-full-access` enters here with its scope written down, not by
+  # oversight: the diff `review` reads was written by the `implement` of the
+  # SAME run, in this worktree, from a versioned spec — it is not a
+  # third-party PR. If this pipeline ever reviews an external diff, this alias
+  # needs external isolation (a container without credentials) FIRST, because
+  # a read-only instruction in the prompt does not contain what a sandbox
+  # would.
 
-  # Revisa o diff e tria (`review`). Read-only por construção: o nó que usa este
-  # alias não tem passo de escrita.
+  # Reviews the diff and triages (`review`). Read-only by construction: the node
+  # that uses this alias has no write step.
   "@reviewer":
     provider: codex
     model: gpt-5.6-sol
 
-  # Verificação independente contra a spec (`verify`, `re-verify`) — trabalho
-  # mais pesado que a revisão: critérios de aceite rastreados um a um, regressão
-  # de capacidade e sensor de discriminação.
+  # Independent verification against the spec (`verify`, `re-verify`) — heavier
+  # work than the review: acceptance criteria traced one by one, capability
+  # regression and the discrimination sensor.
   #
-  # DEFINIDO MAS NÃO LIGADO. Esses nós usam `output_format` (veredito
-  # estruturado que decide o `when` do `fix-gaps`), e não está verificado se o
-  # adaptador Codex honra isso. Se não honrar, o FAIL deixa de disparar a
-  # rodada de conserto e a run halta no `verdict-gate` — degradado mas seguro,
-  # porque o portão grepa o `validation.md` persistido. Ligar só depois de
-  # medir numa feature de verdade.
+  # DEFINED BUT NOT WIRED. Those nodes use `output_format` (the structured
+  # verdict that decides the `when` of `fix-gaps`), and it is not verified that
+  # the Codex adapter honours it. If it does not, a FAIL stops triggering the
+  # fix round and the run halts at `verdict-gate` — degraded but safe, because
+  # the gate greps the persisted `validation.md`. Wire it only after measuring
+  # on a real feature.
   "@verifier":
     provider: codex
     model: gpt-5.6-sol

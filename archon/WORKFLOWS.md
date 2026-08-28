@@ -1,615 +1,639 @@
-# Os workflows por dentro
+# The workflows from the inside
 
-> **Documento herdado.** Ele veio do projeto de origem (`project-b`) junto com
-> o grafo, e foi mantido porque o **raciocínio** de cada nó porta sem mudança.
-> Os **dados** não portam: nenhum número, custo, run-id, número de PR ou nome de
-> arquivo citado aqui foi medido neste repositório. Onde o texto disser
-> `src/lib/`, `pnpm test`, `db-change` ou pgTAP, a regra equivalente deste repo
-> está no `AGENTS.md` da raiz — os arquivos que o Archon realmente executa
-> (`workflows/`, `commands/`, `scripts/`) já foram adaptados; este aqui é
-> leitura.
+> **Inherited document.** It came from the source project (`project-b`) together
+> with the graph, and was kept because the **reasoning** behind each node ports
+> unchanged. The **data** does not port: no number, cost, run-id, PR number or
+> file name cited here was measured in this repository. Where the text says
+> `src/lib/`, `pnpm test`, `db-change` or pgTAP, this repo's equivalent rule
+> lives in `AGENTS.md` at the root — the files Archon actually executes
+> (`workflows/`, `commands/`, `scripts/`) were already adapted; this one is
+> reading material.
 >
-> Quando este repo tiver medição própria de custo por nó e de achados exclusivos
-> por camada, ela substitui a de lá, e esta nota some.
+> When this repo has its own measurement of cost per node and of findings
+> exclusive to each layer, it replaces the one from there, and this note goes.
 
-O `README.md` deste diretório diz **quando** usar cada workflow. Este diz **o que
-acontece dentro** de cada um, nó a nó, e por quê.
+The `README.md` in this directory says **when** to use each workflow. This one
+says **what happens inside** each of them, node by node, and why.
 
-Documento de leitura, não de referência: lê-se uma vez do começo ao fim.
+A reading document, not a reference: read it once from start to finish.
 
 ---
 
-## A gramática do YAML
+## The YAML grammar
 
-Sem isto, o arquivo é opaco:
+Without this, the file is opaque:
 
-| No YAML | Significa |
+| In the YAML | Meaning |
 |---|---|
-| `prompt:` | um agente Claude roda com aquele texto |
-| `bash:` | script — **sair com código ≠ 0 para o fluxo inteiro**. É assim que todo portão funciona |
-| `command:` | comando pronto — o prompt mora em `.archon/commands/<nome>.md`. **Não aceita argumento**: o Archon lê a string inteira como nome do arquivo |
-| `context: fresh` | o nó **começa do zero**: não viu nada do que aconteceu antes |
-| `depends_on:` | ordem de execução |
-| `when:` | condicional — se falso, **pula** (não falha) |
-| `trigger_rule: one_success` | roda se ao menos um dos pais completou (o Archon espera todos assentarem antes de avaliar) |
-| `output_format:` | obriga o nó a devolver JSON com campos definidos, usável em `when:` |
+| `prompt:` | a Claude agent runs with that text |
+| `bash:` | script — **exiting with a non-zero code fails the whole flow**. That is how every gate works |
+| `command:` | a prepared command — the prompt lives in `.archon/commands/<name>.md`. **Takes no argument**: Archon reads the whole string as the file name |
+| `context: fresh` | the node **starts from zero**: it saw nothing of what happened before |
+| `depends_on:` | execution order |
+| `when:` | conditional — if false, **skips** (does not fail) |
+| `trigger_rule: one_success` | runs if at least one parent completed (Archon waits for all of them to settle before evaluating) |
+| `output_format:` | forces the node to return JSON with defined fields, usable in `when:` |
 
-Duas pegadinhas que já custaram tempo:
+Two gotchas that have already cost time:
 
-- **Substituição vem pré-citada.** Escreve-se `VAR=$node.output` — sem aspas. `"$node.output"` produz valor errado, e o `archon validate workflows` acusa.
-- **`--branch X` cria a branch a partir da `main`.** Para que uma spec commitada em outra branch fique visível no worktree, é obrigatório passar `--from <branch-da-spec>`.
-
----
-
-## As três garantias
-
-Cada nó existe por causa de uma delas. Se algo no fluxo parecer cerimônia, é
-porque uma destas está sendo comprada:
-
-**1. Spec-first.** Decisão de escopo é interativa; o Archon só executa o que já
-foi decidido. Nós headless não sabem perguntar — o único ponto humano no meio de
-uma run é um `approval:` gate.
-
-**2. Autor ≠ verificador.** Quem escreve nunca é quem aprova. Instrução em YAML
-ou em skill **não dispara sub-agente**: quem lê a instrução é o mesmo agente que
-escreveu o código, se auto-avaliando. Nós separados com `context: fresh`, sim.
-Por isso a independência é propriedade do grafo, não do prompt.
-
-**3. Nada muta depois do carimbo.** A verificação é a **última** checagem antes
-do PR — revisão e correções acontecem antes dela. Por isso o
-`validation.md` sempre descreve exatamente o código que chega ao PR. Esta
-garantia é comprada com **ordenação**, não com um passo de reconciliação: a
-versão anterior deste fluxo revisava depois do PR e precisava de um `re-gate`
-para consertar a evidência que envelhecia. Trocar a ordem apagou o problema.
+- **Substitution comes pre-quoted.** Write `VAR=$node.output` — no quotes. `"$node.output"` produces the wrong value, and `archon validate workflows` flags it.
+- **`--branch X` creates the branch from `main`.** For a spec committed on another branch to be visible in the worktree, passing `--from <spec-branch>` is mandatory.
 
 ---
 
-## Os três níveis de validação (a confusão mais comum)
+## The three guarantees
 
-A tlc valida **três vezes**, com donos diferentes. Confundir os níveis é o que
-faz o `implement` parecer contraditório:
+Every node exists because of one of them. If something in the flow looks like
+ceremony, it is because one of these is being bought:
 
-| Nível | Quem roda | O quê | Onde |
+**1. Spec-first.** Scope decisions are interactive; Archon only executes what
+was already decided. Headless nodes cannot ask questions — the only human
+touchpoint in the middle of a run is an `approval:` gate.
+
+**2. Author ≠ verifier.** Whoever writes is never whoever approves. An
+instruction in YAML or in a skill **does not spawn a sub-agent**: whoever reads
+the instruction is the same agent that wrote the code, evaluating itself.
+Separate nodes with `context: fresh` do. That is why independence is a property
+of the graph, not of the prompt.
+
+**3. Nothing mutates after the stamp.** Verification is the **last** check
+before the PR — review and fixes happen before it. That is why
+`validation.md` always describes exactly the code that reaches the PR. This
+guarantee is bought with **ordering**, not with a reconciliation step: the
+previous version of this flow reviewed after the PR and needed a `re-gate` to
+repair the evidence that was going stale. Swapping the order erased the problem.
+
+---
+
+## The three levels of validation (the most common confusion)
+
+tlc validates **three times**, with different owners. Confusing the levels is
+what makes `implement` look contradictory:
+
+| Level | Who runs it | What | Where |
 |---|---|---|---|
-| **1. Por tarefa** | **o implementador** | critérios "Done when" + gate (testes passam) antes de **cada** commit | dentro do nó `implement` |
-| **2. Feature** | **Verifier independente** | evidence-or-zero, regressão de capacidade, sensor de discriminação | nó `verify`, contexto fresco |
-| **3. UAT** | humano | só feature de interface | fora do Archon (headless não tem usuário) |
+| **1. Per task** | **the implementer** | "Done when" criteria + gate (tests pass) before **each** commit | inside the `implement` node |
+| **2. Feature** | **independent Verifier** | evidence-or-zero, capability regression, discrimination sensor | `verify` node, fresh context |
+| **3. UAT** | human | UI features only | outside Archon (headless has no user) |
 
-O implementador **roda o nível 1 e é obrigado a isso**. O que ele não pode fazer
-é o nível 2 — autocertificação é exatamente o que este fluxo existe para
-impedir. Ele também não escreve o `validation.md`.
+The implementer **runs level 1 and is required to**. What it cannot do is
+level 2 — self-certification is exactly what this flow exists to prevent. It
+also does not write `validation.md`.
 
 ---
 
-## `tlc-apply-feature` — o caminho principal
+## `tlc-apply-feature` — the main path
 
-19 nós, em **5 movimentos**:
+19 nodes, in **5 movements**:
 
 ```
-① ACHAR A SPEC       extract-slug → verify-feature → tasks-restantes
-② IMPLEMENTAR        implement → adr-gate → validate
-③ REVISAR            limpa-must-fix → review → must-fix-restantes → [fix → validate-fix]
-④ VERIFICAR ★        verify → [fix-gaps → re-verify] → verdict-gate
-⑤ CONTRATO E PR      sync-capabilities → capability-gate → create-pr → finalize
+① FIND THE SPEC      extract-slug → verify-feature → remaining-tasks
+② IMPLEMENT          implement → adr-gate → validate
+③ REVIEW             clear-must-fix → review → remaining-must-fix → [fix → validate-fix]
+④ VERIFY ★           verify → [fix-gaps → re-verify] → verdict-gate
+⑤ CONTRACT AND PR    sync-capabilities → capability-gate → create-pr → finalize
 ```
 
-**A ordem é o desenho.** A revisão vem antes da verificação, então o carimbo do
-Verifier cai sobre o código final — nada muta depois dele. Uma versão anterior
-invertia isso (revisão depois do PR) e precisou de 13 nós a mais, incluindo um
-`re-gate` só para reconciliar a evidência que envelhecia. Ordenar certo apagou
-o problema em vez de remediá-lo.
+**The order is the design.** Review comes before verification, so the
+Verifier's stamp lands on the final code — nothing mutates after it. A previous
+version inverted this (review after the PR) and needed 13 more nodes, including
+a `re-gate` just to reconcile the evidence that was going stale. Ordering it
+right erased the problem instead of remedying it.
 
-### ① Achar a spec
+### ① Find the spec
 
-`extract-slug` (modelo pequeno) transforma "aplica a feature cores-categoria" no
-slug puro. `verify-feature` (bash) confere que `.specs/features/<slug>/spec.md`
-existe e **falha rápido** se não.
+`extract-slug` (small model) turns "apply the feature cores-categoria" into the
+bare slug. `verify-feature` (bash) checks that `.specs/features/<slug>/spec.md`
+exists and **fails fast** if not.
 
-*Por quê:* o worktree nasce da `main`. Sem `--from`, a spec não está lá — e sem
-este portão o `implement` inventaria a feature em vez de seguir a sua.
+*Why:* the worktree is born from `main`. Without `--from`, the spec is not there
+— and without this gate `implement` would invent the feature instead of
+following yours.
 
-### ② Implementar
+### ② Implement
 
-`implement` (fresh, modelo grande) segue o contrato de execução da tlc: teste
-derivado dos critérios de aceite, gate por tarefa, commit atômico por tarefa,
-nunca enfraquecer teste para passar. Roda o **nível 1** de validação.
+`implement` (fresh, large model) follows the tlc execution contract: tests
+derived from the acceptance criteria, gate per task, atomic commit per task,
+never weaken a test to pass. Runs **level 1** of validation.
 
-`validate` (bash) roda o gate do repo: lint + typecheck + testes, mais o pgTAP
-quando o diff toca `supabase/migrations/` ou `supabase/tests/`. **Bash, não
-agente**, e essa escolha é o desenho: o `implement` já termina rodando esse
-mesmo gate e consertando o que quebra, então um agente aqui repetiria o
-trabalho e — pior — relataria o vermelho honestamente e deixaria a esteira
-seguir. Vermelho aqui é parada de esteira, e isso é um `exit 1`, não um
-julgamento. Custo zero de modelo.
+`validate` (bash) runs the repo gate: lint + typecheck + tests, plus pgTAP when
+the diff touches `supabase/migrations/` or `supabase/tests/`. **Bash, not an
+agent**, and that choice is the design: `implement` already finishes by running
+this same gate and fixing what breaks, so an agent here would repeat the work
+and — worse — honestly report the red and let the pipeline carry on. Red here
+is a pipeline stop, and that is an `exit 1`, not a judgement. Zero model cost.
 
-### ③ Revisar
+### ③ Review
 
-`review` (fresh) revisa e tria, com **a skill `code-review`**: duas lentes
-(bugs no diff; regras do `CLAUDE.md` + `.specs/capabilities/`) mais um check
-determinístico de divergência da base, e uma triagem de confiança 0–100 que só
-deixa passar o que pontuou ≥ 80.
+`review` (fresh) reviews and triages, with **the `code-review` skill**:
+independent agents per lens — the bug lens twice over (two agents, same prompt,
+unaware of each other), the project-rules lens (`AGENTS.md`/`CLAUDE.md`,
+`.specs/capabilities/`, connascence, the Fowler smell baseline), a deterministic
+base-divergence check, and a 0–100 confidence triage that only lets ≥ 80
+through. Its intent lens (diff vs. commit messages) does not run in this
+pipeline: a tlc repo has `.specs/`, so spec compliance belongs to the Verifier.
 
-**`review` não conserta** — é read-only sobre o código, e isso é propriedade do
-grafo, não promessa de prompt: o nó que revisa não tem por onde escrever. Quando
-sobra must-fix, ele grava `$ARTIFACTS_DIR/.must-fix`, um nó bash grepa
-(`must-fix-restantes`) e só então o `fix` acorda para aplicar as correções. Se a
-revisão veio limpa, o `fix` é pulado e não custa contexto nenhum.
+**`review` does not fix** — it is read-only over the code, and that is a
+property of the graph, not a promise in a prompt: the node that reviews has
+nowhere to write. When must-fix items remain, it writes
+`$ARTIFACTS_DIR/.must-fix`, a bash node greps it (`remaining-must-fix`) and only
+then does `fix` wake up to apply the corrections. If the review came back
+clean, `fix` is skipped and costs no context at all.
 
-O marcador é apagado por um nó bash (`limpa-must-fix`) logo antes da revisão:
-o `$ARTIFACTS_DIR` sobrevive à tentativa, e um `.must-fix` órfão de uma revisão
-interrompida faria o `fix` consertar achados obsoletos numa run em que a revisão
-nova veio limpa.
+The marker is deleted by a bash node (`clear-must-fix`) right before the
+review: `$ARTIFACTS_DIR` survives the attempt, and a `.must-fix` orphaned by an
+interrupted review would make `fix` repair obsolete findings in a run where the
+new review came back clean.
 
-A divisão existe por uma regra: **escrita de código-fonte fica no Claude**.
-Separado, o `review` pode rodar noutra família de modelo (alias `@reviewer`
-no `config.yaml`), e aí `autor ≠ revisor` deixa de ser "nó separado, mesma
-família" e passa a ser treino diferente com pontos cegos diferentes. Foi essa
-propriedade que fez o CodeRabbit achar, na PR #44, o que a lente "regras do
-projeto" desta esteira declarou inexistente.
+The split exists because of one rule: **source-code writing stays in Claude**.
+Separated, `review` can run in another model family (alias `@reviewer` in
+`config.yaml`), and then `author ≠ reviewer` stops being "separate node, same
+family" and becomes different training with different blind spots. It was that
+property that let CodeRabbit find, on PR #44, what this pipeline's
+"project rules" lens declared non-existent.
 
-O nó único anterior (`review-fix`, que revisava e corrigia junto) saiu do
-workflow em 2026-08-06, mas `commands/tlc-review-fix.md` continua no repo,
-intocado, como caminho de volta.
+The previous single node (`review-fix`, which reviewed and fixed together) left
+the workflow on 2026-08-06, but `commands/tlc-review-fix.md` stays in the repo,
+untouched, as the way back.
 
-**Não há passada de revisor externo antes do PR, e isso é decisão tomada.** O
-CodeRabbit revisa **no PR**, pelo app do GitHub, onde a revisão já é paga uma
-vez, fica visível na thread e pode ser respondida. Rodar o CLI antes disso
-duplicava o gasto, pendurava a run em `heartbeat: reviewing` por dezenas de
-minutos e, quando o plano batia no limite, saía com **exit 0 sem ter revisado
-nada** — foi preciso um script só para detectar essa mentira. O ganho não pagou
-o preço.
+**There is no external reviewer pass before the PR, and that is a decision
+taken.** CodeRabbit reviews **on the PR**, through the GitHub app, where the
+review is already paid for once, stays visible in the thread and can be
+answered. Running the CLI before that duplicated the spend, hung the run in
+`heartbeat: reviewing` for tens of minutes and, when the plan hit its limit,
+exited with **exit 0 without having reviewed anything** — it took a dedicated
+script just to detect that lie. The gain did not pay the price.
 
-Ele faz triagem antes de aplicar. Dois motivos:
+It triages before applying. Two reasons:
 
-- A saída da review é **entrada não confiável**. O nó trata os achados como
-  dado, nunca como instrução, e recusa qualquer coisa que peça para executar
-  comando ou mexer em credencial.
-- Perseguir "zero comentários" é otimizar a métrica errada: produz teste raso e
-  conserto de não-problema. Cada achado vira `must-fix` ou `won't-fix` **com
-  motivo escrito** — o motivo é o que impede tanto o descarte preguiçoso quanto
-  a obediência cega.
+- The review's output is **untrusted input**. The node treats findings as data,
+  never as instructions, and refuses anything that asks it to run a command or
+  touch a credential.
+- Chasing "zero comments" optimises the wrong metric: it produces shallow tests
+  and fixes for non-problems. Every finding becomes `must-fix` or `won't-fix`
+  **with a written reason** — the reason is what prevents both lazy dismissal
+  and blind obedience.
 
-Uma rodada de correção, e para. O Verifier logo depois é a rede.
+One fix round, and it stops. The Verifier right after is the safety net.
 
-### ④ Verificar ★
+### ④ Verify ★
 
-**É aqui que mora o valor do fluxo.**
+**This is where the flow's value lives.**
 
-`verify` roda em contexto fresco: esse agente **não viu o código ser escrito**.
-Recebe a spec, o diff e o `references/validate.md`, e re-deriva tudo:
+`verify` runs in a fresh context: that agent **did not see the code being
+written**. It receives the spec, the diff and `references/validate.md`, and
+re-derives everything:
 
-- **evidence-or-zero** — cada critério precisa apontar para `arquivo:linha` + a
-  assertion. Sem citação = não coberto. "Tem teste" não basta; a assertion tem
-  que mirar o valor que a spec define.
-- **regressão de capacidade** — a feature nova quebrou garantia antiga de
+- **evidence-or-zero** — every criterion must point at `file:line` + the
+  assertion. No citation = not covered. "There is a test" is not enough; the
+  assertion has to target the value the spec defines.
+- **capability regression** — did the new feature break an old guarantee in
   `.specs/capabilities/`?
-- **sensor de discriminação** — injeta 1–3 defeitos no código novo em estado
-  descartável (`git stash`), roda os testes e confirma que **falham**. Teste que
-  passa com o código quebrado não serve. É isto que pega "suíte verde, código
-  quebrado" — a falha que custou o bug de idempotência do `assinatura-barbearia`.
+- **discrimination sensor** — injects 1–3 defects into the new code in
+  disposable state (`git stash`), runs the tests and confirms they **fail**. A
+  test that passes with broken code is worthless. This is what catches "green
+  suite, broken code" — the failure that cost the idempotency bug of
+  `assinatura-barbearia`.
 
-Mais duas varreduras, porque este nó é a última checagem antes do PR:
+Two more sweeps, because this node is the last check before the PR:
 
-- **Cobertura código → teste.** O check de critérios anda spec → teste e acha
-  "especificado mas sem teste". Esta anda ao contrário e acha "codificado sem
-  nunca ter sido especificado nem testado" — que é onde ramo não testado se
-  esconde.
-- **Drift de documentação.** A mudança deixou algum doc ou skill do repo
-  desatualizado? Fluxo novo que a skill `verify` não menciona é fluxo que o
-  próximo não consegue exercitar.
+- **Coverage code → test.** The criteria check walks spec → test and finds
+  "specified but untested". This one walks the other way and finds "coded
+  without ever being specified or tested" — which is where an untested branch
+  hides.
+- **Documentation drift.** Did the change leave any repo doc or skill stale? A
+  new flow the `verify` skill does not mention is a flow the next person cannot
+  exercise.
 
-Escreve `.specs/features/<slug>/validation.md`.
+Writes `.specs/features/<slug>/validation.md`.
 
-FAIL → `fix-gaps` corrige e `re-verify` refaz **do zero** (não compara com o
-relatório anterior). Uma rodada só no headless; depois o fluxo para.
+FAIL → `fix-gaps` fixes and `re-verify` redoes it **from scratch** (does not
+compare against the previous report). One round only in headless; then the
+flow stops.
 
-`verdict-gate` (bash) faz `grep` no `**Overall**: ✅ Ready`. **Grep, não
-julgamento de modelo** — um agente se convence; um grep não.
+`verdict-gate` (bash) greps for `**Overall**: ✅ Ready`. **Grep, not model
+judgement** — an agent talks itself into it; a grep does not.
 
-### ⑤ Contrato e PR
+### ⑤ Contract and PR
 
-`sync-capabilities` só roda **depois** do portão: dobra o comportamento
-verificado em `.specs/capabilities/`. FAIL não sincroniza nada — comportamento
-não verificado nunca entra no contrato.
+`sync-capabilities` only runs **after** the gate: it folds the verified
+behaviour into `.specs/capabilities/`. FAIL syncs nothing — unverified
+behaviour never enters the contract.
 
-`create-pr` abre o PR **já pronto** (não draft): ele passou pelo `review` (mais
-o `fix`, quando sobrou must-fix) e pela verificação independente, então é
-trabalho terminado, não rascunho. O corpo cita o veredito, o resultado do sensor
-e a triagem dessa revisão — inclusive o que foi **recusado e por quê**. A
-revisão externa (CodeRabbit) entra depois, no PR, e é justamente por isso que
-ele não nasce draft.
+`create-pr` opens the PR **already ready** (not draft): it went through `review`
+(plus `fix`, when must-fix items remained) and through independent
+verification, so it is finished work, not a draft. The body cites the verdict,
+the sensor result and that review's triage — including what was **refused and
+why**. External review (CodeRabbit) comes after, on the PR, and that is exactly
+why it is not born as a draft.
 
-`finalize` confere a base do PR e resume onde ficou cada evidência.
+`finalize` checks the PR's base and summarises where each piece of evidence
+ended up.
 
 ---
 
-## Quando uma run morre no meio: retome, não re-rode
+## When a run dies midway: resume, do not re-run
 
-**O comando é este, e ele não aparece em `archon --help`:**
+**This is the command, and it does not appear in `archon --help`:**
 
 ```bash
-archon workflow resume <run-id>          # id vem de `archon workflow runs`
+archon workflow resume <run-id>          # id comes from `archon workflow runs`
 ```
 
-Ele pula os nós já concluídos (`[review] Skipped (prior_success)`) e recomeça
-no que falhou, **dentro da mesma worktree**. Medido na sonda: run com `a → b → c`,
-`c` falhando; o `resume` executou só o `c`.
+It skips the nodes already completed (`[review] Skipped (prior_success)`) and
+restarts at the one that failed, **inside the same worktree**. Measured in a
+probe: run with `a → b → c`, `c` failing; `resume` executed only `c`.
 
-**O que NÃO retoma, e cada um custa a esteira inteira de novo:**
+**What does NOT resume, and each one costs the whole pipeline again:**
 
-| tentativa | o que acontece |
+| attempt | what happens |
 | --------- | -------------- |
-| `archon workflow run <nome> --branch <slug> "<msg>"` | run **nova**, do zero. Foi assim que a `avaliacoes` re-pagou o `implement` |
-| re-invocar igual, mesmo cwd e mesma mensagem | não retoma. A doc embutida do Archon diz que "auto-resume is default" — **é falso pelo CLI**, testado |
-| `--conversation-id` fixo entre as invocações | não retoma. Testado |
-| a flag `--resume` | casa a run pelo **cwd**, não pelo id. Do repo raiz pega a run errada; apontada para a worktree (`--cwd`) estoura em `Cannot resume: repository registration failed` — [issue #2127](https://github.com/coleam00/Archon/issues/2127), **ainda reproduz na v0.6.0** apesar de fechada |
+| `archon workflow run <name> --branch <slug> "<msg>"` | a **new** run, from scratch. That is how `avaliacoes` re-paid for `implement` |
+| re-invoking identically, same cwd and same message | does not resume. Archon's embedded doc says "auto-resume is default" — **it is false through the CLI**, tested |
+| a fixed `--conversation-id` across invocations | does not resume. Tested |
+| the `--resume` flag | matches the run by **cwd**, not by id. From the repo root it picks the wrong run; pointed at the worktree (`--cwd`) it blows up with `Cannot resume: repository registration failed` — [issue #2127](https://github.com/coleam00/Archon/issues/2127), **still reproduces on v0.6.0** despite being closed |
 
-O preço de não saber disso: 8 runs da `avaliacoes`, US$ 25 de modelo, e 78 dos
-142 minutos de agente gastos no `implement` re-entrando numa feature pronta.
+The price of not knowing this: 8 runs of `avaliacoes`, US$ 25 of model, and 78
+of the 142 agent minutes spent in `implement` re-entering a finished feature.
 
-**Antes de retomar, mate a run zumbi.** Run que ficou em `running` sem processo
-vivo bloqueia a próxima e não aparece como falha:
+**Before resuming, kill the zombie run.** A run left in `running` with no live
+process blocks the next one and does not show up as a failure:
 
 ```bash
-archon workflow status                   # está "running" há horas?
-archon workflow abandon <run-id>         # `cancel` não existe como subcomando do CLI
+archon workflow status                   # has it been "running" for hours?
+archon workflow abandon <run-id>         # `cancel` does not exist as a CLI subcommand
 ```
 
-### `one_success` não é o que o nome sugere
+### `one_success` is not what the name suggests
 
-Medido em sonda, porque a intuição erra aqui:
+Measured in a probe, because intuition gets this wrong:
 
-| pais | `one_success` | `none_failed_min_one_success` |
+| parents | `one_success` | `none_failed_min_one_success` |
 | ---- | ------------- | ----------------------------- |
-| um falhado + um concluído | **roda** o filho | pula |
-| um pulado + um concluído | roda | roda |
-| um falhado + um pulado | pula | pula |
+| one failed + one completed | **runs** the child | skips |
+| one skipped + one completed | runs | runs |
+| one failed + one skipped | skips | skips |
 
-A linha perigosa é a primeira. Um nó com `one_success` ao lado de um irmão que
-**sempre conclui** deixa passar o pai falhado — foi o caso do `adr-gate`, onde
-`tasks-restantes` (bash, sempre verde) fica ao lado do `implement`: um
-`implement` que morre no meio liberava `validate → review → fix → verify →
-create-pr` sobre uma feature pela metade. O gate de testes não pega isso —
-código que nem chegou a ser escrito não quebra teste nenhum. Achado pelo
-CodeRabbit na PR #39 e corrigido para `none_failed_min_one_success`.
+The dangerous row is the first. A node with `one_success` next to a sibling that
+**always completes** lets the failed parent through — that was the case of
+`adr-gate`, where `remaining-tasks` (bash, always green) sits next to
+`implement`: an `implement` dying midway released `validate → review → fix →
+verify → create-pr` over a half-built feature. The test gate does not catch
+this — code that never got written breaks no test. Found by CodeRabbit on PR
+#39 and corrected to `none_failed_min_one_success`.
 
-A regra continua deixando passar **pai pulado**, e é isso que o `adr-gate`
-precisa: o `implement` tem `when` e é legitimamente pulado quando não sobrou
-caixa aberta no `tasks.md`. A objeção óbvia — "e um `implement` pulado porque um
-ancestral quebrou, esse não passa também?" — morre no grafo: **todo ancestral do
-`implement` é o `tasks-restantes` ou ancestral dele**. Ancestral quebrado pula ou
-falha os dois pais, e aí o gate fica sem nenhum pai concluído. O par
-"pulado + concluído" só é alcançável pelo `when`, que é o caminho deliberado.
+The rule still lets a **skipped parent** through, and that is what `adr-gate`
+needs: `implement` has a `when` and is legitimately skipped when no open
+checkbox remains in `tasks.md`. The obvious objection — "and an `implement`
+skipped because an ancestor broke, does that pass too?" — dies in the graph:
+**every ancestor of `implement` is `remaining-tasks` or an ancestor of it**. A
+broken ancestor skips or fails both parents, and then the gate has no completed
+parent at all. The pair "skipped + completed" is only reachable through the
+`when`, which is the deliberate path.
 
-**Os outros `one_success` do repo estão certos e não devem ser trocados**: em
-todos, os pais são ramos mutuamente exclusivos (`investigate`/`plan`,
-`verify`/`re-verify`), então a combinação perigosa não é alcançável. O comentário
-em cada nó explica o porquê — leia antes de "uniformizar".
+**The other `one_success` in the repo are correct and must not be swapped**: in
+all of them, the parents are mutually exclusive branches (`investigate`/`plan`,
+`verify`/`re-verify`), so the dangerous combination is not reachable. The
+comment on each node explains why — read it before "making them uniform".
 
-### Falha não desce como falha: desce como "pulado"
+### Failure does not propagate as failure: it propagates as "skipped"
 
-A tabela acima fala dos pais **diretos**, e é literal — `checkTriggerRule` só
-olha o estado deles (`dag-executor.ts:1156`). O que quase ninguém supõe é o que
-acontece com o **neto**: um nó pulado porque um ancestral falhou é gravado como
-`skipped`, não como `failed` (`dag-executor.ts:5700`).
+The table above is about **direct** parents, and it is literal —
+`checkTriggerRule` only looks at their state (`dag-executor.ts:1156`). What
+almost nobody assumes is what happens to the **grandchild**: a node skipped
+because an ancestor failed is recorded as `skipped`, not as `failed`
+(`dag-executor.ts:5700`).
 
-Consequência prática, e ela já custou um bug aqui: `gate` vermelho → `respond`
-vira `skipped` → um `finalize` com `none_failed_min_one_success` sobre
-`[respond, collect]` vê "um pulado + um concluído" e **roda**, anunciando
-tratamento sobre uma resposta que nunca foi postada. A proteção estava escrita e
-mirava o alvo errado: cobria `respond` **falhar**, não `respond` **sumir**.
+Practical consequence, and it has already cost a bug here: red `gate` →
+`respond` becomes `skipped` → a `finalize` with `none_failed_min_one_success`
+over `[respond, collect]` sees "one skipped + one completed" and **runs**,
+announcing treatment of a reply that was never posted. The protection was
+written and aimed at the wrong target: it covered `respond` **failing**, not
+`respond` **vanishing**.
 
-O conserto que vale não é ajustar a regra de trigger — isso resolve a instância,
-não a classe. É o nó de relato **consultar o mundo em vez de afirmar o que
-fez**. Relato derivado de contagem (threads abertas, review no HEAD, estado do
-PR) não tem como mentir sobre uma run que quebrou no meio; relato que afirma o
-que o próprio fluxo fez, sim. O `finalize` do `tlc-apply-feature` segue essa
-regra ao ler o PR em vez de declarar sucesso.
+The fix worth making is not adjusting the trigger rule — that solves the
+instance, not the class. It is having the reporting node **consult the world
+instead of asserting what it did**. A report derived from counts (open threads,
+review on HEAD, PR state) has no way to lie about a run that broke midway; a
+report asserting what the flow itself did, does. `tlc-apply-feature`'s
+`finalize` follows that rule by reading the PR instead of declaring success.
 
-### O `tasks-restantes` continua valendo
+### `remaining-tasks` still earns its place
 
-Ele não é redundante com o `resume`: cobre o caso em que a run nova é
-legítima (spec corrigida, sessão de outro dia) e não há run anterior para
-retomar. Um grep respondendo "não sobrou caixa aberta" é mais barato que
-acordar o Opus para ele descobrir o mesmo. **Checkpoint equivalente para
-`review`, `fix` e `verify` foi avaliado e descartado** — duplicaria a retomada
-nativa, que já pula nó concluído sem nenhuma máquina no YAML.
+It is not redundant with `resume`: it covers the case where the new run is
+legitimate (corrected spec, a session on another day) and there is no previous
+run to resume. A grep answering "no open checkbox remains" is cheaper than
+waking Opus for it to discover the same thing. **An equivalent checkpoint for
+`review`, `fix` and `verify` was evaluated and discarded** — it would duplicate
+native resumption, which already skips completed nodes without any machinery in
+the YAML.
 
 ---
 
-## O que saiu da branch em 04/08, e por quê
+## What left the branch on 2026-08-04, and why
 
-Este arquivo já descreveu sete workflows. Hoje descreve **um**.
+This file once described seven workflows. Today it describes **one**.
 
-Os outros seis — `archon-fix-github-issue`, `tlc-fix-bug`, `tlc-db-change`,
-`tlc-pr-review`, `tlc-pauta-to-issues` e `tlc-pr-findings` — foram
-escritos nesta branch e **nunca rodaram ponta a ponta**. Passavam no
-`archon validate`, o que prova sintaxe, não comportamento. Deixar YAML não
-testado visível para o Archon anuncia um suporte que não existe, e prova sete
-coisas ao mesmo tempo: qualquer falha fica cara de localizar.
+The other six — `archon-fix-github-issue`, `tlc-fix-bug`, `tlc-db-change`,
+`tlc-pr-review`, `tlc-pauta-to-issues` and `tlc-pr-findings` — were written on
+this branch and **never ran end to end**. They passed `archon validate`, which
+proves syntax, not behaviour. Leaving untested YAML visible to Archon advertises
+support that does not exist, and proves seven things at once: any failure
+becomes expensive to locate.
 
-Voltam **um por PR**, cada um respondendo uma pergunta só — "este fluxo reusa
-corretamente a linha já provada?". A ordem e o `git checkout` para recuperá-los
-estão no `README.md`, seção Backlog.
+They come back **one per PR**, each answering a single question — "does this
+flow correctly reuse the line already proven?". The order and the `git checkout`
+to recover them are in `README.md`, Backlog section.
 
-Três coisas que a poda muda no dia a dia, e vale saber:
+Three things the pruning changes day to day, worth knowing:
 
-- **`archon-fix-github-issue` era um override.** Sem o nosso arquivo, esse nome
-  passa a resolver para o workflow **empacotado do Archon**, que não conhece as
-  regras deste repo, não tem `spec-gate` e não roteia para a tlc. Não rode
-  achando que é o nosso.
-- **Mudança de banco** continua coberta: a skill `db-change` faz migration + RLS
-  + pgTAP juntos numa sessão, e é a mesma skill que o `implement` do
-  `tlc-apply-feature` usa.
-- **Achado de revisão do CodeRabbit é tratado à mão** durante o piloto. O
-  `tlc-pr-findings` volta como **skill**, não como workflow: quando o laço
-  automático morreu, o trabalho virou interativo — você dispara quando os
-  comentários chegam, acompanha a triagem e às vezes precisa decidir um
-  `NEEDS_DISCUSSION`. O que o workflow comprava e a skill não compra de graça é
-  ordem obrigatória e gate mecânico; isso volta como script (coletar → agente
-  tria → `repo-gate.sh` → publicar as respostas), não como DAG.
+- **`archon-fix-github-issue` was an override.** Without our file, that name
+  resolves to Archon's **bundled** workflow, which does not know this repo's
+  rules, has no `spec-gate` and does not route to tlc. Do not run it thinking
+  it is ours.
+- **Database changes** stay covered: the `db-change` skill does migration + RLS
+  + pgTAP together in a session, and it is the same skill `tlc-apply-feature`'s
+  `implement` uses.
+- **CodeRabbit review findings are treated by hand** during the pilot.
+  `tlc-pr-findings` comes back as a **skill**, not as a workflow: when the
+  automatic loop died, the work became interactive — you trigger it when the
+  comments arrive, follow the triage and sometimes need to decide a
+  `NEEDS_DISCUSSION`. What the workflow bought and the skill does not buy for
+  free is mandatory ordering and a mechanical gate; that comes back as a script
+  (collect → agent triages → `repo-gate.sh` → publish the replies), not as a
+  DAG.
 
-### O que a construção do ciclo de revisão mediu, e continua valendo
+### What building the review cycle measured, and still holds
 
-Nada disto depende dos arquivos que saíram — vale para quem trata comentário à
-mão, e vale para a skill quando ela vier:
+None of this depends on the files that left — it holds for whoever treats
+comments by hand, and for the skill when it comes:
 
-- **Coletar por um canal só devolve metade.** Achado que o CodeRabbit não
-  consegue prender a uma linha do diff vira texto no corpo da review, sob
-  `Outside diff range comments (N)`, e **não aparece** em
-  `gh api repos/<o>/<r>/pulls/<n>/comments`. Medido na PR #39: 2 de 4 achados.
-  O resto mora em `.../pulls/<n>/reviews`, e só o endpoint REST traz o
-  `commit_id` — o campo que amarra a passada de revisão ao código que ela viu.
-- **Thread resolvida some da coleta**, e o CodeRabbit auto-resolve quando julga
-  que um commit endereçou o achado. Quem confia só na lista de threads abertas
-  perde o que ele fechou sozinho.
-- **Contador no corpo da review é texto congelado**: não diminui quando se
-  conserta. Serve para relatar, nunca para decidir "ainda há trabalho".
-- **A auto-pausa do CodeRabbit é o pior modo de falha que existe aqui**: depois
-  de 5 commits revisados ele para de revisar em silêncio, e a convenção deste
-  repo é um commit por correção. O `.coderabbit.yaml` zera a pausa; se ainda
-  assim parar, `@coderabbitai review` no comentário fura.
-- **Não persiga "zero comentários".** Achado recusado com motivo escrito na
-  thread é melhor que conserto de não-problema — e o motivo escrito é o que
-  permite a quem revisou contestar.
+- **Collecting through a single channel returns half.** A finding CodeRabbit
+  cannot pin to a diff line becomes text in the review body, under
+  `Outside diff range comments (N)`, and **does not appear** in
+  `gh api repos/<o>/<r>/pulls/<n>/comments`. Measured on PR #39: 2 of 4
+  findings. The rest lives in `.../pulls/<n>/reviews`, and only the REST
+  endpoint carries the `commit_id` — the field that ties the review pass to the
+  code it saw.
+- **A resolved thread vanishes from the collection**, and CodeRabbit
+  auto-resolves when it judges that a commit addressed the finding. Whoever
+  trusts only the list of open threads loses what it closed on its own.
+- **The counter in the review body is frozen text**: it does not decrease when
+  things get fixed. It serves for reporting, never for deciding "there is still
+  work".
+- **CodeRabbit's auto-pause is the worst failure mode there is here**: after 5
+  reviewed commits it silently stops reviewing, and this repo's convention is
+  one commit per fix. The `.coderabbit.yaml` zeroes the pause; if it still
+  stops, `@coderabbitai review` in a comment breaks through.
+- **Do not chase "zero comments".** A finding refused with a written reason in
+  the thread beats a fix for a non-problem — and the written reason is what
+  lets whoever reviewed contest it.
 
-### O carimbo que vence
+### The stamp that wins
 
-A garantia nº 3 ("nada muta depois do carimbo") é comprada com **ordenação**: a
-revisão e as correções vêm antes do `verify`, então o `validation.md` descreve o
-código que chega ao PR. Tratar achado depois do PR aberto é o único passo que
-muda código **depois** do carimbo — e aí a evidência anexada envelhece.
+Guarantee no. 3 ("nothing mutates after the stamp") is bought with
+**ordering**: review and fixes come before `verify`, so `validation.md`
+describes the code that reaches the PR. Treating a finding after the PR is
+open is the only step that changes code **after** the stamp — and then the
+attached evidence goes stale.
 
-O `validation.md` registra `**Commit verificado**: <sha>` para tornar isso
-decidível — e o sha é o do **último commit de código**, não o do HEAD:
+`validation.md` records `**Commit verificado**: <sha>` to make this decidable —
+and the sha is that of the **last code commit**, not HEAD's:
 
 ```bash
 git log -1 --format=%H -- . ':!.specs'
 ```
 
-**Carimbar o HEAD cru não funciona, e isso já foi defeito aqui.** O próprio
-Verifier commita o `validation.md` depois de carimbar, e o `sync-capabilities`
-commita de novo: o HEAD fica diferente do carimbo sem nenhuma linha de código
-ter mudado, e a comparação acusaria deriva em toda run — o que é o mesmo que
-não acusar nada. Excluir `.specs/` corta exatamente a classe que o próprio fluxo
-produz depois de carimbar: o campo passa a valer **o último commit fora de
-`.specs/`**. Evidência que chega depois não move; mudança de fonte, sim.
+**Stamping raw HEAD does not work, and that has already been a defect here.**
+The Verifier itself commits `validation.md` after stamping, and
+`sync-capabilities` commits again: HEAD ends up different from the stamp
+without a single line of code having changed, and the comparison would flag
+drift on every run — which is the same as flagging nothing. Excluding `.specs/`
+cuts exactly the class the flow itself produces after stamping: the field comes
+to mean **the last commit outside `.specs/`**. Evidence arriving later does not
+move it; a source change does.
 
-**O corte é por `.specs/`, não por "código".** Um commit posterior em `docs/` ou
-neste arquivo também move o carimbo — e aí a comparação acusa deriva sem que uma
-linha de fonte tenha mudado. Fica assim de propósito: a alternativa é uma lista
-branca de caminhos de código, que precisa ser mantida em todo repo onde a skill
-aterrissar e envelhece calada. Alarme falso de commit de doc custa uma releitura;
-alarme perdido de commit de fonte custa um PR com evidência mentindo.
+**The cut is by `.specs/`, not by "code".** A later commit in `docs/` or in this
+file also moves the stamp — and then the comparison flags drift without a line
+of source having changed. It stays that way on purpose: the alternative is an
+allowlist of code paths, which must be maintained in every repo the skill lands
+in and goes stale silently. A false alarm from a doc commit costs a re-read; a
+missed alarm from a source commit costs a PR with lying evidence.
 
-Conferir depois, à mão, é o mesmo comando dos dois lados:
+Checking afterwards, by hand, is the same command on both sides:
 
 ```bash
 grep 'Commit verificado' .specs/features/<slug>/validation.md
 git log -1 --format=%H -- . ':!.specs'
 ```
 
-Diferentes? A evidência está velha: rode o Verifier de novo antes de mergear.
+Different? The evidence is stale: run the Verifier again before merging.
 
-## Dívida conhecida
+## Known debt
 
-**O miolo triplicado foi resolvido, e a poda de 04/08 colheu o resultado.** Três
-workflows abriam PR carregando cópia da mesma cadeia de revisão e verificação;
-a extração em peças de dono único veio antes da poda, e é por isso que remover
-seis workflows não levou junto o que valia. O que ficou de pé, tudo chamado pelo
-`tlc-apply-feature`:
+**The triplicated core was resolved, and the pruning of 2026-08-04 reaped the
+result.** Three workflows opened PRs carrying a copy of the same review and
+verification chain; the extraction into single-owner pieces came before the
+pruning, which is why removing six workflows did not take away what was worth
+keeping. What is still standing, all of it called by `tlc-apply-feature`:
 
-| peça | onde mora |
+| piece | where it lives |
 | ---- | --------- |
-| gate do repo (lint/typecheck/test + pgTAP condicional) | `scripts/repo-gate.sh` |
-| portão do veredito (parametrizado por relatório e formato) | `scripts/verdict-gate.sh` |
-| digital das entradas do ADR | `scripts/adr-inputs-fingerprint.sh` |
-| fecho do PR (re-target da base + handoff) | `scripts/pr-finalize.sh` |
-| revisão + triagem (read-only) | `commands/tlc-review.md` |
-| correção dos must-fix | `commands/tlc-fix-review.md` |
-| revisão + correção num nó só (aposentado, mantido para revert) | `commands/tlc-review-fix.md` |
-| contrato do Verifier da tlc | `commands/tlc-verify-feature.md` |
-| sync do contrato de capacidades | `commands/tlc-sync-capabilities.md` |
+| repo gate (lint/typecheck/test + conditional pgTAP) | `scripts/repo-gate.sh` |
+| verdict gate (parameterised by report and format) | `scripts/verdict-gate.sh` |
+| ADR input fingerprint | `scripts/adr-inputs-fingerprint.sh` |
+| PR close-out (base re-target + handoff) | `scripts/pr-finalize.sh` |
+| review + triage (read-only) | `commands/tlc-review.md` |
+| must-fix correction | `commands/tlc-fix-review.md` |
+| review + fix in a single node (retired, kept for revert) | `commands/tlc-review-fix.md` |
+| tlc Verifier contract | `commands/tlc-verify-feature.md` |
+| capability contract sync | `commands/tlc-sync-capabilities.md` |
 
-**O `fix-gaps` e o `re-verify` ficaram inline de propósito.** Eles ancoram na
-spec (`.specs/features/<slug>/`), escrevem `validation.md` versionado na branch,
-checam regressão de capacidade e usam o formato `**Overall**: ✅ Ready`. Os
-comandos equivalentes dos fluxos removidos ancoravam na investigação e escreviam
-`verification.md` no artifacts da run, com `VERDICT: PASS`. Forçar um comando só
-exigiria condicional dentro do prompt — troca duplicação honesta por acoplamento
-escondido.
+**`fix-gaps` and `re-verify` stayed inline on purpose.** They anchor on the
+spec (`.specs/features/<slug>/`), write a `validation.md` versioned on the
+branch, check capability regression and use the `**Overall**: ✅ Ready` format.
+The equivalent commands of the removed flows anchored on the investigation and
+wrote `verification.md` in the run's artifacts, with `VERDICT: PASS`. Forcing a
+single command would require a conditional inside the prompt — trading honest
+duplication for hidden coupling.
 
-O `verify`, esse, **é comando com um chamador só**, e continua assim de
-propósito: o critério é "a cópia viraria divergência?", e a resposta muda com o
-tamanho do contrato — 79 linhas de verificação valem versionadas à parte mesmo
-com um chamador. Quem já cobrou esse juro foi o tier de modelo, defasado duas
-semanas em dois arquivos.
+`verify`, on the other hand, **is a command with a single caller**, and stays
+that way on purpose: the criterion is "would the copy turn into divergence?",
+and the answer changes with the size of the contract — 79 lines of verification
+are worth versioning separately even with one caller. The model tier already
+charged that interest, two weeks out of date in two files.
 
-**A dívida cobrou juros antes de ser paga — vale o registro.** A descida de
-`large` para `medium` na cadeia de revisão foi aplicada só no
-`tlc-apply-feature`; os outros dois ficaram em `large` por duas semanas, até
-o CodeRabbit apontar na PR #39. Junto vieram três defasagens no mesmo lugar: a
-alegação de "externally reviewed" no `create-pr`, o comentário do `verdict-gate`
-citando revisão externa, e — a pior — o mesmo prompt mandando `Create a draft
-pull request` no topo e `(not a draft…)` no passo 6. Essa última tinha
-consequência real: o `.coderabbit.yaml` não revisa draft, então o PR sairia sem
-a revisão de que o fluxo passou a depender.
+**The debt charged interest before it was paid — worth recording.** The
+downgrade from `large` to `medium` in the review chain was applied only to
+`tlc-apply-feature`; the other two stayed on `large` for two weeks, until
+CodeRabbit pointed it out on PR #39. Three more lags came with it in the same
+place: the "externally reviewed" claim in `create-pr`, the `verdict-gate`
+comment citing external review, and — the worst — the same prompt ordering
+`Create a draft pull request` at the top and `(not a draft…)` in step 6. That
+last one had a real consequence: `.coderabbit.yaml` does not review drafts, so
+the PR would have gone out without the review the flow had come to depend on.
 
-### Os quatro bloqueadores do piloto — corrigidos em 04/08
+### The pilot's four blockers — fixed on 2026-08-04
 
-Achados em avaliação estática, antes de qualquer run. Ficam registrados porque
-os três primeiros são a mesma classe de erro: **um passo posterior desfazendo a
-garantia de um passo anterior, sem ninguém perceber.**
+Found in static evaluation, before any run. They stay recorded because the
+first three are the same class of error: **a later step undoing an earlier
+step's guarantee, without anyone noticing.**
 
-1. **`create-pr` commitava fonte depois do carimbo.** O prompt mandava commitar
-   "source files that are part of the feature", e ele roda depois do `verify`,
-   do `verdict-gate` e do `sync-capabilities` — ou seja, o PR podia sair com
-   código que o Verifier nunca viu, carregando um `validation.md` que dizia o
-   contrário. Agora ele classifica cada arquivo sujo: scratch se ignora,
-   evidência se commita, **e qualquer outra coisa falha o nó**. Não conserta,
-   não commita: para. A escolha é deliberada — recuperação automática aqui
-   significaria abrir PR com evidência falsa.
+1. **`create-pr` committed source after the stamp.** The prompt ordered
+   committing "source files that are part of the feature", and it runs after
+   `verify`, `verdict-gate` and `sync-capabilities` — meaning the PR could go
+   out with code the Verifier never saw, carrying a `validation.md` that said
+   otherwise. Now it classifies every dirty file: scratch is ignored, evidence
+   is committed, **and anything else fails the node**. It does not fix, does not
+   commit: it stops. The choice is deliberate — automatic recovery here would
+   mean opening a PR with false evidence.
 
-   **Evidência é uma lista de arquivos exatos, não um diretório** —
+   **Evidence is a list of exact files, not a directory** —
    `.specs/features/<slug>/validation.md`, `.specs/LESSONS.md`,
-   `.specs/lessons.json`, e nada mais. Foram duas passadas do CodeRabbit na #39
-   para chegar nisso, e as duas apontaram a mesma coisa: `.specs/**` inteiro
-   como "evidência" varre para dentro do commit coisas que não são evidência.
+   `.specs/lessons.json`, and nothing else. It took two CodeRabbit passes on
+   #39 to get there, and both pointed at the same thing: the whole of
+   `.specs/**` as "evidence" sweeps into the commit things that are not
+   evidence.
 
-   - `.specs/capabilities/` é o **contrato vivo**. O `capability-gate` logo antes
-     já rodou o `capabilities.py check` e provou o diretório limpo no worktree e
-     no índice; sujo aqui significa que a garantia do portão quebrou depois dele.
-   - `spec.md`, `design.md`, `tasks.md`, `context.md` são **entrada**, escritos
-     interativamente antes da run. São a régua contra a qual o Verifier mediu o
-     código — o `validation.md` é uma afirmação *sobre* eles. `spec.md` sujo aqui
-     quer dizer que a régua andou depois do carimbo, e o relatório passa a alegar
-     conformidade com uma spec que não existe mais.
+   - `.specs/capabilities/` is the **living contract**. The `capability-gate`
+     right before already ran `capabilities.py check` and proved the directory
+     clean in the worktree and in the index; dirty here means the gate's
+     guarantee broke after it.
+   - `spec.md`, `design.md`, `tasks.md`, `context.md` are **input**, written
+     interactively before the run. They are the ruler the Verifier measured the
+     code against — `validation.md` is a statement *about* them. A dirty
+     `spec.md` here means the ruler moved after the stamp, and the report comes
+     to claim conformance with a spec that no longer exists.
 
-   O segundo caso é o pior dos dois, e por um motivo específico: o carimbo é
-   `git log -1 --format=%H -- . ':!.specs'`, que **exclui `.specs/` de propósito**
-   (ver "O carimbo que vence"). Deriva de fonte a conferência posterior pega;
-   deriva de spec, não. Commitar isso como evidência não é só errar a
-   classificação — é enterrar a única pista.
-2. **`capability-gate` não via staged.** `git diff --quiet` olha o worktree; um
-   `git add` sem commit sumia do worktree-diff e o portão aprovava um contrato
-   que não estava na branch. Agora checa worktree **e** índice.
-3. **O carimbo por SHA nunca batia** — ver "O carimbo que vence" acima. Passou a
-   registrar o último commit de **código**.
-4. **CI vermelho.** `pnpm@11.13.0` é release quebrada — o `@pnpm/exe` saiu sem
-   binário e o `pnpm/action-setup` recusa instalar (`ERR_PNPM_BROKEN_PNPM_RELEASE`).
-   Subiu para `11.20.0`, com o `--frozen-lockfile` provado local: o lockfile
-   continua aceito, sem regeneração.
+   The second case is the worse of the two, and for a specific reason: the
+   stamp is `git log -1 --format=%H -- . ':!.specs'`, which **excludes `.specs/`
+   on purpose** (see "The stamp that wins"). Source drift the later check
+   catches; spec drift it does not. Committing that as evidence is not just a
+   misclassification — it buries the only clue.
+2. **`capability-gate` did not see staged.** `git diff --quiet` looks at the
+   worktree; a `git add` without commit vanished from the worktree diff and the
+   gate approved a contract that was not on the branch. Now it checks worktree
+   **and** index.
+3. **The SHA stamp never matched** — see "The stamp that wins" above. It now
+   records the last **code** commit.
+4. **Red CI.** `pnpm@11.13.0` is a broken release — `@pnpm/exe` shipped without
+   a binary and `pnpm/action-setup` refuses to install it
+   (`ERR_PNPM_BROKEN_PNPM_RELEASE`). Bumped to `11.20.0`, with
+   `--frozen-lockfile` proven locally: the lockfile is still accepted, no
+   regeneration.
 
-O que **não** foi verificado por nada disso: se o fluxo funciona. Estática pega
-contradição; só a run pega comportamento.
+What **none** of this verified: whether the flow works. Static analysis catches
+contradiction; only the run catches behaviour.
 
-### Retentativa: desligada em todo nó de IA, e o motivo é caro
+### Retry: off on every AI node, and the reason is expensive
 
-**O Archon classifica texto de rate-limit como erro TRANSITÓRIO e re-executa o
-nó.** Não é uma re-tentativa da última chamada: é a **sessão agêntica inteira**
-de novo — re-ler o artefato, re-raciocinar, re-editar. Com backoff de 2s, 4s e
-8s, contra um limite que reseta em **horas**.
+**Archon classifies rate-limit text as a TRANSIENT error and re-executes the
+node.** It is not a retry of the last call: it is the **entire agentic session**
+again — re-read the artifact, re-reason, re-edit. With backoff of 2s, 4s and
+8s, against a limit that resets in **hours**.
 
-Medido em 2026-08-03, na rodada 2 do laço de revisão (já removido): o nó de
-triagem bateu no
-limite de sessão e o Archon o re-executou **3 vezes**, somando 15 eventos de
-rate limit numa run só. Quatro execuções completas do nó mais caro do fluxo,
-todas condenadas desde a primeira — porque nenhuma espera de 8 segundos devolve
-cota que só volta em horas.
+Measured on 2026-08-03, in round 2 of the review loop (since removed): the
+triage node hit the session limit and Archon re-executed it **3 times**, adding
+up to 15 rate-limit events in a single run. Four full executions of the flow's
+most expensive node, all doomed from the first — because no 8-second wait
+returns quota that only comes back in hours.
 
-Por isso todo nó de IA dos workflows `project-b-*` carrega:
+That is why every AI node in the `tlc-*` workflows carries:
 
 ```yaml
 retry:
   max_attempts: 1
 ```
 
-**A assimetria é o argumento.** Sem retentativa, um erro de rede custa uma
-retomada — `archon workflow resume <run-id>`, que pula tudo que já passou e é
-barata. Com retentativa, um limite de cota custa 4× a sessão mais cara da
-esteira, e o pior é que custa **sem chance de sucesso**.
+**The asymmetry is the argument.** Without retry, a network error costs a
+resume — `archon workflow resume <run-id>`, which skips everything that already
+passed and is cheap. With retry, a quota limit costs 4× the pipeline's most
+expensive session, and the worst part is that it costs it **with no chance of
+success**.
 
-Não existe meio-termo configurável: o `retry.on_error` só aceita `transient` ou
-`all`, e texto de rate-limit cai em `transient` nos dois. Ou se desliga, ou se
-paga.
+There is no configurable middle ground: `retry.on_error` only accepts
+`transient` or `all`, and rate-limit text falls under `transient` in both.
+Either you turn it off, or you pay.
 
-O `retry` é **erro de parse** em nó `loop`/`loop_group` — nos laços ele vai nos
-nós do corpo, nunca no nó do grupo.
+`retry` is a **parse error** on `loop`/`loop_group` nodes — in loops it goes on
+the body nodes, never on the group node.
 
-### Quem roda cada nó, e por que `verify`/`re-verify` continuam em medium
+### Who runs each node, and why `verify`/`re-verify` stay on medium
 
-Desde 2026-08-06 os nós com papel no desenho usam **alias**, não tier: alias diz
-*quem faz o trabalho*, tier diz *quão capaz precisa ser*. Nó mecânico
-(`extract-slug`, `create-pr`) continua em tier, porque ali a única pergunta é o
-porte.
+Since 2026-08-06 the nodes with a role in the design use an **alias**, not a
+tier: the alias says *who does the work*, the tier says *how capable it needs to
+be*. A mechanical node (`extract-slug`, `create-pr`) stays on a tier, because
+there the only question is size.
 
-| alias | provider | nós | escreve fonte |
+| alias | provider | nodes | writes source |
 | --- | --- | --- | --- |
-| `@author` | claude/opus | `implement` | sim |
-| `@fixer` | claude/sonnet | `fix`, `fix-gaps` | sim |
-| `@reviewer` | codex | `review` | não |
-| `@verifier` | codex | — (definido, não ligado) | não |
+| `@author` | claude/opus | `implement` | yes |
+| `@fixer` | claude/sonnet | `fix`, `fix-gaps` | yes |
+| `@reviewer` | codex | `review` | no |
+| `@verifier` | codex | — (defined, not wired) | no |
 
-Um alias por papel, e não por família, para dois papéis da mesma família
-divergirem: `@author` parte de uma spec, `@fixer` parte de uma lista de
-`arquivo:linha` — trabalho diferente, porte diferente.
+One alias per role, not per family, so that two roles in the same family can
+diverge: `@author` starts from a spec, `@fixer` starts from a list of
+`file:line` — different work, different size.
 
-`@verifier` não está ligado no `verify`/`re-verify` porque esses nós usam
-`output_format`, e o veredito estruturado é o que dispara o `when` do
-`fix-gaps`; não está verificado se o adaptador Codex honra isso. Enquanto isso
-eles seguem em `medium`. A garantia que os nós de verificação compram é **autor ≠
-verificador**, e ela é propriedade do **grafo** — nó separado com `context:
-fresh` — não do porte do modelo. Sonnet com contexto zerado continua sem herdar
-o modelo mental de quem escreveu o código. O que se perde é profundidade; o que
-se ganha é o fluxo caber numa janela de cota em vez de morrer no meio sem
-verificar nada. Meio fluxo em Opus entrega menos que o fluxo inteiro em Sonnet —
-e isso não é hipótese: o `re-verify` da `avaliacoes` morreu por limite de sessão
-em 2026-07-31, já rodando em medium.
+`@verifier` is not wired into `verify`/`re-verify` because those nodes use
+`output_format`, and the structured verdict is what fires `fix-gaps`' `when`;
+it is not verified that the Codex adapter honours that. Meanwhile they stay on
+`medium`. The guarantee the verification nodes buy is **author ≠ verifier**,
+and it is a property of the **graph** — separate node with `context: fresh` —
+not of the model's size. Sonnet with a zeroed context still does not inherit
+the mental model of whoever wrote the code. What is lost is depth; what is
+gained is the flow fitting inside a quota window instead of dying midway
+without verifying anything. Half a flow on Opus delivers less than the whole
+flow on Sonnet — and that is not a hypothesis: `avaliacoes`' `re-verify` died
+from the session limit on 2026-07-31, already running on medium.
 
-**O que a construção do ciclo de revisão externa mediu está na seção "O que saiu
-da branch" acima** — os canais da coleta, a auto-pausa, o `commit_id`. Três
-medições ficam aqui porque são sobre *ferramenta*, não sobre aquele fluxo, e vão
-reaparecer na skill que substituir o `tlc-pr-findings`:
+**What building the external review cycle measured is in the section "What
+left the branch" above** — the collection channels, the auto-pause, the
+`commit_id`. Three measurements stay here because they are about *tooling*,
+not about that flow, and will reappear in the skill that replaces
+`tlc-pr-findings`:
 
-- **A poda de ruído falhava aberta.** O coletor cortava os blocos `<details>` de
-  "Analysis chain" e "Prompt for AI Agents" (45% do volume) e saía do modo
-  "pula" quando as tags fechavam — só que o markdown do CodeRabbit **não fecha
-  todas**: 21 aberturas para 19 fechamentos numa coleta real de 04/08. O bloco
-  aberto arrastava o filtro até o fim do arquivo e engolia o cabeçalho das
-  entradas seguintes: **3 das 8 threads abertas sumiram**, sem erro, sem aviso,
-  com o artefato parecendo completo. Filtro de ruído precisa zerar o estado em
-  toda fronteira de entrada. **Coletor que falha aberto é pior que coletor que
-  quebra** — quem lê o artefato não tem como desconfiar.
-- **A thread que o revisor fecha depois de responder não cai em canal nenhum**:
-  a coleta pula resolvida, e a auditoria de "fechou sem a gente comentar" exige
-  que a gente nunca tenha falado. A última palavra sendo dele, pode ser
-  contestação. Medido na #39: 15 nessa situação, **as 15 confirmações**, 10 com o
-  marcador `<review_comment_addressed>` que o próprio CodeRabbit põe.
-- **Sinal congelado não pode decidir nada.** Contador no corpo da review não
-  diminui quando se conserta; usá-lo como "ainda há trabalho" prende o veredito
-  para sempre. Foi o defeito que fez o coletor antigo declarar achado aberto numa
-  PR mergeada e inteiramente tratada.
+- **The noise pruning failed open.** The collector cut the `<details>` blocks
+  for "Analysis chain" and "Prompt for AI Agents" (45% of the volume) and left
+  "skip" mode when the tags closed — except CodeRabbit's markdown **does not
+  close all of them**: 21 openings to 19 closings in a real collection on
+  2026-08-04. The open block dragged the filter to the end of the file and
+  swallowed the header of the following entries: **3 of the 8 open threads
+  vanished**, no error, no warning, with the artifact looking complete. A noise
+  filter must reset its state at every entry boundary. **A collector that
+  fails open is worse than one that crashes** — whoever reads the artifact has
+  no way to suspect it.
+- **The thread the reviewer closes after replying lands in no channel**: the
+  collection skips resolved, and the "closed without us commenting" audit
+  requires that we never spoke. With the last word being theirs, it could be a
+  rebuttal. Measured on #39: 15 in that situation, **all 15 confirmations**, 10
+  with the `<review_comment_addressed>` marker CodeRabbit itself adds.
+- **A frozen signal cannot decide anything.** The counter in the review body
+  does not decrease when things get fixed; using it as "there is still work"
+  locks the verdict forever. It was the defect that made the old collector
+  declare an open finding on a merged, fully treated PR.
 
-**Rodado de ponta a ponta na `avaliacoes` (PR #38).** Deixou de ser raciocínio.
-Quais nós ganharam o salário, pela evidência daquela feature:
+**Run end to end on `avaliacoes` (PR #38).** It stopped being reasoning. Which
+nodes earned their pay, by that feature's evidence:
 
-- **`review-fix`** (o nó único de então; hoje `review` + `fix`) achou um bug real
-  antes do PR: o `GET` do convite ignorava o `error` das duas queries do
-  `Promise.all`, então falha de banco virava "sem atendimento concluído", sem
-  log. Recusou dois achados com motivo escrito.
-- **`verify`** reprovou, e por algo que nenhuma outra camada pegaria: a guarda
-  "cliente anonimizado não escreve avaliação" vivia como `if` isolado na rota, e
-  a mutação que a desligava passou pelo gate inteiro sem matar teste nenhum.
-  Trilha LGPD. O `fix-gaps` extraiu para função pura testada; a mutação
-  re-injetada depois morreu.
-- **`tasks-restantes`** pagou por si: `implement` pulado por grep, custo zero,
-  contra os ~US$ 1,86 que uma re-entrada dele havia custado para não produzir nada.
-- **A ordem** (revisão antes da verificação) se provou: o carimbo do Verifier caiu
-  sobre o código final, sem passada de reconciliação.
+- **`review-fix`** (the single node back then; today `review` + `fix`) found a
+  real bug before the PR: the invitation `GET` ignored the `error` of both
+  queries in the `Promise.all`, so a database failure became "no completed
+  appointment", with no log. It refused two findings with a written reason.
+- **`verify`** failed it, and for something no other layer would catch: the
+  "anonymised client does not write a review" guard lived as an isolated `if`
+  in the route, and the mutation that switched it off went through the whole
+  gate without killing a single test. LGPD trail. `fix-gaps` extracted it into
+  a tested pure function; the mutation re-injected afterwards died.
+- **`remaining-tasks`** paid for itself: `implement` skipped by grep, zero cost,
+  against the ~US$ 1.86 a re-entry of it had cost to produce nothing.
+- **The order** (review before verification) proved itself: the Verifier's
+  stamp landed on the final code, with no reconciliation pass.
 
-O que a feature também mostrou, e virou seção própria acima: **a esteira não
-tinha problema de desenho, tinha problema de retomada** — as 8 runs foram
-`workflow run` novo em vez de `workflow resume <run-id>`.
+What the feature also showed, and became its own section above: **the pipeline
+did not have a design problem, it had a resumption problem** — the 8 runs were
+new `workflow run`s instead of `workflow resume <run-id>`.
 
-Os `*-findings.md` e `validation.md` das runs ficam em
+The runs' `*-findings.md` and `validation.md` live in
 `~/.archon/workspaces/<user>/<repo>/artifacts/runs/<run-id>/`.

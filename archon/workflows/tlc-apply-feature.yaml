@@ -38,11 +38,11 @@ model: medium
 
 nodes:
   # ═══════════════════════════════════════════════════════════════
-  # 1. ACHAR A SPEC
+  # 1. FIND THE SPEC
   # ═══════════════════════════════════════════════════════════════
 
   - id: extract-slug
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     prompt: |
@@ -70,51 +70,51 @@ nodes:
         exit 1
       fi
       echo "$SLUG" > "$ARTIFACTS_DIR/.feature-slug"
-      # Digital das entradas que decidem um conflito com ADR (a spec + as
-      # decisões aceitas), tirada ANTES do implement. O adr-gate recomputa
-      # depois: é o que distingue conflito recém-detectado de marcador velho
-      # sobrevivendo a um --resume.
+      # Fingerprint of the inputs that decide a conflict with an ADR (the spec
+      # + the accepted decisions), taken BEFORE implement. The adr-gate
+      # recomputes it afterwards: that is what tells a freshly detected
+      # conflict from a stale marker surviving a --resume.
       .archon/scripts/adr-inputs-fingerprint.sh "$SLUG" > "$ARTIFACTS_DIR/.adr-inputs"
       echo "Feature spec ok: $DIR"
       ls "$DIR"
       [ -f "$DIR/tasks.md" ] || echo "note: no tasks.md (Small/Medium feature — tasks are implicit, listed inline at Execute)"
     depends_on: [extract-slug]
 
-  # Interruptor do implement: "sobrou caixa aberta na tasks.md?". Nó bash, custo
-  # zero de modelo — a resposta sai de um grep, não de um agente.
+  # The implement switch: "is there an open checkbox left in tasks.md?". Bash
+  # node, zero model cost — the answer comes from a grep, not from an agent.
   #
-  # printf sem \n de propósito: o `when:` compara a saída literal, e um newline
-  # pendurado quebraria a igualdade. Se ainda assim a comparação falhar, ela
-  # falha do lado seguro — dá diferente de NENHUMA, o implement roda, e o pior
-  # resultado é o custo que existe hoje.
+  # printf without \n on purpose: `when:` compares the literal output, and a
+  # trailing newline would break the equality. If the comparison still fails,
+  # it fails on the safe side — it differs from NONE, implement runs, and the
+  # worst outcome is the cost that exists today.
   #
-  # Sem tasks.md (feature Small/Medium, tasks implícitas) não há o que contar:
-  # PENDENTE, o implement decide.
-  - id: tasks-restantes
+  # Without tasks.md (Small/Medium feature, implicit tasks) there is nothing to
+  # count: PENDING, implement decides.
+  - id: remaining-tasks
     bash: |
       SLUG=$(cat "$ARTIFACTS_DIR/.feature-slug" | tr -d '[:space:]')
       T=".specs/features/$SLUG/tasks.md"
       if [ ! -f "$T" ]; then
-        printf '%s' "PENDENTE"
+        printf '%s' "PENDING"
       elif grep -q '^- \[ \]' "$T"; then
-        printf '%s' "PENDENTE"
+        printf '%s' "PENDING"
       elif ! grep -q '^- \[' "$T"; then
-        # tasks.md sem checkbox nenhum: formato fora do contrato. Acordar o
-        # implement à toa custa uma entrada de modelo; concluir NENHUMA em cima
-        # de formato inesperado custou a run c4f50068 inteira (implement pulado
-        # em silêncio, 2026-08-07). Fail-safe: tratar como pendente.
-        printf '%s' "PENDENTE"
+        # tasks.md with no checkbox at all: format outside the contract. Waking
+        # implement for nothing costs one model entry; concluding NONE on top
+        # of an unexpected format cost the whole run c4f50068 (implement
+        # silently skipped, 2026-08-07). Fail-safe: treat as pending.
+        printf '%s' "PENDING"
       else
-        printf '%s' "NENHUMA"
+        printf '%s' "NONE"
       fi
     depends_on: [verify-feature]
 
   # ═══════════════════════════════════════════════════════════════
-  # 2. IMPLEMENTAR
+  # 2. IMPLEMENT
   # ═══════════════════════════════════════════════════════════════
 
   - id: implement
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     prompt: |
@@ -189,216 +189,222 @@ nodes:
       feature was built is the commit history (one atomic commit per task, with
       the reasoning in the body), and duplicating it into the branch would add a
       file per feature that drifts from the code it describes.
-    depends_on: [tasks-restantes]
-    # Retomada barata. O implement é `context: fresh`, então numa run nova ele
-    # não sabe que já existe trabalho feito: precisa reler spec, design, tasks,
-    # a skill inteira e o código só para DESCOBRIR que não há o que fazer. Isso
-    # custou 27 e 38 chamadas Opus em duas retomadas da feature `avaliacoes`,
-    # produzindo nada. O grep responde a mesma pergunta antes de acordar o Opus.
+    depends_on: [remaining-tasks]
+    # Cheap resume. implement is `context: fresh`, so in a new run it does not
+    # know work already exists: it has to re-read the spec, design, tasks, the
+    # whole skill and the code just to DISCOVER there is nothing to do. That
+    # cost 27 and 38 Opus calls across two resumes of the `avaliacoes` feature,
+    # producing nothing. The grep answers the same question before waking Opus.
     #
-    # Quem já implementava só o que falta é o próprio implement, lendo os
-    # checkboxes — isto aqui não substitui isso, só evita o custo de entrar no
-    # nó quando não sobrou caixa aberta.
-    when: "$tasks-restantes.output != 'NENHUMA'"
+    # The one that already implemented only what was missing is implement
+    # itself, reading the checkboxes — this does not replace that, it only
+    # avoids the cost of entering the node when no checkbox is left open.
+    when: "$remaining-tasks.output != 'NONE'"
     context: fresh
-    # `@author` (Claude/opus) — ver os papéis em `.archon/config.yaml`.
+    # `@author` (Claude/opus) — see the roles in `.archon/config.yaml`.
     model: "@author"
 
-  # Portão determinístico da camada 2 (decisões), mesmo padrão do verdict-gate:
-  # o nó de agente persiste o fato, o bash grepa. Spec contra ADR aceito é
-  # decisão de arquitetura, e o headless não tem a quem perguntar — o fluxo já
-  # halta por decisão de produto (NEEDS_SPEC no roteador); esta é a mesma
-  # classe. Prosseguir custaria integridade arquitetural que ninguém reaudita
-  # depois; haltar custa uma run.
+  # Deterministic gate for layer 2 (decisions), same pattern as verdict-gate:
+  # the agent node persists the fact, bash greps it. A spec against an accepted
+  # ADR is an architecture decision, and headless has nobody to ask — the flow
+  # already halts on a product decision (NEEDS_SPEC in the router); this is the
+  # same class. Proceeding would cost architectural integrity nobody re-audits
+  # afterwards; halting costs one run.
   - id: adr-gate
     bash: |
       CONFLICT="$ARTIFACTS_DIR/.adr-conflict"
       if [ ! -s "$CONFLICT" ]; then
-        echo "adr-gate ok: nenhum conflito com os ADRs aceitos"
+        echo "adr-gate ok: no conflict with the accepted ADRs"
         exit 0
       fi
 
-      # Marcador presente. Ele só vale para as entradas que o implement viu:
-      # o --resume não re-executa nó que já passou, então um marcador de uma
-      # execução anterior sobreviveria a você consertar a spec e travaria o
-      # fluxo para sempre. A digital separa os dois casos.
+      # Marker present. It only holds for the inputs implement saw: --resume
+      # does not re-run a node that already passed, so a marker from a previous
+      # execution would survive you fixing the spec and lock the flow forever.
+      # The fingerprint separates the two cases.
       #
-      # O que NÃO se faz aqui é apagar o marcador ao ler: no --resume seguinte
-      # o gate passaria sem o implement ter rodado, com zero código escrito, e
-      # o fluxo seguiria verde até um PR vazio. Trocaria um travamento visível
-      # por um falso positivo silencioso — pior nos dois eixos.
+      # What is NOT done here is deleting the marker on read: on the next
+      # --resume the gate would pass without implement having run, with zero
+      # code written, and the flow would go green all the way to an empty PR.
+      # That trades a visible lock for a silent false positive — worse on both
+      # axes.
       SLUG=$(cat "$ARTIFACTS_DIR/.feature-slug" | tr -d '[:space:]')
-      ANTES=$(cat "$ARTIFACTS_DIR/.adr-inputs" 2>/dev/null || echo "digital-ausente")
-      AGORA=$(.archon/scripts/adr-inputs-fingerprint.sh "$SLUG")
+      BEFORE=$(cat "$ARTIFACTS_DIR/.adr-inputs" 2>/dev/null || echo "fingerprint-missing")
+      AFTER=$(.archon/scripts/adr-inputs-fingerprint.sh "$SLUG")
 
-      if [ "$ANTES" != "$AGORA" ]; then
-        echo "adr-gate: a spec ou os ADRs mudaram desde que este conflito foi registrado — marcador velho." >&2
+      if [ "$BEFORE" != "$AFTER" ]; then
+        echo "adr-gate: the spec or the ADRs changed since this conflict was recorded — stale marker." >&2
         echo "" >&2
-        echo "Conflito registrado na execução anterior:" >&2
+        echo "Conflict recorded in the previous execution:" >&2
         cat "$CONFLICT" >&2
         echo "" >&2
-        echo "As entradas já não são as mesmas, então este marcador não decide nada. Quem" >&2
-        echo "precisa reavaliar é o implement, e o --resume não re-executa nó que já passou:" >&2
-        echo "rode o workflow de novo do início, com a spec e os ADRs já corrigidos." >&2
+        echo "The inputs are no longer the same, so this marker decides nothing. The one that" >&2
+        echo "needs to re-evaluate is implement, and --resume does not re-run a node that already passed:" >&2
+        echo "run the workflow again from the start, with the spec and the ADRs already fixed." >&2
         exit 1
       fi
 
-      echo "adr-gate: a spec contradiz um ADR aceito — parando antes de gastar revisão e verificação." >&2
+      echo "adr-gate: the spec contradicts an accepted ADR — stopping before spending review and verification." >&2
       echo "" >&2
       cat "$CONFLICT" >&2
       echo "" >&2
-      echo "Dois caminhos válidos, os dois com você no meio:" >&2
-      echo "  1. emendar a spec para respeitar o ADR (tlc Specify, interativo);" >&2
-      echo "  2. escrever um ADR novo que supersede o antigo." >&2
-      echo "Um ADR não se re-decide de passagem: ou a spec cede, ou a decisão é substituída explicitamente." >&2
-      echo "Feito isso, rode do início — não com --resume." >&2
+      echo "Two valid paths, both with you in the middle:" >&2
+      echo "  1. amend the spec to respect the ADR (tlc Specify, interactive);" >&2
+      echo "  2. write a new ADR that supersedes the old one." >&2
+      echo "An ADR is not re-decided in passing: either the spec yields, or the decision is explicitly replaced." >&2
+      echo "Once done, run from the start — not with --resume." >&2
       exit 1
-    # Religação obrigatória: o implement agora pode ser PULADO (when), e nó
-    # pulado não conta como pai bem-sucedido — com `depends_on: [implement]`
-    # sozinho, o adr-gate seria pulado em cascata e a run terminaria verde sem
-    # ter feito nada, que é o pior desfecho possível aqui. O tasks-restantes
-    # sempre completa, então o gate segue vivo nos dois caminhos.
+    # Mandatory rewiring: implement can now be SKIPPED (when), and a skipped
+    # node does not count as a successful parent — with `depends_on:
+    # [implement]` alone, adr-gate would be skipped in cascade and the run
+    # would end green having done nothing, which is the worst possible outcome
+    # here. remaining-tasks always completes, so the gate stays alive on both
+    # paths.
     #
-    # `none_failed_min_one_success`, NÃO `one_success` — a diferença tem
-    # consequência e foi medida em sonda:
+    # `none_failed_min_one_success`, NOT `one_success` — the difference has
+    # consequences and was measured in a probe:
     #
-    #   pai falhado + pai concluído → one_success RODA o filho
-    #                                 none_failed_min_one_success PULA
-    #   pai pulado  + pai concluído → os dois RODAM o filho
+    #   failed parent  + completed parent → one_success RUNS the child
+    #                                       none_failed_min_one_success SKIPS
+    #   skipped parent + completed parent → both RUN the child
     #
-    # Com `one_success`, um `implement` que FALHA no meio liberava a esteira
-    # inteira (validate → review → fix → verify → create-pr) sobre uma feature
-    # pela metade, porque o tasks-restantes ao lado tinha concluído. O gate de
-    # testes não pega isso: código que nem chegou a ser escrito não quebra
-    # teste nenhum. `none_failed_min_one_success` barra o pai falhado e
-    # continua deixando passar o pai pulado, que é exatamente o par de
-    # comportamentos que este nó precisa.
-    depends_on: [implement, tasks-restantes]
+    # With `one_success`, an implement that FAILS midway released the whole
+    # pipeline (validate → review → fix → verify → create-pr) on a half-built
+    # feature, because remaining-tasks beside it had completed. The test gate
+    # does not catch that: code that was never written breaks no test.
+    # `none_failed_min_one_success` blocks the failed parent and still lets the
+    # skipped parent through, which is exactly the pair of behaviours this node
+    # needs.
+    depends_on: [implement, remaining-tasks]
     trigger_rule: none_failed_min_one_success
 
-  # Gate do repo (CLAUDE.md): lint + typecheck + testes unitários, mais o pgTAP
-  # quando a branch mexe em migration ou RLS.
+  # Repo gate (CLAUDE.md): lint + typecheck + unit tests, plus pgTAP when the
+  # branch touches a migration or RLS.
   #
-  # Bash, não agente. O `implement` já termina rodando esse mesmo gate e
-  # consertando o que quebra; um agente aqui repetiria o trabalho e, pior,
-  # relataria o vermelho honestamente e deixaria a esteira seguir — foi por
-  # isso que existia um segundo gate determinístico logo depois dele. Um gate
-  # só, que é `exit 1`, faz o serviço dos dois. Custo zero de modelo.
+  # Bash, not an agent. implement already ends by running this same gate and
+  # fixing what breaks; an agent here would repeat the work and, worse, report
+  # the red honestly and let the pipeline continue — that is why a second
+  # deterministic gate used to sit right after it. One gate that is an
+  # `exit 1` does the job of both. Zero model cost.
   - id: validate
     bash: .archon/scripts/repo-gate.sh
     depends_on: [adr-gate]
-    # O default de nó bash do Archon é 120s e a suíte não cabe nele: medido na
-    # `avaliacoes`, lint + typecheck + 178 testes deram ~1min40, e o pgTAP soma
-    # em cima. Estourar o teto mata a RUN inteira. 15 min é pega-travamento, não
-    # orçamento; como o nó não roda modelo nenhum, a folga custa relógio, nunca
-    # crédito.
+    # Archon's default for a bash node is 120s and the suite does not fit in it:
+    # measured on `avaliacoes`, lint + typecheck + 178 tests took ~1min40, and
+    # pgTAP adds on top. Blowing the ceiling kills the whole RUN. 15 min is a
+    # hang-catcher, not a budget; since the node runs no model, the slack costs
+    # clock, never credit.
     timeout: 900000
 
-  # A revisão foi partida em `review` (lê e tria) + `fix` (conserta) em
-  # 2026-08-06. O nó único `review-fix` fazia as duas coisas, e o comando dele
-  # (`commands/tlc-review-fix.md`) continua no repo, intocado, como caminho de
-  # volta: reverter é trocar estes quatro nós por um só de novo.
+  # The review was split into `review` (reads and triages) + `fix` (fixes) on
+  # 2026-08-06. The single `review-fix` node did both, and its command
+  # (`commands/tlc-review-fix.md`) stays in the repo, untouched, as the way
+  # back: reverting is swapping these four nodes for one again.
   #
-  # A razão da divisão é uma regra: **escrita de código-fonte fica no Claude**.
-  # Separado, o revisor pode rodar em outra família de modelo — e aí
-  # `autor ≠ revisor` deixa de ser "nó separado, mesma família" e passa a ser
-  # treino diferente, pontos cegos diferentes. É a propriedade que fez o
-  # CodeRabbit achar, na PR #44, o que a lente "regras do projeto" desta esteira
-  # declarou inexistente.
+  # The reason for the split is one rule: **writing source code stays on
+  # Claude**. Separated, the reviewer can run on another model family — and
+  # then `author ≠ reviewer` stops being "separate node, same family" and
+  # becomes different training, different blind spots. It is the property that
+  # let CodeRabbit find, on PR #44, what this pipeline's "project rules" lens
+  # declared nonexistent.
   #
-  # Efeito colateral que importa: read-only vira propriedade do GRAFO em vez de
-  # promessa no prompt. O nó que revisa não tem por onde escrever.
-  # Zera o marcador ANTES de revisar. O `$ARTIFACTS_DIR` sobrevive à tentativa
-  # (é de onde o `resume` lê o estado), então um `.must-fix` escrito por uma
-  # revisão anterior que não chegou ao fim ficaria lá: a revisão nova viria
-  # limpa, não criaria o arquivo — e o `must-fix-restantes` acordaria o `fix`
-  # com achados obsoletos, contra um `review.md` que já foi reescrito por cima.
+  # Side effect that matters: read-only becomes a property of the GRAPH instead
+  # of a promise in the prompt. The node that reviews has nowhere to write.
+  # Clears the marker BEFORE reviewing. `$ARTIFACTS_DIR` survives the attempt
+  # (it is where `resume` reads state from), so a `.must-fix` written by a
+  # previous review that did not reach the end would stay there: the new review
+  # would come back clean, would not create the file — and `remaining-must-fix`
+  # would wake `fix` with stale findings, against a `review.md` already
+  # rewritten on top.
   #
-  # Em bash e como nó separado pela mesma razão do `validate`: o portão não pode
-  # depender de o agente lembrar de limpar. E como nó concluído não re-executa
-  # no `resume`, retomar a run *depois* da revisão preserva o marcador dela.
-  - id: limpa-must-fix
+  # In bash and as a separate node for the same reason as `validate`: the gate
+  # cannot depend on the agent remembering to clean up. And since a completed
+  # node does not re-run on `resume`, resuming the run *after* the review keeps
+  # its marker.
+  - id: clear-must-fix
     bash: rm -f "$ARTIFACTS_DIR/.must-fix"
     depends_on: [validate]
 
   - id: review
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     command: tlc-review
-    depends_on: [limpa-must-fix]
+    depends_on: [clear-must-fix]
     context: fresh
-    # Trocar por `medium` volta a revisão para o Claude sem mexer em mais nada.
+    # Swapping for `medium` moves the review back to Claude without touching
+    # anything else.
     model: "@reviewer"
 
-  # Mesmo padrão do `adr-gate` e do `tasks-restantes`: o nó de agente persiste o
-  # fato num arquivo, o bash grepa. Custo zero de modelo, e o `fix` não acorda
-  # quando a revisão veio limpa — que deve ser o caso comum.
+  # Same pattern as `adr-gate` and `remaining-tasks`: the agent node persists
+  # the fact in a file, bash greps it. Zero model cost, and `fix` does not wake
+  # when the review came back clean — which should be the common case.
   #
-  # printf sem \n de propósito: o `when:` compara a saída literal.
-  - id: must-fix-restantes
+  # printf without \n on purpose: `when:` compares the literal output.
+  - id: remaining-must-fix
     bash: |
       if [ -s "$ARTIFACTS_DIR/.must-fix" ]; then
-        printf '%s' "SIM"
+        printf '%s' "YES"
       else
-        printf '%s' "NAO"
+        printf '%s' "NO"
       fi
     depends_on: [review]
 
   - id: fix
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     command: tlc-fix-review
-    depends_on: [must-fix-restantes]
-    when: "$must-fix-restantes.output == 'SIM'"
+    depends_on: [remaining-must-fix]
+    when: "$remaining-must-fix.output == 'YES'"
     context: fresh
-    # `@fixer` (Claude) — este nó ESCREVE. Ver a regra no cabeçalho do
-    # bloco e os papéis em `.archon/config.yaml`.
+    # `@fixer` (Claude) — this node WRITES. See the rule in the block header
+    # and the roles in `.archon/config.yaml`.
     model: "@fixer"
 
-  # O `fix` mexeu no código depois do `validate`, então o gate roda de novo — e
-  # roda em bash, não na palavra do nó que consertou. Mesmo princípio do
-  # `capability-gate`: o agente diz que rodou o check, este roda.
+  # `fix` touched the code after `validate`, so the gate runs again — and it
+  # runs in bash, not on the word of the node that fixed. Same principle as
+  # `capability-gate`: the agent says it ran the check, this one runs it.
   #
-  # Pulado em cascata quando o `fix` é pulado, que é o caminho comum: sem
-  # conserto, a árvore é a mesma que o `validate` já aprovou.
+  # Skipped in cascade when `fix` is skipped, which is the common path: with no
+  # fix, the tree is the same one `validate` already approved.
   - id: validate-fix
     bash: .archon/scripts/repo-gate.sh
     depends_on: [fix]
     timeout: 900000
 
-  # O contrato do Verifier mora em `commands/tlc-verify-feature.md`, e não
-  # inline, por herança: ele teve um segundo chamador (o `re-carimbo` do
-  # `tlc-feature-e2e`, removido em 2026-08-04 junto com o laço de revisão).
-  # Ficou como comando porque o contrato é longo e tem valor versionado à parte
-  # — hoje, com um chamador só, inline também seria defensável.
+  # The Verifier contract lives in `commands/tlc-verify-feature.md`, not
+  # inline, by inheritance: it had a second caller (the `re-stamp` of
+  # `tlc-feature-e2e`, removed on 2026-08-04 together with the review loop). It
+  # stayed a command because the contract is long and worth versioning apart —
+  # today, with a single caller, inline would also be defensible.
   - id: verify
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     command: tlc-verify-feature
-    # Os três pais cobrem os quatro desfechos da revisão, e a escolha do
-    # `trigger_rule` é a mesma medida em sonda e documentada no `adr-gate`:
+    # The three parents cover the four outcomes of the review, and the choice
+    # of `trigger_rule` is the same one measured in a probe and documented on
+    # `adr-gate`:
     #
-    #   fix pulado + validate-fix pulado + gate ok  → RODA (revisão limpa)
-    #   fix ok     + validate-fix ok     + gate ok  → RODA (consertou e ficou verde)
-    #   fix falhou                                  → PULA
-    #   validate-fix falhou                         → PULA (conserto quebrou o gate)
+    #   fix skipped + validate-fix skipped + gate ok → RUNS (review clean)
+    #   fix ok      + validate-fix ok      + gate ok → RUNS (fixed and stayed green)
+    #   fix failed                                   → SKIPS
+    #   validate-fix failed                          → SKIPS (the fix broke the gate)
     #
-    # `one_success` deixaria os dois últimos passarem, porque o
-    # `must-fix-restantes` sempre conclui ao lado.
-    depends_on: [fix, validate-fix, must-fix-restantes]
+    # `one_success` would let the last two through, because
+    # `remaining-must-fix` always completes beside them.
+    depends_on: [fix, validate-fix, remaining-must-fix]
     trigger_rule: none_failed_min_one_success
     context: fresh
-    # medium por desenho: AUTOR ≠ VERIFICADOR é propriedade do GRAFO (nó
-    # separado + `context: fresh`), não do porte do modelo. Ver "Por que a
-    # cadeia de revisão roda em medium" no WORKFLOWS.md.
+    # medium by design: AUTHOR ≠ VERIFIER is a property of the GRAPH (separate
+    # node + `context: fresh`), not of the model's size. See "Who runs each
+    # node, and why `verify`/`re-verify` stay on medium" in WORKFLOWS.md.
     #
-    # O alias `@verifier` (Codex) existe no config e NÃO está ligado aqui de
-    # propósito: este nó usa `output_format`, e o veredito estruturado é o que
-    # dispara o `when` do `fix-gaps`. Não está verificado se o adaptador Codex
-    # honra isso. Ligar depois de medir numa feature de verdade.
+    # The `@verifier` alias (Codex) exists in the config and is NOT wired here
+    # on purpose: this node uses `output_format`, and the structured verdict is
+    # what triggers the `when` of `fix-gaps`. It is not verified that the Codex
+    # adapter honours it. Wire it after measuring on a real feature.
     model: medium
     output_format:
       type: object
@@ -416,7 +422,7 @@ nodes:
   # One bounded fix round (the interactive flow allows 3; headless gets 1 —
   # if the re-verify still fails, the workflow halts for the owner).
   - id: fix-gaps
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     prompt: |
@@ -428,11 +434,11 @@ nodes:
       $verify.output.ranked_gaps
 
       Full evidence: `.specs/features/<slug>/validation.md`. Context of what was
-      built: `$ARTIFACTS_DIR/implementation.md` **when it exists** — numa run
-      retomada o `implement` foi pulado e o relatório ficou na run anterior.
-      Nesse caso a fonte é `git log --format=full $BASE_BRANCH..HEAD`, que
-      sempre existe e carrega a mesma informação: um commit por task, com a
-      decisão no corpo.
+      built: `$ARTIFACTS_DIR/implementation.md` **when it exists** — on a
+      resumed run `implement` was skipped and the report stayed in the previous
+      run. In that case the source is `git log --format=full $BASE_BRANCH..HEAD`,
+      which always exists and carries the same information: one commit per
+      task, with the decision in the body.
 
       Rules:
       - Fix the gaps in ranked order. Strengthen tests where mutants survived —
@@ -446,13 +452,13 @@ nodes:
     depends_on: [verify]
     when: "$verify.output.verdict == 'FAIL'"
     context: fresh
-    # `@fixer` (Claude) — este nó ESCREVE, a partir dos gaps ranqueados
-    # que o verificador apontou. Mesmo papel do `fix`: a descoberta já foi
-    # feita, aqui é aplicar. Ver os papéis em `.archon/config.yaml`.
+    # `@fixer` (Claude) — this node WRITES, from the ranked gaps the verifier
+    # flagged. Same role as `fix`: the discovery is done, here it is applied.
+    # See the roles in `.archon/config.yaml`.
     model: "@fixer"
 
   - id: re-verify
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     prompt: |
@@ -480,74 +486,76 @@ nodes:
       owner decides. Do not soften the verdict to let it pass.
     depends_on: [fix-gaps]
     context: fresh
-    # medium por desenho: AUTOR ≠ VERIFICADOR é propriedade do GRAFO (nó
-    # separado + `context: fresh`), não do porte do modelo. Ver "Por que a
-    # cadeia de revisão roda em medium" no WORKFLOWS.md.
+    # medium by design: AUTHOR ≠ VERIFIER is a property of the GRAPH (separate
+    # node + `context: fresh`), not of the model's size. See "Who runs each
+    # node, and why `verify`/`re-verify` stay on medium" in WORKFLOWS.md.
     #
-    # O alias `@verifier` (Codex) existe no config e NÃO está ligado aqui de
-    # propósito: este nó usa `output_format`, e o veredito estruturado é o que
-    # dispara o `when` do `fix-gaps`. Não está verificado se o adaptador Codex
-    # honra isso. Ligar depois de medir numa feature de verdade.
+    # The `@verifier` alias (Codex) exists in the config and is NOT wired here
+    # on purpose: this node uses `output_format`, and the structured verdict is
+    # what triggers the `when` of `fix-gaps`. It is not verified that the Codex
+    # adapter honours it. Wire it after measuring on a real feature.
     model: medium
 
-  # Portão determinístico: o contrato e o PR só acontecem para uma feature cujo
-  # relatório persistido diz Ready. Grep, não julgamento de modelo — um agente
-  # se convence de que está bom; um grep não.
+  # Deterministic gate: the contract and the PR only happen for a feature whose
+  # persisted report says Ready. Grep, not model judgement — an agent talks
+  # itself into "it's fine"; a grep does not.
   - id: verdict-gate
     bash: |
       SLUG=$(cat "$ARTIFACTS_DIR/.feature-slug" | tr -d '[:space:]')
       .archon/scripts/verdict-gate.sh ".specs/features/$SLUG/validation.md" tlc
     depends_on: [verify, re-verify]
-    # Aqui `one_success` é o certo, ao contrário do adr-gate — não trocar por
-    # `none_failed_min_one_success` sem ler isto. A diferença é a estrutura dos
-    # pais, não o gosto:
+    # Here `one_success` is the right one, unlike adr-gate — do not swap it for
+    # `none_failed_min_one_success` without reading this. The difference is the
+    # structure of the parents, not taste:
     #
-    # - o `re-verify` só existe quando o `verify` deu FAIL, e nesse caso o
-    #   relatório persistido diz "não Ready". Então o único jeito de chegar
-    #   neste nó com o re-verify quebrado é com um relatório que reprova — o
-    #   script halta, e com mensagem melhor do que um pulo em cascata daria.
-    #   Foi o que aconteceu em 2026-07-31 (re-verify morto por cota).
-    # - se o `verify` quebrar como NÓ, o `fix-gaps` e o `re-verify` somem em
-    #   cascata, e `one_success` pula este gate junto: medido em sonda, pai
-    #   falhado + pai pulado, sem nenhum concluído, não dispara o filho.
+    # - `re-verify` only exists when `verify` returned FAIL, and in that case
+    #   the persisted report says "not Ready". So the only way to reach this
+    #   node with a broken re-verify is with a report that fails — the script
+    #   halts, and with a better message than a cascaded skip would give. That
+    #   is what happened on 2026-07-31 (re-verify killed by quota).
+    # - if `verify` breaks as a NODE, `fix-gaps` and `re-verify` vanish in
+    #   cascade, and `one_success` skips this gate with them: measured in a
+    #   probe, failed parent + skipped parent, none completed, does not trigger
+    #   the child.
     #
-    # Ou seja: não existe caminho que chegue aqui com relatório aprovando sem
-    # um verificador ter completado. O adr-gate era diferente porque tinha um
-    # irmão (`tasks-restantes`) que SEMPRE conclui ao lado de um nó que pode
-    # falhar — ali o `one_success` deixava passar implement quebrado.
+    # In other words: there is no path that reaches here with an approving
+    # report without a verifier having completed. adr-gate was different
+    # because it had a sibling (`remaining-tasks`) that ALWAYS completes beside
+    # a node that can fail — there `one_success` let a broken implement through.
     trigger_rule: one_success
 
-  # Comando, e não prompt inline, pelo mesmo motivo do `verify`: teve um
-  # segundo chamador (o `re-sync` do `tlc-feature-e2e`, removido em
-  # 2026-08-04) e o contrato vale versionado à parte.
+  # A command, not an inline prompt, for the same reason as `verify`: it had a
+  # second caller (the `re-sync` of `tlc-feature-e2e`, removed on 2026-08-04)
+  # and the contract is worth versioning apart.
   - id: sync-capabilities
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     command: tlc-sync-capabilities
     depends_on: [verdict-gate]
     context: fresh
 
-  # Mesmo princípio do verdict-gate, um nível acima: o nó de sync diz que rodou
-  # o check, este roda. Um contrato malformado (ou editado e não commitado) não
-  # chega ao PR — a palavra do nó de sync não é a evidência.
+  # Same principle as verdict-gate, one level up: the sync node says it ran the
+  # check, this one runs it. A malformed (or edited and uncommitted) contract
+  # does not reach the PR — the sync node's word is not the evidence.
   - id: capability-gate
     bash: |
       set -euo pipefail
       python3 .agents/skills/capability-sync/scripts/capabilities.py check
-      # As DUAS checagens: `git diff` vê o worktree, `--cached` vê o índice. Só a
-      # primeira deixava passar o caso mais fácil de acontecer — o nó dá `git add`
-      # e esquece o commit; o arquivo some do worktree-diff e o portão aprova um
-      # contrato que não está na branch.
+      # BOTH checks: `git diff` sees the worktree, `--cached` sees the index.
+      # The first alone let through the easiest case to happen — the node runs
+      # `git add` and forgets the commit; the file vanishes from the
+      # worktree-diff and the gate approves a contract that is not on the
+      # branch.
       if ! git diff --quiet -- .specs/capabilities || ! git diff --cached --quiet -- .specs/capabilities; then
-        echo "Edições não commitadas em .specs/capabilities — o sync-capabilities deve commitá-las." >&2
+        echo "Uncommitted edits in .specs/capabilities — sync-capabilities must commit them." >&2
         git status --short -- .specs/capabilities >&2
         exit 1
       fi
     depends_on: [sync-capabilities]
 
   - id: create-pr
-    # Sem retentativa: rate limit não é transitório — ver WORKFLOWS.md.
+    # No retry: a rate limit is not transient — see WORKFLOWS.md.
     retry:
       max_attempts: 1
     prompt: |
@@ -605,15 +613,15 @@ nodes:
          `validation.md` with the code it saw, and every node after it is evidence-only.
          Source dirty at this point means either the implementation never finished or
          something edited code after the verdict — in both cases the report attached to
-         this PR would describe code that does not exist. This is the "nada muta depois
-         do carimbo" guarantee, and it is worth more than an automatic recovery. A human
-         decides: re-run the verifier, or drop the change.
+         this PR would describe code that does not exist. This is the "nothing mutates
+         after the stamp" guarantee, and it is worth more than an automatic recovery. A
+         human decides: re-run the verifier, or drop the change.
       2. Push the branch: `git push -u origin HEAD`
-      3. Read for context: `git log --format=full $BASE_BRANCH..HEAD` (a fonte
-         que sempre existe — um commit por task, com a decisão no corpo),
+      3. Read for context: `git log --format=full $BASE_BRANCH..HEAD` (the source
+         that always exists — one commit per task, with the decision in the body),
          `.specs/features/<slug>/validation.md`, `$ARTIFACTS_DIR/implementation.md`
-         se existir, `$ARTIFACTS_DIR/review.md` (triagem da revisão) e o
-         `spec.md` da feature.
+         if it exists, `$ARTIFACTS_DIR/review.md` (the review triage) and the
+         feature's `spec.md`.
       4. Check if a PR already exists for this branch: `gh pr list --head $(git branch --show-current)`
          - If PR exists, skip creation and capture its number
       5. Look for the project's PR template at `.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE.md`, or `docs/PULL_REQUEST_TEMPLATE.md`. Read whichever one exists.
@@ -646,11 +654,12 @@ nodes:
       set -euo pipefail
       SLUG=$(cat "$ARTIFACTS_DIR/.feature-slug" | tr -d '[:space:]')
       echo ""
-      echo "── feature '$SLUG' concluída ──"
-      echo "  evidência:  .specs/features/$SLUG/validation.md"
-      echo "  contrato:   .specs/capabilities/ (sincronizado)"
-      echo "  revisão:    \$ARTIFACTS_DIR/review.md"
-      # Corrige a base, imprime o PR e aponta o próximo comando (o ciclo de
-      # revisão externa é assíncrono e não fecha aqui — ver o script).
+      echo "── feature '$SLUG' done ──"
+      echo "  evidence:   .specs/features/$SLUG/validation.md"
+      echo "  contract:   .specs/capabilities/ (synced)"
+      echo "  review:     \$ARTIFACTS_DIR/review.md"
+      # Fixes the base, prints the PR and points at the next command (the
+      # external review cycle is asynchronous and does not close here — see the
+      # script).
       .archon/scripts/pr-finalize.sh
     depends_on: [create-pr]

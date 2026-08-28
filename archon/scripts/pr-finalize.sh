@@ -1,80 +1,81 @@
 #!/usr/bin/env bash
 #
-# Fecho do workflow que abre PR: corrige a base se ela saiu errada, imprime o PR
-# e **diz qual é o próximo comando**.
+# Close-out of the workflow that opens a PR: fixes the base if it came out
+# wrong, prints the PR and **says what the next command is**.
 #
-# Nasceu compartilhado por três `finalize` — o bloco de re-target era idêntico
-# nos três (medido, não suposto; o que diferia era só a lista de artefatos, que
-# continua no YAML de cada um). Mesma extração do `repo-gate.sh` e do
-# `verdict-gate.sh`. Desde 04/08 o único chamador é o `tlc-apply-feature`: os
-# outros saíram da branch para o piloto e voltam um por PR (Backlog do
-# `.archon/README.md`). O script segue genérico de propósito — é para eles
-# reusarem na volta, não para cada um trazer uma cópia de novo.
+# It was born shared by three `finalize` nodes — the re-target block was
+# identical in all three (measured, not assumed; what differed was only the
+# artifact list, which stays in each one's YAML). Same extraction as
+# `repo-gate.sh` and `verdict-gate.sh`. Since 08/04 the only caller is
+# `tlc-apply-feature`: the others left the branch for the pilot and come back
+# one per PR (Backlog in `.archon/README.md`). The script stays generic on
+# purpose — it is for them to reuse on the way back, not for each to bring a
+# copy again.
 #
-# Por que existe um handoff, e por que ele não é um nó:
+# Why there is a handoff, and why it is not a node:
 #
-# O ciclo de revisão NÃO fecha quando o PR abre. O CodeRabbit revisa de forma
-# assíncrona e em várias passadas — medido na PR #39: seis reviews ao longo de
-# 9h46m, a primeira 13 minutos depois da criação e a última quase 10 horas
-# depois, disparada por um push novo. Não existe um instante "a review
-# terminou" para um nó aguardar: esperar a primeira pendura a run por 13
-# minutos e ainda assim perde as outras.
+# The review cycle does NOT close when the PR opens. CodeRabbit reviews
+# asynchronously and in several passes — measured on PR #39: six reviews over
+# 9h46m, the first 13 minutes after creation and the last almost 10 hours
+# later, triggered by a new push. There is no instant "the review finished" for
+# a node to wait on: waiting for the first hangs the run for 13 minutes and
+# still misses the others.
 #
-# (Tentar resolver isso dentro da run já foi tentado por dois caminhos, os dois
-# removidos: o CLI do CodeRabbit antes do PR, que pendurava a run e no limite
-# do plano saía com exit 0 sem revisar nada; e um laço que esperava a review
-# dentro da run. Ver .archon/WORKFLOWS.md.)
+# (Solving this inside the run was tried by two paths, both removed: the
+# CodeRabbit CLI before the PR, which hung the run and at the plan's limit
+# exited 0 without reviewing anything; and a loop waiting for the review inside
+# the run. See .archon/WORKFLOWS.md.)
 #
-# Durante o piloto do `tlc-apply-feature`, o tratamento dos achados é
-# MANUAL. Houve um `tlc-pr-findings` fazendo essa rodada; ele saiu da branch
-# em 2026-08-04 junto com os outros fluxos não testados, e volta como skill
-# depois que a linha dourada estiver provada — ver docs/plano-fluxo-tlc.md.
+# During the `tlc-apply-feature` pilot, treating the findings is MANUAL. There
+# was a `tlc-pr-findings` doing that round; it left the branch on 2026-08-04
+# together with the other untested flows, and comes back as a skill after the
+# golden line is proven — see docs/plano-fluxo-tlc.md.
 #
-# Precisa de $BASE_BRANCH no ambiente (o Archon injeta nos nós bash, e o script
-# herda de quem o chamou).
+# Needs $BASE_BRANCH in the environment (Archon injects it into bash nodes, and
+# the script inherits it from its caller).
 set -euo pipefail
 
 HEAD_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# O número vem de QUEM ABRIU o PR, não de uma busca: o `create-pr` grava o que
-# ele criou. A busca por branch é o fallback para quem chamar este script fora
-# de uma run — e ali ela exige resposta única.
+# The number comes from WHOEVER OPENED the PR, not from a search: `create-pr`
+# records what it created. The search by branch is the fallback for whoever
+# calls this script outside a run — and there it demands a unique answer.
 #
-# Por que a unicidade importa aqui e não seria preciosismo: o GitHub permite
-# mais de um PR aberto da mesma head para BASES diferentes, e a primeira coisa
-# que este script faz é MUDAR A BASE. Um `.[0]` num par desses re-aponta o PR
-# errado — e o dano é justamente o que o script existe para consertar.
+# Why uniqueness matters here and is not pedantry: GitHub allows more than one
+# open PR from the same head to DIFFERENT bases, and the first thing this
+# script does is CHANGE THE BASE. A `.[0]` over such a pair re-targets the
+# wrong PR — and the damage is exactly what the script exists to fix.
 PR_NUMBER=""
 if [ -n "${ARTIFACTS_DIR:-}" ] && [ -s "$ARTIFACTS_DIR/.pr-number" ]; then
   PR_NUMBER=$(tr -d '[:space:]' < "$ARTIFACTS_DIR/.pr-number")
 fi
 
 if [ -z "$PR_NUMBER" ]; then
-  # Atribuição, não pipe: sob `set -e` a falha do `gh` derruba o script aqui.
-  # Deixá-la virar lista vazia transformaria erro de API em "nenhum PR aberto",
-  # que é uma mentira de infraestrutura vestida de veredito.
+  # Assignment, not a pipe: under `set -e` a `gh` failure takes the script down
+  # here. Letting it become an empty list would turn an API error into "no open
+  # PR", which is an infrastructure lie dressed up as a verdict.
   PR_LIST=$(gh pr list --head "$HEAD_BRANCH" --state open --json number -q '.[].number')
-  # Linha a linha, com aspas (SC2206). `MATCHES=($PR_LIST)` sofreria word
-  # splitting e glob — inofensivo para os inteiros que a API devolve, mas quem
-  # ler depois teria que re-derivar essa garantia. Sai mais barato não depender
-  # dela. O `-n` mantém o caso vazio em zero elementos, que é o que o ramo `0`
-  # espera: `<<<` sobre string vazia produz uma linha.
+  # Line by line, quoted (SC2206). `MATCHES=($PR_LIST)` would suffer word
+  # splitting and globbing — harmless for the integers the API returns, but the
+  # next reader would have to re-derive that guarantee. Cheaper not to depend
+  # on it. The `-n` keeps the empty case at zero elements, which is what the
+  # `0` branch expects: `<<<` over an empty string produces one line.
   MATCHES=()
-  while IFS= read -r linha; do
-    [ -n "$linha" ] && MATCHES+=("$linha")
+  while IFS= read -r line; do
+    [ -n "$line" ] && MATCHES+=("$line")
   done <<< "$PR_LIST"
   case ${#MATCHES[@]} in
     0)
-      echo "Nenhum PR aberto para a branch $HEAD_BRANCH" >&2
+      echo "No open PR for branch $HEAD_BRANCH" >&2
       exit 1
       ;;
     1)
       PR_NUMBER=${MATCHES[0]}
       ;;
     *)
-      echo "Mais de um PR aberto para a branch $HEAD_BRANCH: ${MATCHES[*]}" >&2
-      echo "Este script re-aponta a base — escolher um deles no chute mexeria no PR errado." >&2
-      echo "Feche os que sobram, ou grave o número certo em \$ARTIFACTS_DIR/.pr-number." >&2
+      echo "More than one open PR for branch $HEAD_BRANCH: ${MATCHES[*]}" >&2
+      echo "This script re-targets the base — guessing one of them would touch the wrong PR." >&2
+      echo "Close the extra ones, or record the right number in \$ARTIFACTS_DIR/.pr-number." >&2
       exit 1
       ;;
   esac
@@ -82,28 +83,28 @@ fi
 
 ACTUAL=$(gh pr view "$PR_NUMBER" --json baseRefName -q '.baseRefName')
 if [ "$ACTUAL" != "$BASE_BRANCH" ]; then
-  echo "Base errada no PR #$PR_NUMBER: esperada=$BASE_BRANCH atual=$ACTUAL — corrigindo" >&2
+  echo "Wrong base on PR #$PR_NUMBER: expected=$BASE_BRANCH actual=$ACTUAL — fixing" >&2
   gh pr edit "$PR_NUMBER" --base "$BASE_BRANCH"
 fi
 
-# Atribuir antes de imprimir: `echo "$(gh pr view …)"` devolve o status do
-# `echo`, então o `set -e` não vê a falha do `gh` e o fecho segue anunciando
-# sucesso com a linha do PR em branco.
+# Assign before printing: `echo "$(gh pr view …)"` returns the status of
+# `echo`, so `set -e` does not see the `gh` failure and the close-out goes on
+# announcing success with a blank PR line.
 PR_URL=$(gh pr view "$PR_NUMBER" --json url -q '.url')
 echo "  PR:         $PR_URL"
 echo ""
-echo "── o ciclo ainda não fechou ──"
-echo "  A revisão externa é assíncrona e vem em várias passadas. O CodeRabbit"
-echo "  comenta sozinho no PR alguns minutos depois do push."
+echo "── the cycle has not closed yet ──"
+echo "  External review is asynchronous and comes in several passes. CodeRabbit"
+echo "  comments on the PR by itself a few minutes after the push."
 echo ""
-echo "  O tratamento dos achados é MANUAL durante o piloto: leia os comentários"
-echo "  no PR e trate numa sessão interativa. Dois lembretes que valem tanto"
-echo "  para gente quanto valiam para o fluxo que fazia isso:"
+echo "  Treating the findings is MANUAL during the pilot: read the comments on"
+echo "  the PR and handle them in an interactive session. Two reminders that"
+echo "  hold for people as much as they held for the flow that used to do this:"
 echo ""
-echo "    - o endpoint de comentários inline NÃO traz tudo. Achado que o"
-echo "      CodeRabbit não consegue prender a uma linha do diff vira texto no"
-echo "      corpo da review, sob 'Outside diff range comments (N)'. Medido na"
-echo "      PR #39: 2 de 4 achados só existiam ali."
-echo "    - recusar achado com motivo escrito na thread é melhor que corrigir"
-echo "      para zerar contador. Perseguir 'zero comentários' produz conserto"
-echo "      de não-problema."
+echo "    - the inline-comments endpoint does NOT return everything. A finding"
+echo "      CodeRabbit cannot pin to a diff line becomes text in the review"
+echo "      body, under 'Outside diff range comments (N)'. Measured on PR #39:"
+echo "      2 of 4 findings only existed there."
+echo "    - refusing a finding with a written reason in the thread beats fixing"
+echo "      it to zero a counter. Chasing 'zero comments' produces fixes for"
+echo "      non-problems."

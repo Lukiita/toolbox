@@ -1,5 +1,5 @@
 ---
-description: Dobra o comportamento verificado de uma feature tlc no contrato vivo de .specs/capabilities/, com o gate mecânico do capabilities.py
+description: Folds a tlc feature's verified behavior into the living contract in .specs/capabilities/, with the mechanical capabilities.py gate
 ---
 
 A tlc feature just passed independent verification. Sync the durable

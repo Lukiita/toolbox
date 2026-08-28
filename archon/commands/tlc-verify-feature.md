@@ -1,5 +1,5 @@
 ---
-description: Contrato do Verifier independente da tlc — evidência-ou-zero, regressão de capacidade e sensor de discriminação sobre uma feature de .specs/features/, escrevendo o validation.md
+description: The tlc independent Verifier contract — evidence-or-zero, capability regression and discrimination sensor over a feature in .specs/features/, writing validation.md
 ---
 
 You are the independent VERIFIER for a tlc feature. Neither the

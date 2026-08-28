@@ -1,40 +1,42 @@
 #!/usr/bin/env bash
-# Impressão digital das entradas que decidem um conflito entre a spec e um ADR
-# aceito: a spec da feature e as decisões em `docs/en/adr/`.
+# Fingerprint of the inputs that decide a conflict between the spec and an
+# accepted ADR: the feature spec and the decisions in `docs/en/adr/`.
 #
-# Dois nós do tlc-apply-feature usam isto. O `verify-feature` grava a digital
-# ANTES do implement; o `adr-gate` recomputa DEPOIS e compara. Digital diferente
-# significa que spec ou ADR mudaram desde que o conflito foi registrado — o
-# marcador `.adr-conflict` ficou velho e quem precisa reavaliar é o implement,
-# que o `--resume` não re-executa.
+# Two nodes of tlc-apply-feature use this. `verify-feature` records the
+# fingerprint BEFORE implement; `adr-gate` recomputes it AFTER and compares. A
+# different fingerprint means the spec or an ADR changed since the conflict was
+# recorded — the `.adr-conflict` marker went stale, and the one that needs to
+# re-evaluate is implement, which `--resume` does not re-run.
 #
-# Mora num script só, e não inline nos dois nós, porque duas cópias da mesma
-# lógica de hash divergem com o tempo — e divergir aqui reintroduz exatamente o
-# bug do marcador velho que ela existe para pegar.
+# It lives in one script, not inline in both nodes, because two copies of the
+# same hashing logic drift over time — and drifting here reintroduces exactly
+# the stale-marker bug it exists to catch.
 #
-# Uso: .archon/scripts/adr-inputs-fingerprint.sh <slug-da-feature>
+# Usage: .archon/scripts/adr-inputs-fingerprint.sh <feature-slug>
 set -euo pipefail
 
-SLUG="${1:?uso: adr-inputs-fingerprint.sh <slug-da-feature>}"
+SLUG="${1:?usage: adr-inputs-fingerprint.sh <feature-slug>}"
 
-ENTRADAS=()
+INPUTS=()
 if [ -d docs/en/adr ]; then
-  ENTRADAS+=(docs/en/adr)
+  INPUTS+=(docs/en/adr)
 fi
 if [ -d ".specs/features/$SLUG" ]; then
-  ENTRADAS+=(".specs/features/$SLUG")
+  INPUTS+=(".specs/features/$SLUG")
 fi
 
-# Projeto sem ADR e sem spec no disco: digital constante, e o gate compara
-# constante com constante. Não inventa diferença onde não há entrada.
-if [ ${#ENTRADAS[@]} -eq 0 ]; then
-  echo "sem-entradas"
+# A project with no ADR and no spec on disk: constant fingerprint, and the gate
+# compares constant with constant. It does not invent a difference where there
+# is no input.
+if [ ${#INPUTS[@]} -eq 0 ]; then
+  echo "no-inputs"
   exit 0
 fi
 
-# O nome do arquivo entra no hash (o sha256sum imprime nome ao lado do digest),
-# então renomear ou remover um ADR muda a digital — não só editar o conteúdo.
-find "${ENTRADAS[@]}" -type f -print0 \
+# The file name enters the hash (sha256sum prints the name beside the digest),
+# so renaming or removing an ADR changes the fingerprint — not only editing its
+# content.
+find "${INPUTS[@]}" -type f -print0 \
   | LC_ALL=C sort -z \
   | xargs -0 -r sha256sum \
   | sha256sum \
