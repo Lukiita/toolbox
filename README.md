@@ -43,6 +43,7 @@ til/          learning journal — one concept per note, written when Lucas asks
 katas/        architecture-kata practice output — one folder per kata
 install.sh
 toolbox-diff.sh   drift report for a project's copies (skills, hooks, quality-gate, archon)
+system-mind-export.sh  flattens the study vault into one file for the claude.ai project Context
 ```
 
 ## Skills
