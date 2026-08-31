@@ -34,6 +34,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 ```
 skills/       15 global skills (available in any session, any project)
 agents/       AGENTS.md — global instructions for every agent (single source)
+              preferencias-conta.md — source for the text pasted into claude.ai's web settings
 claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
 hooks/        provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
