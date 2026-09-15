@@ -17,9 +17,11 @@ describe('explicitAnyCount', () => {
   });
 
   it('ignores the word in comments and strings', () => {
-    const src = ['// any here, as any as it gets', "const s = 'as any';", 'const n: number = 1;'].join(
-      '\n',
-    );
+    const src = [
+      '// any here, as any as it gets',
+      "const s = 'as any';",
+      'const n: number = 1;',
+    ].join('\n');
     expect(explicitAnyCount('x.ts', src)).toBe(0);
   });
 

@@ -57,14 +57,12 @@ const EN: GateStrings = {
   metricRegressed: (label, from, to, kind) => `${label} went from ${from} to ${to} (${kind})`,
   floorWord: 'floor',
   baselineWord: 'baseline',
-  fileRegressed: (file, from, to) =>
-    `\`${file}\` went from ${from} to ${to} uncovered lines`,
+  fileRegressed: (file, from, to) => `\`${file}\` went from ${from} to ${to} uncovered lines`,
   pureRulesTitle: (count, dirs) => `Pure rules outside ${dirs} (${count})`,
   filesOverLimitTitle: (limit, count) => `Files over ${limit} lines (${count})`,
   explicitAnyTitle: (count) => `Files with explicit \`any\` (${count})`,
   uncoveredFilesTitle: (count) => `Files with uncovered lines (${count})`,
-  uncoveredFileItem: (file, lines, percent) =>
-    `\`${file}\` — ${lines} lines · ${percent}% covered`,
+  uncoveredFileItem: (file, lines, percent) => `\`${file}\` — ${lines} lines · ${percent}% covered`,
   overComplexTitle: (limit, count) => `Functions over cyclomatic complexity ${limit} (${count})`,
   cyclesTitle: (count) => `Circular dependencies (${count})`,
 };
@@ -91,15 +89,15 @@ const PT: GateStrings = {
   metricRegressed: (label, from, to, kind) => `${label} passou de ${from} para ${to} (${kind})`,
   floorWord: 'piso',
   baselineWord: 'baseline',
-  fileRegressed: (file, from, to) =>
-    `\`${file}\` passou de ${from} para ${to} linhas descobertas`,
+  fileRegressed: (file, from, to) => `\`${file}\` passou de ${from} para ${to} linhas descobertas`,
   pureRulesTitle: (count, dirs) => `Regra pura fora de ${dirs} (${count})`,
   filesOverLimitTitle: (limit, count) => `Arquivos acima de ${limit} linhas (${count})`,
   explicitAnyTitle: (count) => `Arquivos com \`any\` explícito (${count})`,
   uncoveredFilesTitle: (count) => `Arquivos com linha descoberta (${count})`,
   uncoveredFileItem: (file, lines, percent) =>
     `\`${file}\` — ${lines} linhas · ${percent}% coberto`,
-  overComplexTitle: (limit, count) => `Funções acima de complexidade ciclomática ${limit} (${count})`,
+  overComplexTitle: (limit, count) =>
+    `Funções acima de complexidade ciclomática ${limit} (${count})`,
   cyclesTitle: (count) => `Dependências circulares (${count})`,
 };
 

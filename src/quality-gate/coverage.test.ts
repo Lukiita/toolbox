@@ -194,10 +194,7 @@ describe('uncoveredInTestableFiles', () => {
   });
 
   it('drops non-testable files even when the map brings them', () => {
-    const result = uncoveredInTestableFiles(
-      { 'src/components/x.tsx': entry([[1, 0]]) },
-      identity,
-    );
+    const result = uncoveredInTestableFiles({ 'src/components/x.tsx': entry([[1, 0]]) }, identity);
     expect(result).toEqual([]);
   });
 

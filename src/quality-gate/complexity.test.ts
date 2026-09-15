@@ -19,7 +19,9 @@ describe('functionComplexities', () => {
   });
 
   it('short-circuit operators count: && || ??', () => {
-    expect(ccOf('function f(a: boolean, b: boolean, c?: number) { return (a && b) || (c ?? 0); }')).toBe(4);
+    expect(
+      ccOf('function f(a: boolean, b: boolean, c?: number) { return (a && b) || (c ?? 0); }'),
+    ).toBe(4);
   });
 
   it('a switch counts one per case, not the default', () => {
@@ -81,10 +83,9 @@ describe('overComplexFunctions', () => {
   const mk = (name: string, cc: number, line = 1) => ({ file: 'x.ts', name, line, cc });
 
   it('keeps only offenders above the limit, worst first', () => {
-    expect(overComplexFunctions([mk('a', 5), mk('b', 9), mk('c', 6)], 5).map((f) => f.name)).toEqual([
-      'b',
-      'c',
-    ]);
+    expect(
+      overComplexFunctions([mk('a', 5), mk('b', 9), mk('c', 6)], 5).map((f) => f.name),
+    ).toEqual(['b', 'c']);
   });
 
   it('an empty codebase has no offenders', () => {
