@@ -9,6 +9,11 @@ import type { Baseline, Failure } from './compare.mts';
 import type { GateStrings } from './locale.mts';
 
 export const MARKER = '<!-- quality-gate -->';
+// Delimit the regressions block so a consumer (the pre-push hook) can cut it
+// out without matching the localized heading - the heading is a locale string,
+// and a hook that greps it breaks the day the string is edited.
+export const REGRESSIONS_START = '<!-- regressions -->';
+export const REGRESSIONS_END = '<!-- /regressions -->';
 
 export interface ReportDetail {
   title: string;
@@ -63,9 +68,11 @@ export function buildReport(input: ReportInput, t: GateStrings): string {
   }
 
   if (failures.length > 0) {
-    lines.push(t.regressionsTitle, '');
+    lines.push(REGRESSIONS_START, t.regressionsTitle, '');
     for (const f of failures) lines.push(`- ${f.message}`);
-    lines.push('');
+    // The advice stays outside the block: a consumer that cuts the block out
+    // (the pre-push hook) prints its own advice, and two would contradict.
+    lines.push(REGRESSIONS_END, '');
     lines.push(...t.ratchetAdvice, '');
   }
 

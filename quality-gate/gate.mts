@@ -32,6 +32,7 @@ import {
   compareFileCounts,
   compareMetrics,
   type MetricBaseline,
+  reconcileBaselineFromRev,
 } from './compare.mts';
 import { CC_LIMIT, functionComplexities, overComplexFunctions } from './complexity.mts';
 import {
@@ -130,6 +131,22 @@ const METRIC_DEFAULTS: Record<string, Omit<MetricBaseline, 'value'>> = {
   },
 };
 
+// Current name -> the name the metric had before the ratchet came from the
+// toolbox (the Portuguese keys of pre-toolbox installs, see README
+// "Migrating a pre-toolbox baseline"). Used only when comparing against a base
+// older than the key migration; once main carries the new keys the map is
+// inert (no key is missing) and can go. Until then it is what keeps the
+// ratchet from going blind exactly on the PR that renames.
+const LEGACY_METRIC_KEYS: Readonly<Record<string, string>> = {
+  'coverage-percent': 'cobertura-percentual',
+  'uncovered-lines': 'linhas-descobertas',
+  'files-with-uncovered-lines': 'arquivos-com-linha-descoberta',
+  'duplication-percent': 'duplicacao-percentual',
+  'duplication-fragments': 'duplicacao-fragmentos',
+  'pure-rule-outside-domain': 'regra-pura-fora-da-lib',
+  'files-over-limit': 'arquivos-acima-do-limite',
+};
+
 function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 }
@@ -195,7 +212,9 @@ function measureDuplication() {
       ['--reporters', 'json', '--output', out, '--silent', 'src'],
       { cwd: ROOT, stdio: 'ignore' },
     );
-    const report = JSON.parse(readFileSync(resolve(out, 'jscpd-report.json'), 'utf8')) as JscpdReport;
+    const report = JSON.parse(
+      readFileSync(resolve(out, 'jscpd-report.json'), 'utf8'),
+    ) as JscpdReport;
     return duplicationStats(report);
   } finally {
     // Without this, every run leaves a directory behind - and in the tlc
@@ -204,8 +223,12 @@ function measureDuplication() {
   }
 }
 
+function readOwnBaseline(): Baseline {
+  return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Baseline;
+}
+
 function readBaseline(rev?: string): { base: Baseline; origin?: string } {
-  if (!rev) return { base: JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) };
+  if (!rev) return { base: readOwnBaseline() };
   try {
     return {
       base: JSON.parse(git('show', `${rev}:quality-baseline.json`)),
@@ -220,7 +243,7 @@ function readBaseline(rev?: string): { base: Baseline; origin?: string } {
       `warning: ${rev} has no quality-baseline.json (the PR that introduces the ratchet).\n` +
         "Comparing against the branch's own baseline.",
     );
-    return { base: JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) };
+    return { base: readOwnBaseline() };
   }
 }
 
@@ -295,7 +318,15 @@ function main(): void {
     return;
   }
 
-  const { base, origin } = readBaseline(baselineFrom);
+  const { base: fromRev, origin } = readBaseline(baselineFrom);
+  // Comparing against the PR's base has to reconcile two things the base does
+  // not know yet: a renamed key (which keeps comparing, under the old name)
+  // and a new metric (which cannot be a regression, because there was nothing
+  // to worsen). Without `--baseline-from` none of this runs, and an
+  // unregistered metric still fails loudly.
+  const base = origin
+    ? reconcileBaselineFromRev(fromRev, readOwnBaseline(), LEGACY_METRIC_KEYS)
+    : fromRev;
   const t = stringsFor(base.language);
   const failures = [
     ...compareMetrics(base, current, t),
@@ -325,7 +356,9 @@ function main(): void {
     },
     {
       title: t.uncoveredFilesTitle(uncovered.length),
-      items: uncovered.slice(0, 20).map((d) => t.uncoveredFileItem(d.file, d.lines.length, d.percent)),
+      items: uncovered
+        .slice(0, 20)
+        .map((d) => t.uncoveredFileItem(d.file, d.lines.length, d.percent)),
     },
   ];
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Baseline } from './compare.mts';
 import { stringsFor } from './locale.mts';
-import { buildReport, MARKER } from './report.mts';
+import { buildReport, MARKER, REGRESSIONS_END, REGRESSIONS_START } from './report.mts';
 
 const t = stringsFor('en');
 
@@ -58,6 +58,23 @@ describe('buildReport', () => {
     expect(md).toContain('❌ Failed — 2 regression(s)');
     expect(md).toContain('### Regressions');
     expect(md).toContain('- `a` went up');
+  });
+
+  it('wraps the regressions block in markers, so a hook can cut it out without the localized heading', () => {
+    const md = buildReport(
+      { ...INPUT, failures: [{ metric: 'a', limit: 208, current: 213, message: '`a` went up' }] },
+      t,
+    );
+    const block = md.slice(md.indexOf(REGRESSIONS_START), md.indexOf(REGRESSIONS_END));
+    expect(block).toContain('### Regressions');
+    expect(block).toContain('- `a` went up');
+    // The advice stays outside: a hook prints its own, and two contradict.
+    expect(block).not.toContain('The ratchet only moves one way.');
+    expect(md).toContain('The ratchet only moves one way.');
+  });
+
+  it('emits no regressions markers when nothing regressed', () => {
+    expect(buildReport(INPUT, t)).not.toContain(REGRESSIONS_START);
   });
 
   it('groups one table per section', () => {

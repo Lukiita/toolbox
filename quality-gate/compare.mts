@@ -81,6 +81,65 @@ export function compareFileCounts(
 }
 
 /**
+ * Reconciles a baseline read from ANOTHER revision (`--baseline-from`, which
+ * CI points at the pull request's base) with the branch's own.
+ *
+ * It exists because comparing against the base has two blind spots that both
+ * look like "metric is not in the baseline", while meaning opposite things:
+ *
+ * 1. **A renamed metric.** The base still calls it `cobertura-percentual`,
+ *    the branch measures `coverage-percent`. Without the mapping the ratchet
+ *    would lose the real comparison exactly on the pull request that renames
+ *    the keys - the moment it is most needed. `legacyKeys` restores it: the
+ *    old entry answers for the new name, at its frozen value.
+ * 2. **A genuinely new metric.** The base never measured circular
+ *    dependencies, so its absence is not a regression - there is nothing to
+ *    have got worse. The branch's own entry takes over, and the "this pull
+ *    request changes quality-baseline.json" diff is what puts a human on the
+ *    re-freeze.
+ *
+ * What it deliberately does NOT do: soften the local run. With no
+ * `--baseline-from`, an unregistered metric still fails loudly - there the
+ * absence means someone added a collector and never froze it.
+ *
+ * Born in project-b (2026-08-19), brought back here by toolbox issue #1.
+ * Pure: takes both baselines, returns a new one.
+ *
+ * @example
+ *   reconcileBaselineFromRev(base, own, { 'coverage-percent': 'cobertura-percentual' })
+ */
+export function reconcileBaselineFromRev(
+  fromRev: Baseline,
+  own: Baseline,
+  legacyKeys: Readonly<Record<string, string>> = {},
+): Baseline {
+  const metrics: Record<string, MetricBaseline> = { ...fromRev.metrics };
+  for (const [name, ownMeta] of Object.entries(own.metrics)) {
+    if (name in metrics) continue;
+    const legacy = legacyKeys[name];
+    const inherited = legacy ? fromRev.metrics[legacy] : undefined;
+    if (!inherited) {
+      metrics[name] = ownMeta;
+      continue;
+    }
+    // The legacy entry keeps the RULE - value, mode, direction, gate: taken
+    // from the branch, a flipped direction or `gate: false` on the rename PR
+    // would let the branch approve itself. Only label and section are the
+    // branch's - the old ones may be in another language. The legacy key
+    // itself goes: left in, the report renders an empty table under the old
+    // section for a metric nothing measures anymore.
+    metrics[name] = { ...inherited, label: ownMeta.label, section: ownMeta.section };
+    delete metrics[legacy as string];
+  }
+  // `language` comes from the branch, not the base: the report language is
+  // today's preference, not a frozen number. Taken from the base, a PR against
+  // a main older than the language choice printed the header in English and
+  // the sections in Portuguese, because label and section come from each
+  // metric's own metadata.
+  return { ...fromRev, language: own.language, metrics };
+}
+
+/**
  * Returns the metrics that regressed. A metric present in the measurement and
  * absent from the baseline **fails**: an incomplete baseline would be a gate
  * that approves what it does not know, and the fix (`--update-baseline`) is
