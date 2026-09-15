@@ -44,7 +44,7 @@ import {
 import { circularDependencies, importGraph } from './cycles.mts';
 import { duplicationStats, type JscpdReport } from './duplication.mts';
 import { stringsFor } from './locale.mts';
-import { pureRuleFilesOutsideDomain } from './place-rule.mts';
+import { PLACE_RULE_HOMES, pureRuleFilesOutsideDomain } from './place-rule.mts';
 import { buildReport, type ReportDetail } from './report.mts';
 import { countLines, isSizedFile, LINE_LIMIT, oversizedFiles } from './size.mts';
 
@@ -335,7 +335,7 @@ function main(): void {
 
   const details: ReportDetail[] = [
     {
-      title: t.pureRulesTitle(displacedRules.length, '`domain/` / `application/`'),
+      title: t.pureRulesTitle(displacedRules.length, PLACE_RULE_HOMES),
       items: displacedRules.map((f) => `\`${f}\``),
     },
     {

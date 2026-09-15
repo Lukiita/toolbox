@@ -14,7 +14,7 @@ Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`
 | `uncoveredByFile` (per-file ratchet) | ✔ | local coverage regressions the global number hides |
 | `uncovered-lines` / `files-with-uncovered-lines` | info | context in the report |
 | `duplication-percent` / `duplication-fragments` | ✔ | copies an agent will edit inconsistently |
-| `pure-rule-outside-domain` | ✔ | business rules born outside the layer dirs (a `.ts` with a unit test beside it, outside `RULE_PATTERNS`) — works for both package-by-feature and package-by-layer layouts |
+| `pure-rule-outside-domain` | ✔ | business rules born outside the layer dirs: a `.ts` with a unit test beside it that is not in `domain/` or `application/` (`RULE_PATTERNS`) nor in a feature's `infra(structure)/`, `presentation/`, `use-case(s)/`, `command(s)/`, `query|queries/` (`FEATURE_LAYER_PATTERN`; a feature is a folder with a `domain/`) — works for both package-by-feature and package-by-layer layouts; a metric of place, not content |
 | `circular-dependencies` | ✔ | strongly connected components in the production import graph — a cycle means nothing in it can be reused or understood alone; frozen at 0, cycles are forbidden outright |
 | `files-over-limit` | ✔ | files over the size limit — where agent edits turn into mess |
 | `cc-over-limit` | ✔ | functions over the cyclomatic-complexity limit (default 5) — every path is a test someone owes, and generative AI accumulates accidental complexity |
@@ -37,7 +37,7 @@ The code and console output are English. The **report** (terminal, job summary, 
 
 ## Adaptation points (review on import)
 
-- `place-rule.mts` → `RULE_PATTERNS` (where business rules may live; the default accepts both `src/<feature>/domain|application/` and the flat `src/domain|application/`).
+- `place-rule.mts` → `FEATURE_SLOT` (a monorepo without `src/` re-anchors here, once), `RULE_PATTERNS` (where rules live: `domain|application`) and `FEATURE_LAYER_PATTERN` (the other layers, exempt only inside a feature that has a `domain/`). Exempt by folder, never by file suffix — see the docstrings.
 - `size.mts` → `LINE_LIMIT` (default 400) and the production-file window (`isSizedFile`).
 - `complexity.mts` → `CC_LIMIT` (default 5, the Richards & Ford preference; industry tolerates 10).
 - `cycles.mts` → `ALIAS_PREFIXES` (non-relative import prefixes resolved as internal; default `@/` → repo root).
