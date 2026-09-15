@@ -28,11 +28,4 @@ export interface MeasureOptions {
  *   projectFiles(root) // => ['src/a.ts', 'src/a.test.ts', ...]
  */
 export declare function projectFiles(root: string): string[];
-/**
- * Measures the repository at `root` with the project's config.
- *
- * @example
- *   const { current } = measureRepository({ root, config, skipTests: true });
- *   current['files-over-limit'] // => 3
- */
 export declare function measureRepository({ root, config, skipTests }: MeasureOptions): Measurement;

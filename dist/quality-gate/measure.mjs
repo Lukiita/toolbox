@@ -62,10 +62,6 @@ function readCoverage(root, config) {
 function readProductionSources(root, paths, sourceWindow) {
     const sources = new Map();
     for (const file of paths.filter((p) => isSizedFile(p, sourceWindow))) {
-        // `ls-files --cached` still lists a file rm'd but not yet staged; the
-        // gate runs exactly then (pre-commit, tlc per-task) - skip, do not crash.
-        if (!existsSync(resolve(root, file)))
-            continue;
         if (!lstatSync(resolve(root, file)).isFile())
             continue;
         sources.set(file, readFileSync(resolve(root, file), 'utf8'));
@@ -147,8 +143,15 @@ function metricValues(m, duplication, uncovered, percent) {
  *   const { current } = measureRepository({ root, config, skipTests: true });
  *   current['files-over-limit'] // => 3
  */
+// `ls-files --cached` still lists a file rm'd but not yet staged, and the
+// gate runs exactly then (pre-commit, tlc per-task). Filtered ONCE, here, so
+// every collector sees the same set - the first cut skipped it in one reader
+// and the place rule still named the ghost (narrow round).
+function presentFiles(root, paths) {
+    return paths.filter((p) => existsSync(resolve(root, p)));
+}
 export function measureRepository({ root, config, skipTests }) {
-    const sourceMetrics = measureSources(root, config, projectFiles(root));
+    const sourceMetrics = measureSources(root, config, presentFiles(root, projectFiles(root)));
     const duplication = measureDuplication(root, config.duplicationPaths);
     if (!skipTests)
         runCoveredTests(root, config.vitestConfig);

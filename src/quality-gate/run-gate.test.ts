@@ -159,11 +159,17 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     ).toThrow(/quality\.duplicationPaths: apps\/nope is not a folder/);
   });
 
-  it('a tracked file deleted from the worktree but not staged does not crash the gate', () => {
+  it('a tracked file deleted from the worktree but not staged is neither a crash nor a ghost', () => {
     const { root, config } = scratchRepo();
-    runQualityGate(env(root, config), { ...run, updateBaseline: true });
-    rmSync(join(root, 'src', 'billing', 'domain', 'fee.ts'));
-    expect(() => runQualityGate(env(root, config), run)).not.toThrow();
+    // A displaced rule with its test beside it, committed, then rm'd but not staged.
+    mkdirSync(join(root, 'src', 'utils'), { recursive: true });
+    writeFileSync(join(root, 'src', 'utils', 'money.ts'), 'export const m = 1;\n');
+    writeFileSync(join(root, 'src', 'utils', 'money.test.ts'), '');
+    execFileSync('git', ['add', '-A'], { cwd: root });
+    execFileSync('git', ['commit', '-qm', 'displaced'], { cwd: root });
+    rmSync(join(root, 'src', 'utils', 'money.ts'));
+    const result = runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    expect(result.current['pure-rule-outside-domain']).toBe(0);
   });
 
   it('a missing coverage json names the path and the flag to drop', () => {

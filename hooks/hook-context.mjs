@@ -58,8 +58,11 @@ export async function hooksConfigOrDefaults() {
     // not send this guard to the defaults (loop round 2). The feature slot
     // still travels, or a monorepo's watch list would be rebuilt from the
     // default `^src/` and watch nothing (loop round 3).
+    // The raw slot, not a coerced one: a RegExp written where the string
+    // belongs must fail loudly below (stderr + defaults), not become "not set"
+    // and watch nothing in silence (narrow round).
     const { quality, hooks } = await config.loadToolboxConfigPartial(repoRoot());
-    const featureSlot = typeof quality?.featureSlot === 'string' ? quality.featureSlot : undefined;
+    const featureSlot = quality?.featureSlot;
     return config.resolveToolboxConfig({ quality: { featureSlot }, hooks }).hooks;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
