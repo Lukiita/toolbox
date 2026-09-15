@@ -98,6 +98,38 @@ describe('linkSkills', () => {
     expect(readFileSync(viaLink, 'utf8')).toContain('name: x');
   });
 
+  it('under a pnpm-style symlinked package dir, links the nominal path and updates when the hash changes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'toolbox-pnpm-'));
+    roots.push(root);
+    const projectRoot = join(root, 'project');
+    const storeOf = (hash: string): string =>
+      join(
+        projectRoot,
+        'node_modules',
+        '.pnpm',
+        `toolbox@${hash}`,
+        'node_modules',
+        '@lukiita',
+        'toolbox',
+      );
+    for (const hash of ['h1', 'h2']) {
+      mkdirSync(join(storeOf(hash), 'skills', 'retro'), { recursive: true });
+      writeFileSync(join(storeOf(hash), 'skills', 'retro', 'SKILL.md'), `hash ${hash}`);
+    }
+    const packageDir = join(projectRoot, 'node_modules', '@lukiita', 'toolbox');
+    mkdirSync(join(projectRoot, 'node_modules', '@lukiita'), { recursive: true });
+    symlinkSync(storeOf('h1'), packageDir, 'dir');
+    linkSkills({ packageDir, projectRoot });
+    const link = join(projectRoot, '.agents', 'skills', 'retro');
+    expect(readlinkSync(link)).toBe('../../node_modules/@lukiita/toolbox/skills/retro');
+    expect(linkSkills({ packageDir, projectRoot }).unchanged).toEqual(['retro']);
+    // pnpm update: the package dir now points at h2, h1 still on disk
+    rmSync(packageDir);
+    symlinkSync(storeOf('h2'), packageDir, 'dir');
+    expect(linkSkills({ packageDir, projectRoot }).unchanged).toEqual(['retro']);
+    expect(readFileSync(join(link, 'SKILL.md'), 'utf8')).toBe('hash h2');
+  });
+
   it('leaves project-local skills with other names untouched', () => {
     const { packageDir, projectRoot } = scratch();
     mkdirSync(join(projectRoot, '.agents', 'skills', 'db-change'), { recursive: true });

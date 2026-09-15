@@ -54,7 +54,10 @@ export function isEntrypoint(moduleUrl) {
 export async function hooksConfigOrDefaults() {
   const config = await import('../dist/config/index.mjs');
   try {
-    return (await config.loadToolboxConfig(repoRoot())).hooks;
+    // Only the `hooks` section is resolved: a shape error in `quality` must
+    // not send this guard to the defaults (loop round 2).
+    const { hooks } = await config.loadToolboxConfigPartial(repoRoot());
+    return config.resolveToolboxConfig({ hooks }).hooks;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     process.stderr.write(`toolbox hooks: using default config (${reason})\n`);

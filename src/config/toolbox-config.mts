@@ -94,7 +94,11 @@ export const DEFAULT_HOOKS: HooksConfig = {
   watchedPatterns: watchedByDefault(DEFAULT_QUALITY.featureSlot),
   exemptSuffixes: [
     '.test.ts',
+    '.test.mts',
+    '.test.cts',
     '.d.ts',
+    '.d.mts',
+    '.d.cts',
     '.types.ts',
     '.type.ts',
     '.config.ts',
@@ -130,8 +134,9 @@ export function resolveToolboxConfig(partial: ToolboxConfig = {}): ResolvedToolb
 // message names the field, what it needs and what arrived.
 function expectField(name: string, ok: boolean, expected: string, value: unknown): void {
   if (ok) return;
-  const received = Array.isArray(value) ? 'array' : typeof value;
-  throw new Error(`toolbox.config: ${name} must be ${expected}, received ${received}`);
+  const kind = Array.isArray(value) ? 'array' : typeof value;
+  const shown = String(JSON.stringify(value) ?? value).slice(0, 80);
+  throw new Error(`toolbox.config: ${name} must be ${expected}, received ${kind} ${shown}`);
 }
 
 const isRegExp = (v: unknown): boolean => v instanceof RegExp;
@@ -161,6 +166,10 @@ function validateHooksShapes(h: Partial<HooksConfig>): void {
   if ('protectedBranches' in h) {
     const ok = isStrings(h.protectedBranches);
     expectField('hooks.protectedBranches', ok, 'an array of branch names', h.protectedBranches);
+  }
+  if ('exemptSuffixes' in h) {
+    const ok = isStrings(h.exemptSuffixes);
+    expectField('hooks.exemptSuffixes', ok, 'an array of suffixes', h.exemptSuffixes);
   }
 }
 

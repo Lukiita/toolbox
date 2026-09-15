@@ -78,6 +78,9 @@ describe('the hooks watch window follows the feature slot', () => {
     expect(() => resolveToolboxConfig(cast({ quality: { duplicationPaths: 'src' } }))).toThrow(
       /quality\.duplicationPaths must be an array of paths, received string/,
     );
+    expect(() => resolveToolboxConfig(cast({ hooks: { exemptSuffixes: '.x' } }))).toThrow(
+      /hooks\.exemptSuffixes must be an array of suffixes, received string/,
+    );
     expect(() => resolveToolboxConfig(cast({ quality: { featureSlot: /x/ } }))).toThrow(
       /quality\.featureSlot must be a regex source string, received object/,
     );

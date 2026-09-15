@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24 # >= 22.18 works: the gate ships built, and a .ts toolbox.config needs Node's type stripping
+          node-version: 24 # engines: >=22.18 <23 || >=23.6 - the gate ships built; the .ts toolbox.config needs Node's type stripping
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

@@ -9,4 +9,6 @@
 # The binary by path, not `pnpm exec`: husky runs hooks in a non-interactive
 # sh that never reads the login profile, so a version-managed pnpm may be off
 # PATH there; node_modules/.bin only needs `node`.
-"$(git rev-parse --show-toplevel)/node_modules/.bin/toolbox" pre-push
+TOOLBOX="$(git rev-parse --show-toplevel)/node_modules/.bin/toolbox"
+[ -x "$TOOLBOX" ] || { echo "pre-push: $TOOLBOX not found - is @lukiita/toolbox installed at the repo root? (pnpm install)" >&2; exit 1; }
+"$TOOLBOX" pre-push

@@ -2,7 +2,7 @@
 // and the lists the report details. Reads the repo (git, files, coverage
 // json, jscpd) once; everything after this is pure.
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
@@ -18,6 +18,12 @@ import { countLines, isSizedFile, oversizedFiles } from "./size.mjs";
 // committed must count. The tlc per-task gate runs BEFORE the commit, and
 // without this the place rule would miss exactly the file just born in the
 // wrong place - the hole sat at the most valuable integration point.
+/**
+ * Every versioned file plus the untracked ones git does not ignore.
+ *
+ * @example
+ *   projectFiles(root) // => ['src/a.ts', 'src/a.test.ts', ...]
+ */
 export function projectFiles(root) {
     return runGit(root, ['ls-files', '--cached', '--others', '--exclude-standard'])
         .split('\n')
@@ -79,14 +85,19 @@ function jscpdBin() {
         throw new Error(`jscpd's package.json at ${pkgPath} declares no "jscpd" bin`);
     return resolve(dirname(pkgPath), bin);
 }
+// jscpd exits 0 with an empty report for a path that does not exist - or is
+// a file, not a folder - and the metric would freeze at 0 forever: a monorepo
+// that re-anchored `sourceWindow` but not `duplicationPaths` (review rounds 2
+// and loop 2).
+function assertDuplicationFolders(root, paths) {
+    const isFolder = (p) => existsSync(resolve(root, p)) && statSync(resolve(root, p)).isDirectory();
+    const bad = paths.filter((p) => !isFolder(p));
+    if (bad.length === 0)
+        return;
+    throw new Error(`quality.duplicationPaths: ${bad.join(', ')} is not a folder under ${root}; point it at the production source folders`);
+}
 function measureDuplication(root, paths) {
-    // jscpd exits 0 with an empty report for a path that does not exist, and the
-    // metric would freeze at 0 forever - a monorepo that re-anchored
-    // `sourceWindow` but not `duplicationPaths` (found in review, round 2).
-    const missing = paths.filter((p) => !existsSync(resolve(root, p)));
-    if (missing.length > 0) {
-        throw new Error(`quality.duplicationPaths: ${missing.join(', ')} not found under ${root}; point it at the production source folders`);
-    }
+    assertDuplicationFolders(root, paths);
     const out = mkdtempSync(resolve(tmpdir(), 'jscpd-'));
     try {
         execFileSync(process.execPath, [jscpdBin(), '--reporters', 'json', '--output', out, '--silent', ...paths], { cwd: root, stdio: 'ignore' });

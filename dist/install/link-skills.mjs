@@ -27,9 +27,15 @@ export function shippedSkills(packageDir) {
 // A link the project made itself - pointing anywhere but into the package -
 // is the project's pin, kept like a real directory would be. Only our own
 // links (into the package) and dangling ones are replaced.
+// "Ours" by the nominal package path or by its real one: under pnpm the
+// package dir is a symlink into `.pnpm/<hash>/`, and a link written by an
+// earlier version (or resolved by the OS) may spell either.
 function isForeignLink(dest, packageDir) {
     const target = resolve(realParent(dest), readlinkSync(dest));
-    return existsSync(target) && !target.startsWith(packageDir);
+    if (!existsSync(target))
+        return false;
+    const ours = existsSync(packageDir) ? [packageDir, realpathSync(packageDir)] : [packageDir];
+    return !ours.some((p) => target.startsWith(p));
 }
 // The directory the link is physically written into. When `.agents/skills`
 // (or any ancestor) is itself a symlink, a relative target computed from the
@@ -51,7 +57,11 @@ function destState(dest, packageDir, wanted) {
     return readlinkSync(dest) === wanted ? 'unchanged' : 'replace';
 }
 function linkOne(name, target, dest, packageDir, summary) {
-    const wanted = relative(realParent(dest), realpathSync(target));
+    // The NOMINAL target (`node_modules/@lukiita/toolbox/skills/x`), never its
+    // real path: under pnpm the real path pins a `.pnpm/<hash>/` that changes
+    // on every update, and the link would keep serving the old version (loop
+    // round 2). Relative from where the link really lives (loop round 1).
+    const wanted = relative(realParent(dest), target);
     const state = destState(dest, packageDir, wanted);
     if (state === 'kept')
         return void summary.kept.push(name);

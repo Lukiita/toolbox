@@ -100,13 +100,21 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     expect(result.failures.map((f) => f.metric)).toContain('src/billing/domain/fee.ts');
   });
 
-  it('compares against the baseline of another rev and reconciles with the own one', () => {
+  it('compares against the baseline of another rev and records its origin', () => {
     const { root, config } = scratchRepo();
     runQualityGate(env(root, config), { ...run, updateBaseline: true });
     execFileSync('git', ['commit', '-qam', 'freeze'], { cwd: root });
     const result = runQualityGate(env(root, config), { ...run, baselineFrom: 'HEAD' });
     expect(result.status).toBe('passed');
     expect(result.report).toContain('HEAD');
+  });
+
+  it('an unknown --baseline-from rev is an error, not a silent self-comparison', () => {
+    const { root, config } = scratchRepo();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    expect(() => runQualityGate(env(root, config), { ...run, baselineFrom: 'mian' })).toThrow(
+      /--baseline-from mian: not a commit/,
+    );
   });
 
   it('a malformed own baseline names the file, not just the JSON error', () => {
@@ -132,7 +140,7 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     const { root, config } = scratchRepo();
     expect(() =>
       runQualityGate(env(root, { ...config, duplicationPaths: ['apps/nope'] }), run),
-    ).toThrow(/quality\.duplicationPaths: apps\/nope not found/);
+    ).toThrow(/quality\.duplicationPaths: apps\/nope is not a folder/);
   });
 
   it('a missing coverage json names the path and the flag to drop', () => {

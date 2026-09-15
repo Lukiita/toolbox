@@ -63,6 +63,19 @@ function isFeatureLayer(p, pattern, features) {
     const match = pattern.exec(p);
     return match !== null && features.has(match[1] ?? '');
 }
+// `.ts`, `.mts`, `.cts` - not `.tsx` (a component is a render shell by
+// policy), not tests, not declarations. `.mts`/`.cts` were invisible here
+// while size, complexity and coverage already counted them (loop round 2).
+const MODULE_EXT = /\.(ts|mts|cts)$/;
+function isPlainModule(p) {
+    return MODULE_EXT.test(p) && !/\.(test|d)\.(ts|mts|cts)$/.test(p);
+}
+// The test beside `x.mts` is `x.test.ts` in every repo of ours; `x.test.mts` counts too.
+function hasTestBeside(p, all) {
+    const base = p.replace(MODULE_EXT, '');
+    const ext = p.slice(base.length);
+    return all.has(`${base}.test.ts`) || all.has(`${base}.test${ext}`);
+}
 /**
  * Takes paths relative to the repo root (what `git ls-files` returns) and
  * returns, sorted, the ones that look like pure rules outside the rule
@@ -84,9 +97,7 @@ export function pureRuleFilesOutsideDomain(paths, options = DEFAULT_QUALITY) {
         .filter((p) => options.sourceWindow.test(p) &&
         !rulePatterns.some((pattern) => pattern.test(p)) &&
         !isFeatureLayer(p, featureLayerPattern, features) &&
-        p.endsWith('.ts') &&
-        !p.endsWith('.test.ts') &&
-        !p.endsWith('.d.ts') &&
-        all.has(`${p.slice(0, -3)}.test.ts`))
+        isPlainModule(p) &&
+        hasTestBeside(p, all))
         .sort();
 }

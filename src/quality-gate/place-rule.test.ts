@@ -196,6 +196,16 @@ describe('pureRuleFilesOutsideDomain', () => {
     expect(pureRuleFilesOutsideDomain(files)).toEqual([]);
   });
 
+  it('sees a .mts module with its .test.ts beside it, like size and coverage do', () => {
+    const files = ['src/utils/money.mts', 'src/utils/money.test.ts'];
+    expect(pureRuleFilesOutsideDomain(files)).toEqual(['src/utils/money.mts']);
+  });
+
+  it('accepts .test.mts beside .mts too, and never counts the test or a .d.mts', () => {
+    const files = ['src/utils/a.mts', 'src/utils/a.test.mts', 'src/utils/b.d.mts'];
+    expect(pureRuleFilesOutsideDomain(files)).toEqual(['src/utils/a.mts']);
+  });
+
   it('ignores what lives outside src/', () => {
     const files = ['scripts/quality/size.mts', 'scripts/quality/size.test.ts'];
     expect(pureRuleFilesOutsideDomain(files)).toEqual([]);

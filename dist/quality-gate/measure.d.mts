@@ -21,6 +21,12 @@ export interface MeasureOptions {
     /** Reuse the coverage json already on disk instead of running the suite. */
     skipTests: boolean;
 }
+/**
+ * Every versioned file plus the untracked ones git does not ignore.
+ *
+ * @example
+ *   projectFiles(root) // => ['src/a.ts', 'src/a.test.ts', ...]
+ */
 export declare function projectFiles(root: string): string[];
 /**
  * Measures the repository at `root` with the project's config.

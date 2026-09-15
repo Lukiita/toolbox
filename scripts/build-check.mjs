@@ -5,13 +5,12 @@
 // UNTRACKED files, so a new module emitted by tsc passed the check while the
 // tag shipped without it (review, round 2); and `a && b || c` blamed "stale"
 // for a compile error. A clean build (rm + tsc) also surfaces orphans - tsc
-// never deletes the .mjs of a source that is gone.
+// never deletes the .mjs of a source that is gone - so `pnpm build` cleans
+// first, and the pre-commit relies on that too.
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
 
-rmSync('dist', { recursive: true, force: true });
 try {
-  execFileSync('./node_modules/.bin/tsc', ['-p', 'tsconfig.build.json'], { stdio: 'inherit' });
+  execFileSync('pnpm', ['build'], { stdio: 'inherit' });
 } catch {
   execFileSync('git', ['checkout', '--', 'dist']);
   console.error(

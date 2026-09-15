@@ -103,7 +103,12 @@ export const LEGACY_METRIC_KEYS: Readonly<Record<string, string>> = {
   'files-over-limit': 'arquivos-acima-do-limite',
 };
 
-/** The branch's own baseline, from the worktree. */
+/**
+ * The branch's own baseline, from the worktree.
+ *
+ * @example
+ *   readOwnBaseline(root).metrics['coverage-percent'].value
+ */
 export function readOwnBaseline(root: string): Baseline {
   const path = resolve(root, BASELINE_FILE);
   if (!existsSync(path)) {
@@ -132,6 +137,15 @@ function parseBaseline(json: string, where: string): Baseline {
  * re-froze itself would pass (review, loop round 1).
  */
 function readBaselineAt(root: string, rev: string): Baseline | undefined {
+  // The rev must exist: a typo (`--baseline-from mian`) must not read as "the
+  // base has no baseline" and compare the branch with itself (loop round 2).
+  try {
+    runGit(root, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`]);
+  } catch {
+    throw new Error(
+      `--baseline-from ${rev}: not a commit in this repository (fetch it, or check the spelling)`,
+    );
+  }
   let json: string;
   try {
     json = runGit(root, ['show', `${rev}:${BASELINE_FILE}`]);
@@ -177,7 +191,12 @@ export function readComparisonBaseline(
   };
 }
 
-/** Whether the branch touched the baseline since `origin` - what the report warns about. */
+/**
+ * Whether the branch touched the baseline since `origin` - what the report warns about.
+ *
+ * @example
+ *   baselineChangedSince(root, 'origin/main') // => true when the PR re-froze
+ */
 export function baselineChangedSince(root: string, origin: string): boolean {
   return runGit(root, ['diff', '--name-only', `${origin}...HEAD`]).includes(BASELINE_FILE);
 }
@@ -187,6 +206,9 @@ export function baselineChangedSince(root: string, origin: string): boolean {
  * metadata, a new one is born from the registered defaults, and a metric no
  * longer measured is pruned - stale entries would document a gate that no
  * longer exists. Re-freezing is already the deliberate, versioned action.
+ *
+ * @example
+ *   writeBaseline(root, refreezeBaseline(readOwnBaseline(root), current, byFile))
  */
 export function refreezeBaseline(
   base: Baseline,

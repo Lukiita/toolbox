@@ -2,7 +2,12 @@ import { type Baseline, type MetricBaseline } from './compare.mts';
 export declare const BASELINE_FILE = "quality-baseline.json";
 export declare const METRIC_DEFAULTS: Record<string, Omit<MetricBaseline, 'value'>>;
 export declare const LEGACY_METRIC_KEYS: Readonly<Record<string, string>>;
-/** The branch's own baseline, from the worktree. */
+/**
+ * The branch's own baseline, from the worktree.
+ *
+ * @example
+ *   readOwnBaseline(root).metrics['coverage-percent'].value
+ */
 export declare function readOwnBaseline(root: string): Baseline;
 export interface BaselineSource {
     base: Baseline;
@@ -18,13 +23,21 @@ export interface BaselineSource {
  * "passed" believing the base was compared.
  */
 export declare function readComparisonBaseline(root: string, rev: string | undefined, warn: (message: string) => void): BaselineSource;
-/** Whether the branch touched the baseline since `origin` - what the report warns about. */
+/**
+ * Whether the branch touched the baseline since `origin` - what the report warns about.
+ *
+ * @example
+ *   baselineChangedSince(root, 'origin/main') // => true when the PR re-froze
+ */
 export declare function baselineChangedSince(root: string, origin: string): boolean;
 /**
  * Rebuilds the baseline from what was measured: an existing entry keeps its
  * metadata, a new one is born from the registered defaults, and a metric no
  * longer measured is pruned - stale entries would document a gate that no
  * longer exists. Re-freezing is already the deliberate, versioned action.
+ *
+ * @example
+ *   writeBaseline(root, refreezeBaseline(readOwnBaseline(root), current, byFile))
  */
 export declare function refreezeBaseline(base: Baseline, current: Readonly<Record<string, number>>, byFile: Readonly<Record<string, number>>): Baseline;
 /**

@@ -24,7 +24,7 @@ Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`
 
 The ratchet is part of the `@lukiita/toolbox` package (ADR-0001). Nothing is copied; the project depends on it and configures it.
 
-1. `pnpm add -D github:Lukiita/toolbox#v1.0.0` (npm: `npm i -D github:Lukiita/toolbox#v1.0.0`). Node ≥ 22.18 (the `.ts` config needs type stripping). The tag carries the build — nothing runs on install.
+1. `pnpm add -D github:Lukiita/toolbox#v1.0.0` (npm: `npm i -D github:Lukiita/toolbox#v1.0.0`). Node ≥ 22.18 (22.x from 22.18, or ≥ 23.6; 23.0–23.5 cannot strip types from the `.ts` config). The tag carries the build — nothing runs on install.
 2. `package.json` scripts: `"quality": "toolbox quality"`, and wire it into the repo gate (e.g. `"gate": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm quality"`).
 3. Copy `node_modules/@lukiita/toolbox/templates/quality-gate/vitest.quality.config.ts` to the repo root (the wide coverage slice with no threshold — the why lives in the file) and add `vitest` + `@vitest/coverage-v8` as dev deps.
 4. Copy `node_modules/@lukiita/toolbox/toolbox.config.example.ts` to the repo root as `toolbox.config.ts` and set what differs from the canonical values — see **Config** below. An empty config is the canonical setup.
