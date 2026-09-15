@@ -48,7 +48,7 @@ The hooks ship inside the `@lukiita/toolbox` package (ADR-0001) — nothing is c
 | field | default | what it drives |
 | --- | --- | --- |
 | `watchedPatterns` | `src/<feature>/domain\|application/` and the flat layout | files that must have a co-located test (the same window as the ratchet's rule places; edges are excluded on purpose — watching them would fail every PR that touches a screen) |
-| `exemptSuffixes` | `.test.ts`, `.d.ts`, `.types.ts`, `.type.ts`, `.config.ts`, `.constants.ts`, `.fixtures.ts` | artefacts with no behaviour of their own |
+| `exemptSuffixes` | `.test.ts`, `.test.mts`, `.test.cts`, `.d.ts`, `.d.mts`, `.d.cts`, `.types.ts`, `.type.ts`, `.config.ts`, `.constants.ts`, `.fixtures.ts` | artefacts with no behaviour of their own (`index.ts|mts|cts` barrels are exempt too) |
 | `protectedBranches` | `['main', 'develop']` | a direct `git push` to one of these is denied |
 
 The secrets rule needs no config: it is universal, and `guard-bash-secrets.mjs` runs it globally from `~/.agents/hooks` for every repo.

@@ -109,6 +109,22 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     expect(result.report).toContain('HEAD');
   });
 
+  it('a base with no common history still yields a report (the re-freeze warning is just off)', () => {
+    const { root, config } = scratchRepo();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    execFileSync('git', ['commit', '-qam', 'freeze'], { cwd: root });
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+    const branch = git('rev-parse', '--abbrev-ref', 'HEAD').trim();
+    git('checkout', '-q', '--orphan', 'unrelated');
+    git('commit', '-qm', 'orphan with the same files');
+    const orphan = git('rev-parse', 'HEAD').trim();
+    git('checkout', '-q', branch);
+    const result = runQualityGate(env(root, config), { ...run, baselineFrom: orphan });
+    expect(result.status).toBe('passed');
+    expect(result.report).toContain(orphan);
+  });
+
   it('an unknown --baseline-from rev is an error, not a silent self-comparison', () => {
     const { root, config } = scratchRepo();
     runQualityGate(env(root, config), { ...run, updateBaseline: true });
@@ -141,6 +157,13 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     expect(() =>
       runQualityGate(env(root, { ...config, duplicationPaths: ['apps/nope'] }), run),
     ).toThrow(/quality\.duplicationPaths: apps\/nope is not a folder/);
+  });
+
+  it('a tracked file deleted from the worktree but not staged does not crash the gate', () => {
+    const { root, config } = scratchRepo();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    rmSync(join(root, 'src', 'billing', 'domain', 'fee.ts'));
+    expect(() => runQualityGate(env(root, config), run)).not.toThrow();
   });
 
   it('a missing coverage json names the path and the flag to drop', () => {

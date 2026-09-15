@@ -80,6 +80,20 @@ describe('linkSkills', () => {
     );
   });
 
+  it("keeps the project's link into a sibling package whose name only shares our prefix", () => {
+    const { packageDir, projectRoot } = scratch();
+    mkdirSync(join(projectRoot, 'node_modules', '@lukiita', 'toolbox-extra', 'skills', 'retro'), {
+      recursive: true,
+    });
+    mkdirSync(join(projectRoot, '.agents', 'skills'), { recursive: true });
+    symlinkSync(
+      '../../node_modules/@lukiita/toolbox-extra/skills/retro',
+      join(projectRoot, '.agents', 'skills', 'retro'),
+      'dir',
+    );
+    expect(linkSkills({ packageDir, projectRoot }).kept).toEqual(['retro']);
+  });
+
   it('replaces a dangling symlink', () => {
     const { packageDir, projectRoot } = scratch();
     mkdirSync(join(projectRoot, '.agents', 'skills'), { recursive: true });

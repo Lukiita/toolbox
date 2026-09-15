@@ -72,7 +72,7 @@ function changedFiles({ base, head } = {}) {
 function isWatched(file, { watchedPatterns, exemptSuffixes }) {
   if (!watchedPatterns.some((pattern) => pattern.test(file))) return false;
   if (exemptSuffixes.some((suffix) => file.endsWith(suffix))) return false;
-  return path.basename(file) !== 'index.ts';
+  return !/^index\.(ts|mts|cts)$/.test(path.basename(file));
 }
 
 function hasBranching(absolute) {

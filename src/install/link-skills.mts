@@ -60,7 +60,8 @@ function isForeignLink(dest: string, packageDir: string): boolean {
   const target = resolve(realParent(dest), readlinkSync(dest));
   if (!existsSync(target)) return false;
   const ours = existsSync(packageDir) ? [packageDir, realpathSync(packageDir)] : [packageDir];
-  return !ours.some((p) => target.startsWith(p));
+  // A path boundary, not a prefix: `@lukiita/toolbox-extra` is not ours.
+  return !ours.some((p) => target === p || target.startsWith(`${p}/`));
 }
 
 // The directory the link is physically written into. When `.agents/skills`

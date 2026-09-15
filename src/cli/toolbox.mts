@@ -26,6 +26,7 @@ import * as git from './git-ports.mts';
 
 const USAGE =
   'Usage: toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]\n' +
+  '       (--update-baseline re-freezes and exits; --baseline-from and --out are ignored with it)\n' +
   '       toolbox pre-push\n' +
   '       toolbox install';
 

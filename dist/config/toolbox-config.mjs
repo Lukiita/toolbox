@@ -52,17 +52,28 @@ export const DEFAULT_HOOKS = {
  */
 export function resolveToolboxConfig(partial = {}) {
     validateShapes(partial);
-    const quality = { ...DEFAULT_QUALITY, ...partial.quality };
+    const quality = { ...DEFAULT_QUALITY, ...withoutUndefined(partial.quality) };
     const hooks = {
         ...DEFAULT_HOOKS,
         // Follows the project's slot unless the project pins its own list.
         watchedPatterns: watchedByDefault(quality.featureSlot),
-        ...partial.hooks,
+        ...withoutUndefined(partial.hooks),
     };
     return {
         quality: { ...quality, sourceWindow: stateless(quality.sourceWindow) },
         hooks: { ...hooks, watchedPatterns: hooks.watchedPatterns.map(stateless) },
     };
+}
+// `{ field: undefined }` means "not set", not "set to undefined": a spread
+// would otherwise erase the default (the hooks pass `featureSlot` through
+// this way, loop round 3).
+function withoutUndefined(partial) {
+    const out = {};
+    for (const [k, v] of Object.entries(partial ?? {})) {
+        if (v !== undefined)
+            out[k] = v;
+    }
+    return out;
 }
 // A `.mjs` config has no compiler: a string where a RegExp belongs would die
 // deep inside a collector as `undefined.replace` with no field name. Each
@@ -104,9 +115,9 @@ function validateHooksShapes(h) {
         expectField('hooks.exemptSuffixes', ok, 'an array of suffixes', h.exemptSuffixes);
     }
 }
-function validateShapes({ quality = {}, hooks = {} }) {
-    validateQualityShapes(quality);
-    validateHooksShapes(hooks);
+function validateShapes({ quality, hooks }) {
+    validateQualityShapes(withoutUndefined(quality));
+    validateHooksShapes(withoutUndefined(hooks));
 }
 // A `/g` or `/y` flag makes `.test()` remember `lastIndex` between calls, so
 // a pattern from a project config would silently skip every other file.

@@ -21,6 +21,7 @@ import { parseArgs, UsageError } from "../quality-gate/args.mjs";
 import { runQualityGate } from "../quality-gate/run-gate.mjs";
 import * as git from "./git-ports.mjs";
 const USAGE = 'Usage: toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]\n' +
+    '       (--update-baseline re-freezes and exits; --baseline-from and --out are ignored with it)\n' +
     '       toolbox pre-push\n' +
     '       toolbox install';
 function quality(root, config, args) {

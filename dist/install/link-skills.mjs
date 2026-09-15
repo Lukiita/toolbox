@@ -35,7 +35,8 @@ function isForeignLink(dest, packageDir) {
     if (!existsSync(target))
         return false;
     const ours = existsSync(packageDir) ? [packageDir, realpathSync(packageDir)] : [packageDir];
-    return !ours.some((p) => target.startsWith(p));
+    // A path boundary, not a prefix: `@lukiita/toolbox-extra` is not ours.
+    return !ours.some((p) => target === p || target.startsWith(`${p}/`));
 }
 // The directory the link is physically written into. When `.agents/skills`
 // (or any ancestor) is itself a symlink, a relative target computed from the

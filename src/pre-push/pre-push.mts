@@ -133,11 +133,8 @@ const RECORDED_DECISION = [
   '────────────────────────────────────────────────────────────────────────────',
 ];
 
-function withoutBase(baseBranch: string, ports: PrePushPorts): PrePushDecision {
-  const lines = [
-    `quality gate: origin/${baseBranch} not found - comparing against the branch's own baseline.`,
-    '(fetch it to measure against the same point CI does)',
-  ];
+function withoutBase(baseBranch: string, reason: string, ports: PrePushPorts): PrePushDecision {
+  const lines = [`quality gate: ${reason} - comparing against the branch's own baseline.`];
   const own = ports.gate(undefined);
   if (own.passed) return { exitCode: 0, lines };
   return { exitCode: 1, lines: [...lines, ...regressionLines(own)] };
@@ -177,8 +174,21 @@ export function decidePrePush(
   // (the same point CI uses); the MERGE-BASE is where "did this branch
   // re-freeze" starts.
   const baseSha = ports.baseTip();
-  const forkSha = baseSha && ports.mergeBase(baseSha, head);
-  if (!baseSha || !forkSha) return withoutBase(baseBranch, ports);
+  if (!baseSha) {
+    return withoutBase(
+      baseBranch,
+      `origin/${baseBranch} not found (fetch it to measure against the same point CI does)`,
+      ports,
+    );
+  }
+  const forkSha = ports.mergeBase(baseSha, head);
+  if (!forkSha) {
+    return withoutBase(
+      baseBranch,
+      `no common history with origin/${baseBranch} (shallow clone or unrelated branch)`,
+      ports,
+    );
+  }
 
   const lines = [`Quality gate against origin/${baseBranch}...`];
   const againstBase = ports.gate(baseSha);

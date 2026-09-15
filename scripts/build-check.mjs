@@ -9,6 +9,12 @@
 // first, and the pre-commit relies on that too.
 import { execFileSync } from 'node:child_process';
 
+// From the repo root: `pnpm build` normalises its cwd to the package, `git`
+// does not - run from a subdirectory the pathspec `dist` matched nothing and
+// the check passed for free (loop round 3).
+const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+process.chdir(root);
+
 try {
   execFileSync('pnpm', ['build'], { stdio: 'inherit' });
 } catch {

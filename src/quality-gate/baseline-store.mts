@@ -198,7 +198,13 @@ export function readComparisonBaseline(
  *   baselineChangedSince(root, 'origin/main') // => true when the PR re-froze
  */
 export function baselineChangedSince(root: string, origin: string): boolean {
-  return runGit(root, ['diff', '--name-only', `${origin}...HEAD`]).includes(BASELINE_FILE);
+  // `A...B` fatals without a merge base (shallow clone, unrelated rev); this
+  // only feeds a warning in the report, so unknown reads as "no".
+  try {
+    return runGit(root, ['diff', '--name-only', `${origin}...HEAD`]).includes(BASELINE_FILE);
+  } catch {
+    return false;
+  }
 }
 
 /**

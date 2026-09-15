@@ -55,9 +55,12 @@ export async function hooksConfigOrDefaults() {
   const config = await import('../dist/config/index.mjs');
   try {
     // Only the `hooks` section is resolved: a shape error in `quality` must
-    // not send this guard to the defaults (loop round 2).
-    const { hooks } = await config.loadToolboxConfigPartial(repoRoot());
-    return config.resolveToolboxConfig({ hooks }).hooks;
+    // not send this guard to the defaults (loop round 2). The feature slot
+    // still travels, or a monorepo's watch list would be rebuilt from the
+    // default `^src/` and watch nothing (loop round 3).
+    const { quality, hooks } = await config.loadToolboxConfigPartial(repoRoot());
+    const featureSlot = typeof quality?.featureSlot === 'string' ? quality.featureSlot : undefined;
+    return config.resolveToolboxConfig({ quality: { featureSlot }, hooks }).hooks;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     process.stderr.write(`toolbox hooks: using default config (${reason})\n`);

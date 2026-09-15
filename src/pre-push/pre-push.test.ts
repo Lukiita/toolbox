@@ -98,6 +98,13 @@ describe('decidePrePush', () => {
     expect(p.calls).toEqual([undefined]);
   });
 
+  it('6b. a base with no common history says so, instead of "not found"', () => {
+    const p = ports({ mergeBase: () => undefined, gate: () => pass });
+    const d = decidePrePush(newBranch, HEAD, 'main', p);
+    expect(d.exitCode).toBe(0);
+    expect(d.lines[0]).toContain('no common history with origin/main');
+  });
+
   it('7. a branch deletion runs no gate', () => {
     const p = ports();
     const d = decidePrePush([{ localSha: EMPTY_SHA, remoteSha: TIP }], HEAD, 'main', p);

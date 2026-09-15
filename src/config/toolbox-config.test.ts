@@ -55,6 +55,15 @@ describe('the hooks watch window follows the feature slot', () => {
     expect(hooks.watchedPatterns.some((p) => p.test('src/billing/domain/x.ts'))).toBe(false);
   });
 
+  it('a field set to undefined is "not set", not "erase the default"', () => {
+    const { quality, hooks } = resolveToolboxConfig({
+      quality: { featureSlot: undefined },
+      hooks: { protectedBranches: undefined },
+    });
+    expect(quality.featureSlot).toBe('^src/(?:([^/]+)/)?');
+    expect(hooks.protectedBranches).toEqual(['main', 'develop']);
+  });
+
   it('a project that pins its own watched patterns keeps them', () => {
     const { hooks } = resolveToolboxConfig({ hooks: { watchedPatterns: [/^lib\//] } });
     expect(hooks.watchedPatterns).toEqual([/^lib\//]);

@@ -107,6 +107,9 @@ function readProductionSources(
 ): Map<string, string> {
   const sources = new Map<string, string>();
   for (const file of paths.filter((p) => isSizedFile(p, sourceWindow))) {
+    // `ls-files --cached` still lists a file rm'd but not yet staged; the
+    // gate runs exactly then (pre-commit, tlc per-task) - skip, do not crash.
+    if (!existsSync(resolve(root, file))) continue;
     if (!lstatSync(resolve(root, file)).isFile()) continue;
     sources.set(file, readFileSync(resolve(root, file), 'utf8'));
   }
