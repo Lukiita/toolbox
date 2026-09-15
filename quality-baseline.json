@@ -1,0 +1,99 @@
+{
+  "_readme": "Quality ratchet: these numbers are the worst accepted state. A PR may add code but may not worsen any metric - not even by one unit. Re-freezing is deliberate (`pnpm quality --update-baseline`) and the reason goes in the commit body; this file is versioned precisely so the change shows in the diff.",
+  "_mode": "Every metric here uses \"baseline\" (freeze today's value, only allow improvement) - the mode for a repo with existing debt. A fresh repo may prefer \"floor\" with explicit thresholds; see compare.mts.",
+  "language": "en",
+  "metrics": {
+    "coverage-percent": {
+      "section": "Coverage",
+      "label": "Line coverage",
+      "mode": "baseline",
+      "direction": "higher-is-better",
+      "value": 76.79,
+      "unit": "%",
+      "note": "Covered lines / instrumented lines over the wide slice (vitest.quality.config.ts). Catches dilution; the per-file ratchet catches local regressions."
+    },
+    "uncovered-lines": {
+      "section": "Coverage",
+      "label": "Uncovered lines",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 104,
+      "gate": false,
+      "note": "Informative only - the per-file ratchet (uncoveredByFile) is what fails the build."
+    },
+    "files-with-uncovered-lines": {
+      "section": "Coverage",
+      "label": "Files with uncovered lines",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 7,
+      "gate": false,
+      "note": "Informative only."
+    },
+    "duplication-percent": {
+      "section": "Duplication",
+      "label": "Duplicated lines",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "unit": "%",
+      "note": "jscpd over src/. An agent edits one copy and misses the others - duplication is refactor risk, not aesthetics."
+    },
+    "duplication-fragments": {
+      "section": "Duplication",
+      "label": "Duplicated fragments",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0
+    },
+    "pure-rule-outside-domain": {
+      "section": "Architecture",
+      "label": "Pure rules outside the domain",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "note": "A .ts outside the rule directories WITH a unit test beside it - the signature of a business rule born at the edge. Complements the import-direction lint, which cannot see a rule that never reached domain/."
+    },
+    "circular-dependencies": {
+      "section": "Architecture",
+      "label": "Circular dependencies",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "note": "Strongly connected components in the production import graph (cycles.mts). A cycle means no file in it can be reused or understood alone. At 0, freezing makes cycles forbidden outright."
+    },
+    "files-over-limit": {
+      "section": "Size",
+      "label": "Files over the line limit",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "note": "Production files over quality.lineLimit (size.mts). Big files are where the next agent edit turns into a mess."
+    },
+    "cc-over-limit": {
+      "section": "Complexity",
+      "label": "Functions over the CC limit",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 16,
+      "note": "Functions with cyclomatic complexity above quality.ccLimit (complexity.mts, default 5 per Richards & Ford). Every path is a test someone owes; generative AI accumulates accidental complexity - the ratchet watches the model's laziness."
+    },
+    "explicit-any": {
+      "section": "Types",
+      "label": "Explicit `any`",
+      "mode": "baseline",
+      "direction": "lower-is-better",
+      "value": 0,
+      "note": "AST count of any-keyword nodes in production files (any-count.mts). AGENTS.md bans new `any`; the ratchet lets legacy debt only shrink. Exists because flipping no-explicit-any to 'error' over legacy code breaks the build on day one."
+    }
+  },
+  "uncoveredByFile": {
+    "src/install/link-skills.mts": 1,
+    "src/quality-gate/baseline-store.mts": 25,
+    "src/quality-gate/git.mts": 1,
+    "src/quality-gate/locale.mts": 16,
+    "src/quality-gate/measure.mts": 42,
+    "src/quality-gate/report.mts": 3,
+    "src/quality-gate/run-gate.mts": 16
+  }
+}

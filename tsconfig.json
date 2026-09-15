@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "paths": {
+      "@lukiita/toolbox/config": ["./src/config/index.mts"]
+    }
+  },
+  "include": ["src/**/*.mts", "src/**/*.ts", "toolbox.config.example.ts"]
+}
