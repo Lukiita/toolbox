@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24 # >= 22.18 works; the gate ships built, but a .ts toolbox.config needs type stripping (type stripping)
+          node-version: 24 # >= 22.18 works: the gate ships built, and a .ts toolbox.config needs Node's type stripping
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -41,6 +41,10 @@ jobs:
       # A PR may add code; it may not make any metric worse. Zero model cost -
       # the cheapest layer of the quality control, and it catches what a model
       # review misses out of fatigue.
+      - name: Changed files with logic must have a co-located test
+        if: github.event_name == 'pull_request'
+        run: node node_modules/@lukiita/toolbox/hooks/check-missing-tests.mjs --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}"
+
       - name: Quality ratchet
         run: |
           if [ -n "${{ github.event.pull_request.base.sha }}" ]; then

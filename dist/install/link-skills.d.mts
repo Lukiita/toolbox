@@ -8,10 +8,15 @@ export interface LinkSkillsSummary {
     linked: string[];
     /** Already pointing at the package: nothing done. */
     unchanged: string[];
-    /** A real directory of the project's own with the same name: left alone. */
+    /** The project's own directory or its own symlink with the same name: left alone. */
     kept: string[];
 }
-/** Every folder under `skills/` that has a SKILL.md. */
+/**
+ * Every folder under `skills/` that has a SKILL.md.
+ *
+ * @example
+ *   shippedSkills('/p/node_modules/@lukiita/toolbox') // => ['code-review', 'retro', ...]
+ */
 export declare function shippedSkills(packageDir: string): string[];
 /**
  * Links the shipped skills into the project. Idempotent.

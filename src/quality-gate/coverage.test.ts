@@ -103,7 +103,7 @@ describe('coveragePercent', () => {
           [3, 0],
         ]),
       },
-      identity,
+      { toRelativePath: identity },
     );
     expect(pct).toBe(66.67);
   });
@@ -121,7 +121,7 @@ describe('coveragePercent', () => {
         ]),
         'src/lib/small.ts': entry([[1, 0]]),
       },
-      identity,
+      { toRelativePath: identity },
     );
     expect(pct).toBe(60);
   });
@@ -135,13 +135,13 @@ describe('coveragePercent', () => {
           [2, 0],
         ]),
       },
-      identity,
+      { toRelativePath: identity },
     );
     expect(pct).toBe(100);
   });
 
   it('a repo with no statements counts as 100, not 0', () => {
-    expect(coveragePercent({}, identity)).toBe(100);
+    expect(coveragePercent({}, { toRelativePath: identity })).toBe(100);
   });
 });
 
@@ -171,7 +171,7 @@ describe('uncoveredInTestableFiles', () => {
           [2, 0],
         ]),
       },
-      identity,
+      { toRelativePath: identity },
     );
     expect(result).toEqual([
       { file: 'src/lib/b.ts', lines: [1, 2], percent: 0 },
@@ -188,18 +188,38 @@ describe('uncoveredInTestableFiles', () => {
           [3, 0],
         ]),
       },
-      identity,
+      { toRelativePath: identity },
     );
     expect(result[0].percent).toBe(66.67);
   });
 
   it('drops non-testable files even when the map brings them', () => {
-    const result = uncoveredInTestableFiles({ 'src/components/x.tsx': entry([[1, 0]]) }, identity);
+    const result = uncoveredInTestableFiles(
+      { 'src/components/x.tsx': entry([[1, 0]]) },
+      { toRelativePath: identity },
+    );
     expect(result).toEqual([]);
   });
 
   it('omits fully covered files', () => {
-    const result = uncoveredInTestableFiles({ 'src/lib/a.ts': entry([[1, 2]]) }, identity);
+    const result = uncoveredInTestableFiles(
+      { 'src/lib/a.ts': entry([[1, 2]]) },
+      { toRelativePath: identity },
+    );
     expect(result).toEqual([]);
+  });
+});
+
+describe('config-driven source window (ADR-0001)', () => {
+  it('a monorepo window makes its files testable', () => {
+    expect(isTestableFile('apps/api/src/a.ts', /^apps\/[^/]+\/src\//)).toBe(true);
+    expect(isTestableFile('apps/api/src/a.ts')).toBe(false);
+  });
+});
+
+describe('the production window is shared with size.mts', () => {
+  it('a .mts module is testable, so a repo made of them is not frozen at 100%', () => {
+    expect(isTestableFile('src/quality-gate/measure.mts')).toBe(true);
+    expect(isTestableFile('src/quality-gate/measure.test.mts')).toBe(false);
   });
 });

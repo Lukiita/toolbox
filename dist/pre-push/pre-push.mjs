@@ -24,6 +24,9 @@ export const EMPTY_SHA = '0000000000000000000000000000000000000000';
 /**
  * Parses git's stdin. A push that changes no code would measure the same
  * number as before - a documentation push does not pay for the gate.
+ *
+ * @example
+ *   parsePushedRefs('refs/heads/x abc refs/heads/x 000…0\n') // => [{ localSha: 'abc', remoteSha: '000…0' }]
  */
 export function parsePushedRefs(stdin) {
     return stdin
@@ -47,6 +50,12 @@ function refTouchesCode(ref, ports, baseTip) {
         return true;
     return ports.touchesCode(before, ref.localSha);
 }
+/**
+ * Whether any pushed ref changes code - the gate runs only then.
+ *
+ * @example
+ *   pushesCode(parsePushedRefs(stdin), ports) // => false for a docs-only push
+ */
 export function pushesCode(refs, ports) {
     const baseTip = ports.baseTip();
     return refs.some((ref) => refTouchesCode(ref, ports, baseTip));

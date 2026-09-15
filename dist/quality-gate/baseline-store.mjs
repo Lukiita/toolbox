@@ -158,6 +158,13 @@ export function refreezeBaseline(base, current, byFile) {
     const uncoveredByFile = Object.fromEntries(Object.entries(byFile).sort(([a], [b]) => a.localeCompare(b)));
     return { ...base, metrics, uncoveredByFile };
 }
+/**
+ * Writes the baseline json, two-space indented with a final newline - the
+ * shape `--update-baseline` diffs cleanly in a pull request.
+ *
+ * @example
+ *   writeBaseline(root, refreezeBaseline(readOwnBaseline(root), current, byFile))
+ */
 export function writeBaseline(root, baseline) {
     writeFileSync(resolve(root, BASELINE_FILE), `${JSON.stringify(baseline, null, 2)}\n`);
 }

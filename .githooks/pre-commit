@@ -1,0 +1,12 @@
+#!/bin/sh
+# Keeps the committed dist/ honest: when a source file is staged, rebuild and
+# stage dist/ with it, so no commit can carry src/ and dist/ out of sync.
+# (`pnpm build:check` is the RELEASE gate: it demands dist/ == HEAD before a
+# tag. In a commit that changes src/, dist/ is meant to differ from HEAD.)
+# Wired by install.sh (`git config core.hooksPath .githooks`) - not by husky,
+# because any lifecycle script in package.json would run (and be refused)
+# when the package is installed as a git dependency (ADR-0001).
+if git diff --cached --name-only | grep -qE '^src/.*\.mts$'; then
+  pnpm build || exit 1
+  git add dist
+fi

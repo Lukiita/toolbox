@@ -9,7 +9,12 @@
 // the owner decides.
 import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, symlinkSync, unlinkSync, } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-/** Every folder under `skills/` that has a SKILL.md. */
+/**
+ * Every folder under `skills/` that has a SKILL.md.
+ *
+ * @example
+ *   shippedSkills('/p/node_modules/@lukiita/toolbox') // => ['code-review', 'retro', ...]
+ */
 export function shippedSkills(packageDir) {
     const dir = join(packageDir, 'skills');
     if (!existsSync(dir))
@@ -19,15 +24,34 @@ export function shippedSkills(packageDir) {
         .map((e) => e.name)
         .sort();
 }
-function linkOne(name, target, dest, summary) {
+// A link the project made itself - pointing anywhere but into the package -
+// is the project's pin, kept like a real directory would be. Only our own
+// links (into the package) and dangling ones are replaced.
+function isForeignLink(dest, packageDir) {
+    const target = resolve(dest, '..', readlinkSync(dest));
+    return existsSync(target) && !target.startsWith(packageDir);
+}
+function isPresent(dest) {
+    return existsSync(dest) || isSymlink(dest);
+}
+function destState(dest, packageDir, wanted) {
+    if (!isPresent(dest))
+        return 'absent';
+    if (!isSymlink(dest))
+        return 'kept';
+    if (isForeignLink(dest, packageDir))
+        return 'kept';
+    return readlinkSync(dest) === wanted ? 'unchanged' : 'replace';
+}
+function linkOne(name, target, dest, packageDir, summary) {
     const wanted = relative(resolve(dest, '..'), target);
-    if (existsSync(dest) || isSymlink(dest)) {
-        if (!isSymlink(dest))
-            return void summary.kept.push(name);
-        if (readlinkSync(dest) === wanted)
-            return void summary.unchanged.push(name);
+    const state = destState(dest, packageDir, wanted);
+    if (state === 'kept')
+        return void summary.kept.push(name);
+    if (state === 'unchanged')
+        return void summary.unchanged.push(name);
+    if (state === 'replace')
         unlinkSync(dest);
-    }
     // Relative, so the project can move and a container sees the same tree.
     symlinkSync(wanted, dest, 'dir');
     summary.linked.push(name);
@@ -52,7 +76,7 @@ export function linkSkills({ packageDir, projectRoot }) {
     mkdirSync(skillsDir, { recursive: true });
     const summary = { linked: [], unchanged: [], kept: [] };
     for (const name of shippedSkills(packageDir)) {
-        linkOne(name, join(packageDir, 'skills', name), join(skillsDir, name), summary);
+        linkOne(name, join(packageDir, 'skills', name), join(skillsDir, name), packageDir, summary);
     }
     return summary;
 }

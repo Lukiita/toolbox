@@ -1,6 +1,6 @@
 # toolbox
 
-My personal development environment, versioned. This repo is the **single source**: the machine consumes it through symlinks, and any drift shows up in `git status` instead of hiding in copies.
+My personal development environment, versioned. This repo is the **single source**: the machine consumes it through symlinks, and projects consume it as a **versioned package** (`@lukiita/toolbox`, ADR-0001) — any drift shows up in `git status` or in a version number, never hidden in copies.
 
 The pattern came from Project A's `.agents/skills/`, which learned the hard way that copy-per-provider drifts — when the skills were rescued into this repo, the only difference between the `tlc-spec-driven` copies in project-b and Project A was the script path prefix.
 
@@ -28,6 +28,33 @@ Idempotent: running it again only confirms the state. What it links:
 
 Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 
+## Using it in a project (the library)
+
+Projects used to copy `skills/`, `hooks/` and `quality-gate/` and adapt them by hand; the copies drifted (issues #1 and #2 were fixes born in a copy). Now a project depends on the package and configures it:
+
+```bash
+pnpm add -D github:Lukiita/toolbox#v1.0.0     # a tag is a version (v1.0.0 = the first release); no registry, no build step
+pnpm exec toolbox install                      # links every shipped skill into .agents/skills/
+cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
+```
+
+- **Skills** arrive as symlinks in `.agents/skills/` (Claude, Codex and Cursor all read it); the project's own skills in that folder are never touched. Add `"postinstall": "toolbox install"` to the project's scripts: `pnpm install` on a fresh clone links them (verified with pnpm 12); `pnpm add` does not run the project's own postinstall, hence the explicit `pnpm exec toolbox install` once after adding.
+- **Quality ratchet**: `"quality": "toolbox quality"` in the scripts; the rest of the setup (baseline, CI, pre-push hook) is in `templates/quality-gate/README.md`.
+- **Hooks**: wired from `node_modules/@lukiita/toolbox/hooks/` — see `hooks/README.md`.
+- **Config**: one file, `toolbox.config.ts`, holds every value a project used to edit inside a copied file (source window, feature slot, limits, alias prefixes, base branch, protected branches). Empty config = canonical setup. The code is never edited in a project.
+
+Updating a project is `pnpm update @lukiita/toolbox`. Publishing is a build and a tag: `pnpm build:check && git tag v1.1.0 && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move.
+
+Migration of an existing copy, one project at a time: `./toolbox-diff.sh <project>` lists the adaptations — each one becomes a config field — then delete `scripts/quality/`, `tools/agent-hooks/` and the toolbox-owned skills, and run `pnpm quality --update-baseline` once: the numbers must not move (a moved number means the config is wrong, not the baseline). Two known exceptions, both in the direction of measuring more: `duplication-*` when the project's jscpd version differs from the package's pinned one, and `cc-over-limit`/`files-over-limit`/`explicit-any` for a copy older than project-a's 2026-09-02 collectors, which the package now carries.
+
+## Developing the toolbox itself
+
+```bash
+pnpm install && pnpm test && pnpm typecheck && pnpm build && pnpm quality
+```
+
+`src/` is TypeScript (`.mts`, tests beside each module), built to `dist/` — and **`dist/` is committed**. Two facts force that: Node refuses to strip types from files under `node_modules`, so `.mts` cannot ship as is; and pnpm 12 refuses a git dependency's build script unless the consumer allowlists it with the commit sha, which breaks on every bump. So nothing runs on install: the tag carries the build. `.githooks/pre-commit` rebuilds and stages `dist/` whenever a source file is staged (`./install.sh` sets `core.hooksPath`), so no commit carries the two out of sync; `pnpm build:check` is the release gate — it fails unless `dist/` equals HEAD, run it before a tag. `hooks/` is plain `.mjs`. `skills/` and `templates/` ship as files.
+
 ## Structure
 
 ```
@@ -36,11 +63,13 @@ agents/       AGENTS.md — global instructions for every agent (single source)
               preferencias-conta.md — source for the text pasted into claude.ai's web settings
 claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
-hooks/        provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
-quality-gate/ ratchet engine template (frozen baseline, 10 metrics, per-file coverage) — imported per project
+hooks/        provider-neutral agent guards (secrets/push deny + missing-tests warn) — shipped in the package, config-driven
+src/          the package's TypeScript: config/, quality-gate/ (the ratchet, 10 metrics), pre-push/, install/, cli/
+templates/    quality-gate examples a project copies once (baseline, CI, vitest config, pre-push one-liner, dependency-cruiser)
+docs/adr/     architectural decisions (ADR-0001: the toolbox as a library)
 katas/        architecture-kata practice output — one folder per kata
 install.sh
-toolbox-diff.sh   drift report for a project's copies (skills, hooks, quality-gate, archon)
+toolbox-diff.sh   drift report for a project's copies — the migration checklist while copies still exist
 system-mind-export.sh  flattens the study vault into one file for the claude.ai project Context
 ```
 

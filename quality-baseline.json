@@ -8,7 +8,7 @@
       "label": "Line coverage",
       "mode": "baseline",
       "direction": "higher-is-better",
-      "value": 76.79,
+      "value": 95.3,
       "unit": "%",
       "note": "Covered lines / instrumented lines over the wide slice (vitest.quality.config.ts). Catches dilution; the per-file ratchet catches local regressions."
     },
@@ -17,7 +17,7 @@
       "label": "Uncovered lines",
       "mode": "baseline",
       "direction": "lower-is-better",
-      "value": 104,
+      "value": 22,
       "gate": false,
       "note": "Informative only - the per-file ratchet (uncoveredByFile) is what fails the build."
     },
@@ -26,7 +26,7 @@
       "label": "Files with uncovered lines",
       "mode": "baseline",
       "direction": "lower-is-better",
-      "value": 7,
+      "value": 4,
       "gate": false,
       "note": "Informative only."
     },
@@ -88,12 +88,9 @@
     }
   },
   "uncoveredByFile": {
-    "src/install/link-skills.mts": 1,
-    "src/quality-gate/baseline-store.mts": 25,
-    "src/quality-gate/git.mts": 1,
-    "src/quality-gate/locale.mts": 16,
-    "src/quality-gate/measure.mts": 42,
-    "src/quality-gate/report.mts": 3,
-    "src/quality-gate/run-gate.mts": 16
+    "src/quality-gate/baseline-store.mts": 5,
+    "src/quality-gate/locale.mts": 9,
+    "src/quality-gate/measure.mts": 3,
+    "src/quality-gate/run-gate.mts": 5
   }
 }

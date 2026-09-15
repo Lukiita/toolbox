@@ -6,8 +6,7 @@
 // The AGENTS.md target is files under 500 lines (ideally 200-300); the limit
 // here is the enforcement floor for that rule.
 
-/** Above this, the file enters the count. */
-export const LINE_LIMIT = 400;
+import { DEFAULT_QUALITY } from '../config/toolbox-config.mts';
 
 export interface MeasuredFile {
   file: string;
@@ -25,26 +24,53 @@ export function countLines(content: string): number {
 }
 
 /**
- * Production code under `src/` only: a big test file is normal (a case
+ * Production code inside the source window only (`^src/` by default,
+ * `quality.sourceWindow` in the config): a big test file is normal (a case
  * table), and charging for it would push in the wrong direction - cutting
  * test cases.
  */
-export function isSizedFile(relPath: string): boolean {
-  return (
-    relPath.startsWith('src/') &&
-    (relPath.endsWith('.ts') || relPath.endsWith('.tsx')) &&
-    !relPath.endsWith('.test.ts') &&
-    !relPath.endsWith('.test.tsx') &&
-    !relPath.endsWith('.d.ts')
-  );
+const PRODUCTION_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
+const EXCLUDED_SUFFIXES = [
+  '.test.ts',
+  '.test.tsx',
+  '.test.mts',
+  '.test.cts',
+  '.d.ts',
+  '.d.mts',
+  '.d.cts',
+];
+
+/**
+ * `.mts` and `.cts` are here because they were NOT, and a production module written in one was
+ * invisible to every metric at once: 534 lines at cyclomatic complexity 60, `any`-typed and
+ * uncovered, moved not a single number (review 2026-09-02, round 8, demonstrated). TypeScript
+ * compiles them like any other module; the gate has to see them like any other module.
+ */
+export function isSizedFile(
+  relPath: string,
+  sourceWindow: RegExp = DEFAULT_QUALITY.sourceWindow,
+): boolean {
+  if (!sourceWindow.test(relPath)) return false;
+  if (EXCLUDED_SUFFIXES.some((suffix) => relPath.endsWith(suffix))) return false;
+  return PRODUCTION_EXTENSIONS.some((extension) => relPath.endsWith(extension));
+}
+
+export interface SizeOptions {
+  /** `quality.lineLimit`, default 400. */
+  limit?: number;
+  /** `quality.sourceWindow`, default `^src/`. */
+  sourceWindow?: RegExp;
 }
 
 /** The ones past the limit, largest first. */
 export function oversizedFiles(
   measured: readonly MeasuredFile[],
-  limit: number = LINE_LIMIT,
+  {
+    limit = DEFAULT_QUALITY.lineLimit,
+    sourceWindow = DEFAULT_QUALITY.sourceWindow,
+  }: SizeOptions = {},
 ): MeasuredFile[] {
   return measured
-    .filter((m) => isSizedFile(m.file) && m.lines > limit)
+    .filter((m) => isSizedFile(m.file, sourceWindow) && m.lines > limit)
     .sort((a, b) => b.lines - a.lines || a.file.localeCompare(b.file));
 }

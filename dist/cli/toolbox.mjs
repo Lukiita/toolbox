@@ -40,8 +40,10 @@ function quality(root, config, args) {
         return 0;
     }
     console.log(result.report);
+    // Relative to the cwd, as any CLI: the CI step that reads the file runs
+    // where it wrote it, and a monorepo package may run the gate from its own dir.
     if (options.out)
-        writeReport(resolve(root, options.out), result.report ?? '');
+        writeReport(resolve(process.cwd(), options.out), result.report ?? '');
     return result.status === 'failed' ? 1 : 0;
 }
 function writeReport(path, report) {
@@ -63,7 +65,7 @@ function prePushPorts(root, config) {
         baselineChanged: (from, to) => git.baselineChanged(root, from, to),
         gate: (baselineFrom) => {
             const out = join(reports, baselineFrom ? 'quality-pre-push.md' : 'quality-pre-push-own.md');
-            const result = runQualityGate({ root, config: config.quality, warn: () => undefined }, { updateBaseline: false, skipTests: config.quality.prePushSkipTests, baselineFrom });
+            const result = runQualityGate({ root, config: config.quality, warn: console.error }, { updateBaseline: false, skipTests: config.quality.prePushSkipTests, baselineFrom });
             writeReport(out, result.report ?? '');
             return { passed: result.status === 'passed', failures: result.failures, reportPath: out };
         },
@@ -110,4 +112,13 @@ async function main(argv) {
     console.error(`unknown command: ${command ?? '(none)'}\n${USAGE}`);
     return 2;
 }
-process.exitCode = await main(process.argv.slice(2));
+// A setup error (bad config, missing baseline or coverage json, jscpd not
+// found) is not "the ratchet failed": it exits 2 with its own message, so a
+// CI log never reads a config typo as a quality regression.
+try {
+    process.exitCode = await main(process.argv.slice(2));
+}
+catch (e) {
+    console.error(`toolbox: ${e instanceof Error ? e.message : String(e)}`);
+    process.exitCode = 2;
+}

@@ -53,6 +53,12 @@ link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 link "$REPO_DIR/katas" "$HOME/.agents/katas"
 link "$REPO_DIR/claude/agents" "$HOME/.claude/agents"
 
+# This repo's own git hooks (pre-commit keeps the committed dist/ in sync with
+# src/). Plain core.hooksPath, not husky: a lifecycle script in package.json
+# would run when the package is installed as a git dependency.
+git -C "$REPO_DIR" config core.hooksPath .githooks
+echo "hooks:  core.hooksPath -> .githooks"
+
 # Codex discovers skills in ~/.codex/skills/, beside its own .system/ - so the
 # directory stays real and each skill gets its own link. A skill removed from
 # the repo would leave a dangling link behind, which Codex lists as broken.

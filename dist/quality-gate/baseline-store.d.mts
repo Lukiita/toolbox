@@ -27,4 +27,11 @@ export declare function baselineChangedSince(root: string, origin: string): bool
  * longer exists. Re-freezing is already the deliberate, versioned action.
  */
 export declare function refreezeBaseline(base: Baseline, current: Readonly<Record<string, number>>, byFile: Readonly<Record<string, number>>): Baseline;
+/**
+ * Writes the baseline json, two-space indented with a final newline - the
+ * shape `--update-baseline` diffs cleanly in a pull request.
+ *
+ * @example
+ *   writeBaseline(root, refreezeBaseline(readOwnBaseline(root), current, byFile))
+ */
 export declare function writeBaseline(root: string, baseline: Baseline): void;

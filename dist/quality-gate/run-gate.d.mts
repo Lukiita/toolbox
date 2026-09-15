@@ -16,7 +16,9 @@ export interface GateResult {
     report?: string;
 }
 /**
- * Runs the ratchet once. Never exits the process; the caller maps the status.
+ * Runs the ratchet once. Never exits the process; the caller maps the status
+ * and writes `--out` itself - so an unwritable path never loses the report
+ * from the log (found in review).
  *
  * @example
  *   const result = runQualityGate({ root, config, warn: console.error }, { skipTests: true, updateBaseline: false });

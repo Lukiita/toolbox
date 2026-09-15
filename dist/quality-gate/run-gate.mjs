@@ -16,7 +16,8 @@ import { stringsFor } from "./locale.mjs";
 import { measureRepository } from "./measure.mjs";
 import { PLACE_RULE_HOMES } from "./place-rule.mjs";
 import { buildReport } from "./report.mjs";
-function reportDetails(m, config, t) {
+const sample = (items, max) => items.slice(0, max);
+function architectureDetails(m, t) {
     return [
         {
             title: t.pureRulesTitle(m.displacedRules.length, PLACE_RULE_HOMES),
@@ -24,48 +25,47 @@ function reportDetails(m, config, t) {
         },
         {
             title: t.cyclesTitle(m.cycles.length),
-            items: m.cycles.slice(0, 10).map((c) => [...c, c[0]].map((f) => `\`${f}\``).join(' → ')),
+            items: sample(m.cycles, 10).map((c) => [...c, c[0]].map((f) => `\`${f}\``).join(' → ')),
         },
+    ];
+}
+function sizeAndTypeDetails(m, config, t) {
+    return [
         {
             title: t.filesOverLimitTitle(config.lineLimit, m.oversized.length),
             items: m.oversized.map((g) => `\`${g.file}\` — ${g.lines}`),
         },
         {
             title: t.overComplexTitle(config.ccLimit, m.complexFns.length),
-            items: m.complexFns.slice(0, 20).map((f) => `\`${f.file}:${f.line}\` ${f.name} — CC ${f.cc}`),
+            items: sample(m.complexFns, 20).map((f) => `\`${f.file}:${f.line}\` ${f.name} — CC ${f.cc}`),
         },
         {
             title: t.explicitAnyTitle(m.anys.length),
-            items: m.anys.slice(0, 20).map((a) => `\`${a.file}\` — ${a.count}`),
+            items: sample(m.anys, 20).map((a) => `\`${a.file}\` — ${a.count}`),
         },
+    ];
+}
+function coverageDetails(m, t) {
+    return [
         {
             title: t.uncoveredFilesTitle(m.uncovered.length),
-            items: m.uncovered
-                .slice(0, 20)
-                .map((d) => t.uncoveredFileItem(d.file, d.lines.length, d.percent)),
+            items: sample(m.uncovered, 20).map((d) => t.uncoveredFileItem(d.file, d.lines.length, d.percent)),
         },
+    ];
+}
+function reportDetails(m, config, t) {
+    return [
+        ...architectureDetails(m, t),
+        ...sizeAndTypeDetails(m, config, t),
+        ...coverageDetails(m, t),
     ];
 }
 function refreeze(env, m) {
     writeBaseline(env.root, refreezeBaseline(readOwnBaseline(env.root), m.current, m.byFile));
     return { status: 'refrozen', failures: [], current: m.current };
 }
-/**
- * Runs the ratchet once. Never exits the process; the caller maps the status.
- *
- * @example
- *   const result = runQualityGate({ root, config, warn: console.error }, { skipTests: true, updateBaseline: false });
- *   if (result.status === 'failed') process.exitCode = 1;
- */
-export function runQualityGate(env, options) {
-    const measurement = measureRepository({
-        root: env.root,
-        config: env.config,
-        skipTests: options.skipTests,
-    });
-    if (options.updateBaseline)
-        return refreeze(env, measurement);
-    const { base, origin } = readComparisonBaseline(env.root, options.baselineFrom, env.warn);
+function compareAndReport(env, measurement, baselineFrom) {
+    const { base, origin } = readComparisonBaseline(env.root, baselineFrom, env.warn);
     const t = stringsFor(base.language);
     const failures = [
         ...compareMetrics(base, measurement.current, t),
@@ -80,12 +80,25 @@ export function runQualityGate(env, options) {
         baselineOrigin: origin,
         baselineChanged: origin ? baselineChangedSince(env.root, origin) : false,
     }, t);
-    // `--out` is the caller's: the CLI prints first and writes after, so an
-    // unwritable path never loses the report from the log (found in review).
-    return {
-        status: failures.length > 0 ? 'failed' : 'passed',
-        failures,
-        current: measurement.current,
-        report,
-    };
+    const status = failures.length > 0 ? 'failed' : 'passed';
+    return { status, failures, current: measurement.current, report };
+}
+/**
+ * Runs the ratchet once. Never exits the process; the caller maps the status
+ * and writes `--out` itself - so an unwritable path never loses the report
+ * from the log (found in review).
+ *
+ * @example
+ *   const result = runQualityGate({ root, config, warn: console.error }, { skipTests: true, updateBaseline: false });
+ *   if (result.status === 'failed') process.exitCode = 1;
+ */
+export function runQualityGate(env, options) {
+    const measurement = measureRepository({
+        root: env.root,
+        config: env.config,
+        skipTests: options.skipTests,
+    });
+    if (options.updateBaseline)
+        return refreeze(env, measurement);
+    return compareAndReport(env, measurement, options.baselineFrom);
 }

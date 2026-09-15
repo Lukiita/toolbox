@@ -48,15 +48,21 @@ export const DEFAULT_HOOKS = {
  */
 export function resolveToolboxConfig(partial = {}) {
     const quality = { ...DEFAULT_QUALITY, ...partial.quality };
-    return {
-        quality,
-        hooks: {
-            ...DEFAULT_HOOKS,
-            // Follows the project's slot unless the project pins its own list.
-            watchedPatterns: watchedByDefault(quality.featureSlot),
-            ...partial.hooks,
-        },
+    const hooks = {
+        ...DEFAULT_HOOKS,
+        // Follows the project's slot unless the project pins its own list.
+        watchedPatterns: watchedByDefault(quality.featureSlot),
+        ...partial.hooks,
     };
+    return {
+        quality: { ...quality, sourceWindow: stateless(quality.sourceWindow) },
+        hooks: { ...hooks, watchedPatterns: hooks.watchedPatterns.map(stateless) },
+    };
+}
+// A `/g` or `/y` flag makes `.test()` remember `lastIndex` between calls, so
+// a pattern from a project config would silently skip every other file.
+function stateless(pattern) {
+    return new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, ''));
 }
 /**
  * Identity with a type: lets `toolbox.config.ts` get autocomplete without

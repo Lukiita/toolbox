@@ -11,6 +11,9 @@
 // when someone adds a rule at the edge and down when someone moves the rule
 // into the lib, which is exactly the desired gradient.
 
+import { DEFAULT_QUALITY } from '../config/toolbox-config.mts';
+import { isSizedFile } from './size.mts';
+
 /** The slice of `coverage-final.json` (istanbul format) that matters here. */
 export interface CoverageEntry {
   statementMap: Record<string, { start: { line: number }; end: { line: number } }>;
@@ -53,14 +56,24 @@ export function lineTotals(entry: CoverageEntry): {
   return { total: instrumented.size, covered: covered.size };
 }
 
-/** `true` for the files this repo can cover with a unit test. */
-export function isTestableFile(relPath: string): boolean {
-  return (
-    relPath.startsWith('src/') &&
-    relPath.endsWith('.ts') &&
-    !relPath.endsWith('.test.ts') &&
-    !relPath.endsWith('.d.ts')
-  );
+/**
+ * `true` for the files this repo can cover with a unit test: the production
+ * window `size.mts` defines (so `.mts`/`.cts` count here too - a module the
+ * size metric sees and the coverage metric does not would freeze coverage at
+ * 100% on a repo made of them, found in review), minus `.tsx`.
+ */
+export function isTestableFile(
+  relPath: string,
+  sourceWindow: RegExp = DEFAULT_QUALITY.sourceWindow,
+): boolean {
+  return isSizedFile(relPath, sourceWindow) && !relPath.endsWith('.tsx');
+}
+
+export interface CoverageScope {
+  /** Turns the absolute path istanbul records into the repo-relative one. */
+  toRelativePath: (absolute: string) => string;
+  /** `quality.sourceWindow`, default `^src/`. */
+  sourceWindow?: RegExp;
 }
 
 export interface UncoveredByFile {
@@ -86,12 +99,12 @@ function percent(covered: number, total: number): number {
  */
 export function coveragePercent(
   map: CoverageMap,
-  toRelativePath: (absolute: string) => string,
+  { toRelativePath, sourceWindow = DEFAULT_QUALITY.sourceWindow }: CoverageScope,
 ): number {
   let total = 0;
   let covered = 0;
   for (const [absolute, entry] of Object.entries(map)) {
-    if (!isTestableFile(toRelativePath(absolute))) continue;
+    if (!isTestableFile(toRelativePath(absolute), sourceWindow)) continue;
     const totals = lineTotals(entry);
     total += totals.total;
     covered += totals.covered;
@@ -105,12 +118,12 @@ export function coveragePercent(
  */
 export function uncoveredInTestableFiles(
   map: CoverageMap,
-  toRelativePath: (absolute: string) => string,
+  { toRelativePath, sourceWindow = DEFAULT_QUALITY.sourceWindow }: CoverageScope,
 ): UncoveredByFile[] {
   const out: UncoveredByFile[] = [];
   for (const [absolute, entry] of Object.entries(map)) {
     const file = toRelativePath(absolute);
-    if (!isTestableFile(file)) continue;
+    if (!isTestableFile(file, sourceWindow)) continue;
     const lines = uncoveredLines(entry);
     if (lines.length === 0) continue;
     const totals = lineTotals(entry);

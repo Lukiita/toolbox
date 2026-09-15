@@ -146,6 +146,36 @@ describe('pureRuleFilesOutsideDomain', () => {
     expect(pureRuleFilesOutsideDomain(files)).toEqual([]);
   });
 
+  // ADR-0001: the slot and the window come from the project's config. This is
+  // the project-d shape - a monorepo with no `src/` at the root.
+  describe('with a monorepo slot from the config', () => {
+    const monorepo = {
+      sourceWindow: /^apps\/[^/]+\/src\//,
+      featureSlot: '^apps/[^/]+/src/(?:([^/]+)/)?',
+    };
+
+    it('accepts a tested gateway inside a feature of the monorepo', () => {
+      const files = [
+        'apps/backend/src/santander/domain/pagamento.ts',
+        'apps/backend/src/santander/infra/gateways/pagamento-santander-gateway.ts',
+        'apps/backend/src/santander/infra/gateways/pagamento-santander-gateway.test.ts',
+      ];
+      expect(pureRuleFilesOutsideDomain(files, monorepo)).toEqual([]);
+    });
+
+    it('still flags the grab-bag, and ignores files outside the window', () => {
+      const files = [
+        'apps/backend/src/utils/functions/calcular-juros.ts',
+        'apps/backend/src/utils/functions/calcular-juros.test.ts',
+        'src/utils/money.ts',
+        'src/utils/money.test.ts',
+      ];
+      expect(pureRuleFilesOutsideDomain(files, monorepo)).toEqual([
+        'apps/backend/src/utils/functions/calcular-juros.ts',
+      ]);
+    });
+  });
+
   it('flags a rule inside a feature folder but outside its layer dirs', () => {
     const files = [
       'src/processo-aduaneiro/calculo-emolumentos.ts',

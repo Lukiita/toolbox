@@ -16,18 +16,21 @@ import { dirname, posix } from 'node:path';
 
 import ts from 'typescript';
 
-/**
- * Non-relative prefixes resolved as internal (adapt per project). The source
- * project aliases `@/` to the repo root in its bundler and test configs.
- */
-export const ALIAS_PREFIXES: Record<string, string> = { '@/': '' };
+import { DEFAULT_QUALITY } from '../config/toolbox-config.mts';
 
-function specifierCandidates(spec: string, fromFile: string): string[] | undefined {
+// Non-relative prefixes resolved as internal come from `quality.aliasPrefixes`
+// (default `@/` -> repo root, what the source project's bundler and test
+// configs alias).
+function specifierCandidates(
+  spec: string,
+  fromFile: string,
+  aliasPrefixes: Readonly<Record<string, string>>,
+): string[] | undefined {
   let resolved: string | undefined;
   if (spec.startsWith('./') || spec.startsWith('../')) {
     resolved = posix.normalize(posix.join(dirname(fromFile), spec));
   } else {
-    for (const [prefix, target] of Object.entries(ALIAS_PREFIXES)) {
+    for (const [prefix, target] of Object.entries(aliasPrefixes)) {
       if (spec.startsWith(prefix)) {
         resolved = posix.normalize(target + spec.slice(prefix.length));
         break;
@@ -71,12 +74,15 @@ function importSpecifiers(relPath: string, source: string): string[] {
 }
 
 /** file → internal files it imports. Only edges between known files enter. */
-export function importGraph(sources: ReadonlyMap<string, string>): Map<string, string[]> {
+export function importGraph(
+  sources: ReadonlyMap<string, string>,
+  aliasPrefixes: Readonly<Record<string, string>> = DEFAULT_QUALITY.aliasPrefixes,
+): Map<string, string[]> {
   const graph = new Map<string, string[]>();
   for (const [file, source] of sources) {
     const edges = new Set<string>();
     for (const spec of importSpecifiers(file, source)) {
-      const candidates = specifierCandidates(spec, file);
+      const candidates = specifierCandidates(spec, file, aliasPrefixes);
       if (!candidates) continue;
       const hit = candidates.find((c) => sources.has(c));
       if (hit && hit !== file) edges.add(hit);

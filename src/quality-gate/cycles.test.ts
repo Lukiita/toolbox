@@ -98,3 +98,14 @@ describe('circularDependencies', () => {
     ]);
   });
 });
+
+describe('config-driven alias prefixes (ADR-0001)', () => {
+  it('resolves a project alias the default does not know, and ignores it by default', () => {
+    const sources = new Map([
+      ['app/a.ts', "import './b.ts'; import '~/a';"],
+      ['app/b.ts', "import '~/a';"],
+    ]);
+    expect(importGraph(sources, { '~/': 'app/' }).get('app/b.ts')).toEqual(['app/a.ts']);
+    expect(importGraph(sources).get('app/b.ts')).toEqual([]);
+  });
+});

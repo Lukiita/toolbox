@@ -12,46 +12,21 @@
  * be averaged away. (The quality ratchet's per-file map closes the same hole from the
  * coverage side; this one fires earlier — at Stop and at the PR — and needs no test run.)
  *
- * Usage in CI:  node tools/agent-hooks/check-missing-tests.mjs --base <sha> --head <sha>
+ * Usage in CI:  node node_modules/@lukiita/toolbox/hooks/check-missing-tests.mjs --base <sha> --head <sha>
  * With no arguments, compares the working tree against HEAD.
+ *
+ * What it watches comes from the project's `toolbox.config.ts` (`hooks.watchedPatterns`,
+ * `hooks.exemptSuffixes`); with no config file, the canonical defaults apply.
  *
  * Exits 1 when something is missing, 0 otherwise.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-// The repo root comes from git, not from this file's position, so the hook works from
-// whatever directory a project copies it into.
-function repoRoot() {
-  try {
-    return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf-8' }).trim();
-  } catch {
-    return process.cwd();
-  }
-}
+import { hooksConfigOrDefaults, isEntrypoint, repoRoot } from './hook-context.mjs';
+
 const ROOT = repoRoot();
-
-/**
- * Only the layers AGENTS.md requires unit tests for — the same window as the quality
- * ratchet's RULE_PATTERNS: the canonical package-by-feature layout
- * (`src/<feature>/domain/`) and the flat package-by-layer one (`src/domain/`).
- * Edges (components, wiring) are deliberately excluded: they hold no business rules by
- * policy, and watching them would fail every pull request that touches a screen.
- */
-const WATCHED_PATTERNS = [/^src\/(?:[^/]+\/)?domain\//, /^src\/(?:[^/]+\/)?application\//];
-
-/** Artefacts with no behaviour of their own that could regress. */
-const EXEMPT_SUFFIXES = [
-  '.test.ts',
-  '.d.ts',
-  '.types.ts',
-  '.type.ts',
-  '.config.ts',
-  '.constants.ts',
-  '.fixtures.ts',
-];
 
 /**
  * Without a branch there is no alternate path to regress: a value object that only
@@ -85,14 +60,16 @@ function changedFiles({ base, head } = {}) {
       ? git(['diff', '--name-only', '--diff-filter=ACMR', base, head, '--'])
       : `${git(['diff', '--name-only', 'HEAD', '--'])}\n${git(['ls-files', '--others', '--exclude-standard'])}`;
 
+  // `.mts`/`.cts` are production modules too; the ratchet's size window counts
+  // them, so the test rule must see them as well (review, round 2).
   return [...new Set(output.split('\n'))]
     .map((line) => line.trim())
-    .filter((line) => line.endsWith('.ts'));
+    .filter((line) => /\.(ts|mts|cts)$/.test(line));
 }
 
-function isWatched(file) {
-  if (!WATCHED_PATTERNS.some((pattern) => pattern.test(file))) return false;
-  if (EXEMPT_SUFFIXES.some((suffix) => file.endsWith(suffix))) return false;
+function isWatched(file, { watchedPatterns, exemptSuffixes }) {
+  if (!watchedPatterns.some((pattern) => pattern.test(file))) return false;
+  if (exemptSuffixes.some((suffix) => file.endsWith(suffix))) return false;
   return path.basename(file) !== 'index.ts';
 }
 
@@ -108,7 +85,7 @@ function hasBranching(absolute) {
 function missingTest(file) {
   const absolute = path.join(ROOT, file);
   if (!existsSync(absolute)) return false;
-  if (existsSync(absolute.replace(/\.ts$/, '.test.ts'))) return false;
+  if (existsSync(absolute.replace(/\.(ts|mts|cts)$/, '.test.$1'))) return false;
   return hasBranching(absolute);
 }
 
@@ -116,20 +93,22 @@ function missingTest(file) {
  * Lists changed files that require a test and do not have one.
  *
  * @param {{base?: string, head?: string}} range Explicit comparison; omit to use the working tree.
- * @returns {string[]} Paths relative to the repository root.
+ * @param {{watchedPatterns: RegExp[], exemptSuffixes: string[]}} [config] Omit to read toolbox.config.
+ * @returns {Promise<string[]>} Paths relative to the repository root.
  */
-export function listFilesMissingTests(range = {}) {
-  return changedFiles(range).filter((file) => isWatched(file) && missingTest(file));
+export async function listFilesMissingTests(range = {}, config) {
+  const resolved = config ?? (await hooksConfigOrDefaults());
+  return changedFiles(range).filter((file) => isWatched(file, resolved) && missingTest(file));
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const flag = (name) => {
     const index = argv.indexOf(name);
     return index >= 0 ? argv[index + 1] : undefined;
   };
 
-  const pending = listFilesMissingTests({ base: flag('--base'), head: flag('--head') });
+  const pending = await listFilesMissingTests({ base: flag('--base'), head: flag('--head') });
   if (pending.length === 0) {
     console.log('Every changed file with logic has a co-located test.');
     return;
@@ -148,6 +127,4 @@ function main() {
   process.exitCode = 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
-}
+if (isEntrypoint(import.meta.url)) await main();

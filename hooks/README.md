@@ -1,6 +1,6 @@
 # hooks — provider-neutral agent guards
 
-Canonical source of the coding-agent hooks, born in Project A. Imported per project (like `archon/` and `quality-gate/`), because hooks run inside a repo and their wiring lives in the repo's settings — with one exception: **`guard-bash-secrets.mjs` is global.** The installer links `~/.agents/hooks` → this directory and the shared `~/.claude/settings.json` wires the secrets rule for every session in every repo (it is the one universal rule; push rules stay per-project because branch flow varies). A project that also wires the full guard runs both — a double denial is harmless.
+Canonical source of the coding-agent hooks, born in Project A. They ship inside the `@lukiita/toolbox` package and run from the project's `node_modules` (ADR-0001), because hooks run inside a repo and their wiring lives in the repo's settings — with one exception: **`guard-bash-secrets.mjs` is global.** The installer links `~/.agents/hooks` → this directory and the shared `~/.claude/settings.json` wires the secrets rule for every session in every repo (it is the one universal rule; push rules stay per-project because branch flow varies). A project that also wires the full guard runs both — a double denial is harmless.
 
 ## The two hooks
 
@@ -9,12 +9,13 @@ Canonical source of the coding-agent hooks, born in Project A. Imported per proj
 | `guard-bash.mjs` | PreToolUse (Bash) | **deny** | closes the shell path to secrets (`cat .env`, `grep *.pem`…) that the provider's Read-deny cannot see, blocks `git push --force` without lease, blocks direct pushes to protected branches |
 | `missing-tests-reminder.mjs` | Stop | warn only | lists changed files with logic and no co-located `.test.ts` — never blocks, no state, cannot loop |
 
-`check-missing-tests.mjs` is the shared heuristic: the Stop hook imports it (warn) and **CI runs the same file as a blocking gate** (`node tools/agent-hooks/check-missing-tests.mjs --base <sha> --head <sha>`). One source of truth — if they diverged, agents and CI would disagree about what is required. The severity split is deliberate: mid-task the test may be one step away; at the pull request, it is not.
+`check-missing-tests.mjs` is the shared heuristic: the Stop hook imports it (warn) and **CI runs the same file as a blocking gate** (`node node_modules/@lukiita/toolbox/hooks/check-missing-tests.mjs --base <sha> --head <sha>`). One source of truth — if they diverged, agents and CI would disagree about what is required. The severity split is deliberate: mid-task the test may be one step away; at the pull request, it is not.
 
 ## Importing into a project
 
-1. Copy the three files to `tools/agent-hooks/` (they resolve the repo root via git, so any directory works — keep them together).
-2. Wire them in `.claude/settings.json` (versioned, not the `.local` one):
+The hooks ship inside the `@lukiita/toolbox` package (ADR-0001) — nothing is copied. With the package installed (see `templates/quality-gate/README.md`, step 1):
+
+1. Wire them in `.claude/settings.json` (versioned, not the `.local` one):
 
 ```json
 {
@@ -23,14 +24,14 @@ Canonical source of the coding-agent hooks, born in Project A. Imported per proj
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/tools/agent-hooks/guard-bash.mjs\"", "timeout": 10 }
+          { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lukiita/toolbox/hooks/guard-bash.mjs\"", "timeout": 10 }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/tools/agent-hooks/missing-tests-reminder.mjs\"", "timeout": 30 }
+          { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lukiita/toolbox/hooks/missing-tests-reminder.mjs\"", "timeout": 30 }
         ]
       }
     ]
@@ -38,14 +39,19 @@ Canonical source of the coding-agent hooks, born in Project A. Imported per proj
 }
 ```
 
-3. Mirror the same block into `.codex/hooks.json` — the hooks are provider-neutral on purpose (they read the tool input from stdin and answer in the shared shape), so every agent family obeys the same guards.
-4. CI: add the blocking counterpart —
-   `node tools/agent-hooks/check-missing-tests.mjs --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}"`.
+2. Mirror the same block into `.codex/hooks.json` — the hooks are provider-neutral on purpose (they read the tool input from stdin and answer in the shared shape), so every agent family obeys the same guards.
+3. CI: add the blocking counterpart —
+   `node node_modules/@lukiita/toolbox/hooks/check-missing-tests.mjs --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.sha }}"`.
 
-## Adaptation points (review on import)
+## Config (`toolbox.config.ts`, section `hooks`)
 
-- `guard-bash.mjs` → `PROTECTED_BRANCHES` (default `main|develop`), and the secret rule's reason — name the project's real blast radius (the source project cited its Supabase `service_role` key bypassing RLS); a concrete reason lands harder than a generic one.
-- `check-missing-tests.mjs` → `WATCHED_PATTERNS` (default: the same window as the quality ratchet's `RULE_PATTERNS` — `src/<feature>/domain|application/` and the flat legacy layout) and `EXEMPT_SUFFIXES`.
+| field | default | what it drives |
+| --- | --- | --- |
+| `watchedPatterns` | `src/<feature>/domain\|application/` and the flat layout | files that must have a co-located test (the same window as the ratchet's rule places; edges are excluded on purpose — watching them would fail every PR that touches a screen) |
+| `exemptSuffixes` | `.test.ts`, `.d.ts`, `.types.ts`, `.type.ts`, `.config.ts`, `.constants.ts`, `.fixtures.ts` | artefacts with no behaviour of their own |
+| `protectedBranches` | `['main', 'develop']` | a direct `git push` to one of these is denied |
+
+The secrets rule needs no config: it is universal, and `guard-bash-secrets.mjs` runs it globally from `~/.agents/hooks` for every repo.
 
 ## Design rules these hooks follow (keep them when adding new ones)
 

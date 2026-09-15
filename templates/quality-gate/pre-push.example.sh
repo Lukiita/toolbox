@@ -5,4 +5,8 @@
 # measures against the tip of origin/<base> like CI, and charges the recorded
 # decision, not the number. `quality.baseBranch` in toolbox.config.ts names
 # the base. Git's stdin (the pushed refs) passes straight through.
-pnpm exec toolbox pre-push   # npm: npx toolbox pre-push
+#
+# The binary by path, not `pnpm exec`: husky runs hooks in a non-interactive
+# sh that never reads the login profile, so a version-managed pnpm may be off
+# PATH there; node_modules/.bin only needs `node`.
+"$(git rev-parse --show-toplevel)/node_modules/.bin/toolbox" pre-push

@@ -33,8 +33,17 @@ export declare const EMPTY_SHA = "0000000000000000000000000000000000000000";
 /**
  * Parses git's stdin. A push that changes no code would measure the same
  * number as before - a documentation push does not pay for the gate.
+ *
+ * @example
+ *   parsePushedRefs('refs/heads/x abc refs/heads/x 000…0\n') // => [{ localSha: 'abc', remoteSha: '000…0' }]
  */
 export declare function parsePushedRefs(stdin: string): PushedRef[];
+/**
+ * Whether any pushed ref changes code - the gate runs only then.
+ *
+ * @example
+ *   pushesCode(parsePushedRefs(stdin), ports) // => false for a docs-only push
+ */
 export declare function pushesCode(refs: readonly PushedRef[], ports: PrePushPorts): boolean;
 /**
  * The whole hook, as a value.

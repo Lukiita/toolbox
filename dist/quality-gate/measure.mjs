@@ -75,9 +75,18 @@ function jscpdBin() {
     const pkgPath = require.resolve('jscpd/package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin.jscpd;
+    if (!bin)
+        throw new Error(`jscpd's package.json at ${pkgPath} declares no "jscpd" bin`);
     return resolve(dirname(pkgPath), bin);
 }
 function measureDuplication(root, paths) {
+    // jscpd exits 0 with an empty report for a path that does not exist, and the
+    // metric would freeze at 0 forever - a monorepo that re-anchored
+    // `sourceWindow` but not `duplicationPaths` (found in review, round 2).
+    const missing = paths.filter((p) => !existsSync(resolve(root, p)));
+    if (missing.length > 0) {
+        throw new Error(`quality.duplicationPaths: ${missing.join(', ')} not found under ${root}; point it at the production source folders`);
+    }
     const out = mkdtempSync(resolve(tmpdir(), 'jscpd-'));
     try {
         execFileSync(process.execPath, [jscpdBin(), '--reporters', 'json', '--output', out, '--silent', ...paths], { cwd: root, stdio: 'ignore' });

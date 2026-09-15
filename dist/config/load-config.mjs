@@ -22,7 +22,12 @@ export const CONFIG_FILE_NAMES = [
     'toolbox.config.mjs',
     'toolbox.config.js',
 ];
-/** The config file the root has, or undefined when it runs on defaults. */
+/**
+ * The config file the root has, or undefined when it runs on defaults.
+ *
+ * @example
+ *   findConfigFile('/p') // => '/p/toolbox.config.ts' or undefined
+ */
 export function findConfigFile(root) {
     return CONFIG_FILE_NAMES.map((name) => resolve(root, name)).find((path) => existsSync(path));
 }
@@ -43,7 +48,8 @@ export async function loadToolboxConfig(root) {
         return resolveToolboxConfig();
     const loaded = (await import(__rewriteRelativeImportExtension(pathToFileURL(file).href)));
     if (!isToolboxConfig(loaded.default)) {
-        throw new Error(`${file}: expected a default export object ({ quality?, hooks? }), received ${typeof loaded.default}`);
+        const received = Array.isArray(loaded.default) ? 'array' : typeof loaded.default;
+        throw new Error(`${file}: expected a default export object ({ quality?, hooks? }), received ${received}`);
     }
     return resolveToolboxConfig(loaded.default);
 }
