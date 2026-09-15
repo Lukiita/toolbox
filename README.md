@@ -21,7 +21,6 @@ Idempotent: running it again only confirms the state. What it links:
 | `~/.codex/AGENTS.md` | `agents/AGENTS.md` | symlink |
 | `~/.codex/skills/<skill>` | `skills/<skill>` | one symlink **per skill** — Codex keeps its own `.system/` inside that directory, so the directory itself cannot be a link; dangling links are pruned |
 | `~/.agents/hooks` | `hooks/` | symlink (the global secrets guard is wired from here) |
-| `~/.agents/til` | `til/` | symlink (the learning journal agents write to) |
 | `~/.agents/katas` | `katas/` | symlink (`architecture-kata` practice output — never a stray `katas/` inside a client repo) |
 | `~/.claude/agents` | `claude/agents/` | symlink (Claude Code subagent definitions) |
 | `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` | symlink (a one-line pointer to AGENTS.md) |
@@ -39,7 +38,6 @@ claude/       CLAUDE.md pointer + shareable settings.json
 archon/       canonical source of the Archon flow (headless tlc) — imported, not linked
 hooks/        provider-neutral agent guards (secrets/push deny + missing-tests warn) — imported per project
 quality-gate/ ratchet engine template (frozen baseline, 10 metrics, per-file coverage) — imported per project
-til/          learning journal — one concept per note, written when Lucas asks to save an explanation
 katas/        architecture-kata practice output — one folder per kata
 install.sh
 toolbox-diff.sh   drift report for a project's copies (skills, hooks, quality-gate, archon)
