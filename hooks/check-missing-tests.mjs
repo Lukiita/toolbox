@@ -61,7 +61,9 @@ function changedFiles({ base, head } = {}) {
       : `${git(['diff', '--name-only', 'HEAD', '--'])}\n${git(['ls-files', '--others', '--exclude-standard'])}`;
 
   // `.mts`/`.cts` are production modules too; the ratchet's size window counts
-  // them, so the test rule must see them as well (review, round 2).
+  // them, so the test rule must see them as well (review, round 2). `.tsx` is
+  // left out on purpose, as in the coverage slice: a component is a render
+  // shell by policy (AGENTS.md: extract the logic, do not test the render).
   return [...new Set(output.split('\n'))]
     .map((line) => line.trim())
     .filter((line) => /\.(ts|mts|cts)$/.test(line));
@@ -85,7 +87,12 @@ function hasBranching(absolute) {
 function missingTest(file) {
   const absolute = path.join(ROOT, file);
   if (!existsSync(absolute)) return false;
-  if (existsSync(absolute.replace(/\.(ts|mts|cts)$/, '.test.$1'))) return false;
+  // The test beside `x.mts` is `x.test.ts` in every repo of ours (vitest
+  // includes `**/*.test.ts`); `x.test.mts` is accepted too (loop round 1: the
+  // first cut looked only for `.test.mts` and flagged every tested `.mts`).
+  const base = absolute.replace(/\.(ts|mts|cts)$/, '');
+  const ext = absolute.slice(base.length);
+  if (existsSync(`${base}.test.ts`) || existsSync(`${base}.test${ext}`)) return false;
   return hasBranching(absolute);
 }
 

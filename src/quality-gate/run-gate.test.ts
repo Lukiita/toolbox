@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { DEFAULT_QUALITY, type QualityConfig } from '../config/toolbox-config.mts';
-import { runQualityGate } from './run-gate.mts';
+import { type GateEnvironment, runQualityGate } from './run-gate.mts';
 
 // A real repository in a temp dir: git, files, a baseline and a coverage json
 // that istanbul would have written. jscpd runs for real (the package's own
@@ -60,7 +60,7 @@ function scratchRepo(): { root: string; config: QualityConfig } {
   return { root, config: { ...DEFAULT_QUALITY, vitestConfig: undefined } };
 }
 
-const env = (root: string, config: QualityConfig) => ({
+const env = (root: string, config: QualityConfig): GateEnvironment => ({
   root,
   config,
   warn: (): void => undefined,
@@ -107,6 +107,25 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     const result = runQualityGate(env(root, config), { ...run, baselineFrom: 'HEAD' });
     expect(result.status).toBe('passed');
     expect(result.report).toContain('HEAD');
+  });
+
+  it('a malformed own baseline names the file, not just the JSON error', () => {
+    const { root, config } = scratchRepo();
+    writeFileSync(join(root, 'quality-baseline.json'), '{ not json');
+    expect(() => runQualityGate(env(root, config), run)).toThrow(
+      /quality-baseline\.json is not valid JSON/,
+    );
+  });
+
+  it('a malformed baseline at the base rev fails instead of falling back to the own one', () => {
+    const { root, config } = scratchRepo();
+    writeFileSync(join(root, 'quality-baseline.json'), '{ not json');
+    execFileSync('git', ['commit', '-qam', 'broken'], { cwd: root });
+    // The worktree has a valid baseline again; only the committed one is broken.
+    writeFileSync(join(root, 'quality-baseline.json'), readFileSync(TEMPLATE_BASELINE));
+    expect(() => runQualityGate(env(root, config), { ...run, baselineFrom: 'HEAD' })).toThrow(
+      /HEAD:quality-baseline\.json is not valid JSON/,
+    );
   });
 
   it('a duplication path that does not exist is a setup error, not a 0% duplication', () => {

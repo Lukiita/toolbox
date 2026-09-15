@@ -39,7 +39,7 @@ project, `toolbox.config.ts`:
 | `complexity.mts` → `CC_LIMIT`                      | `quality.ccLimit`                          |
 | `cycles.mts` → `ALIAS_PREFIXES`                    | `quality.aliasPrefixes`                    |
 | `gate.mts` → `ROOT`, coverage path, `src` for jscpd | the git root (not configurable), `quality.coveragePath`, `quality.duplicationPaths`, `quality.vitestConfig` |
-| `pre-push.example.sh` → `BASE_BRANCH`, `QUALITY_CMD`, `GATE_FLAGS` | `quality.baseBranch`, `quality.prePushSkipTests`; the one-line hook names the package manager |
+| `pre-push.example.sh` → `BASE_BRANCH`, `QUALITY_CMD`, `GATE_FLAGS` | `quality.baseBranch`, `quality.prePushSkipTests`; the one-line hook calls the binary by path |
 | `check-missing-tests.mjs` → `WATCHED_PATTERNS`, `EXEMPT_SUFFIXES` | `hooks.watchedPatterns` (derived from `featureSlot` unless pinned), `hooks.exemptSuffixes` |
 | `guard-bash.mjs` → `PROTECTED_BRANCHES`             | `hooks.protectedBranches` (the secrets and force-push rules are universal, no config) |
 
@@ -59,7 +59,7 @@ differences are config, the common part is the library.**
 
 ### How each kind of content is delivered
 
-- **Skills** are files. A `postinstall` links `node_modules/@lukiita/toolbox/skills/<name>`
+- **Skills** are files. `toolbox install` (the consumer's own `postinstall`, see deviations) links `node_modules/@lukiita/toolbox/skills/<name>`
   into `.agents/skills/<name>` for every skill the package ships, and touches nothing else
   in that folder. Claude, Codex and Cursor all read `.agents/skills/`, so one mechanism
   serves every agent. (A Claude Code plugin could come later, in addition, for the

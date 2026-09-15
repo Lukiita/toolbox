@@ -111,6 +111,7 @@ export const DEFAULT_HOOKS: HooksConfig = {
  *   resolveToolboxConfig({ quality: { lineLimit: 300 } }).quality.ccLimit // => 5
  */
 export function resolveToolboxConfig(partial: ToolboxConfig = {}): ResolvedToolboxConfig {
+  validateShapes(partial);
   const quality = { ...DEFAULT_QUALITY, ...partial.quality };
   const hooks = {
     ...DEFAULT_HOOKS,
@@ -122,6 +123,50 @@ export function resolveToolboxConfig(partial: ToolboxConfig = {}): ResolvedToolb
     quality: { ...quality, sourceWindow: stateless(quality.sourceWindow) },
     hooks: { ...hooks, watchedPatterns: hooks.watchedPatterns.map(stateless) },
   };
+}
+
+// A `.mjs` config has no compiler: a string where a RegExp belongs would die
+// deep inside a collector as `undefined.replace` with no field name. Each
+// message names the field, what it needs and what arrived.
+function expectField(name: string, ok: boolean, expected: string, value: unknown): void {
+  if (ok) return;
+  const received = Array.isArray(value) ? 'array' : typeof value;
+  throw new Error(`toolbox.config: ${name} must be ${expected}, received ${received}`);
+}
+
+const isRegExp = (v: unknown): boolean => v instanceof RegExp;
+const isStrings = (v: unknown): boolean =>
+  Array.isArray(v) && v.every((x) => typeof x === 'string');
+const isRegExps = (v: unknown): boolean => Array.isArray(v) && v.every(isRegExp);
+
+function validateQualityShapes(q: Partial<QualityConfig>): void {
+  if ('sourceWindow' in q) {
+    expectField('quality.sourceWindow', isRegExp(q.sourceWindow), 'a RegExp', q.sourceWindow);
+  }
+  if ('featureSlot' in q) {
+    const ok = typeof q.featureSlot === 'string';
+    expectField('quality.featureSlot', ok, 'a regex source string', q.featureSlot);
+  }
+  if ('duplicationPaths' in q) {
+    const ok = isStrings(q.duplicationPaths);
+    expectField('quality.duplicationPaths', ok, 'an array of paths', q.duplicationPaths);
+  }
+}
+
+function validateHooksShapes(h: Partial<HooksConfig>): void {
+  if ('watchedPatterns' in h) {
+    const ok = isRegExps(h.watchedPatterns);
+    expectField('hooks.watchedPatterns', ok, 'an array of RegExp', h.watchedPatterns);
+  }
+  if ('protectedBranches' in h) {
+    const ok = isStrings(h.protectedBranches);
+    expectField('hooks.protectedBranches', ok, 'an array of branch names', h.protectedBranches);
+  }
+}
+
+function validateShapes({ quality = {}, hooks = {} }: ToolboxConfig): void {
+  validateQualityShapes(quality);
+  validateHooksShapes(hooks);
 }
 
 // A `/g` or `/y` flag makes `.test()` remember `lastIndex` between calls, so

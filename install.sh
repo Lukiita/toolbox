@@ -56,8 +56,11 @@ link "$REPO_DIR/claude/agents" "$HOME/.claude/agents"
 # This repo's own git hooks (pre-commit keeps the committed dist/ in sync with
 # src/). Plain core.hooksPath, not husky: a lifecycle script in package.json
 # would run when the package is installed as a git dependency.
-git -C "$REPO_DIR" config core.hooksPath .githooks
-echo "hooks:  core.hooksPath -> .githooks"
+if git -C "$REPO_DIR" config core.hooksPath .githooks 2>/dev/null; then
+  echo "hooks:  core.hooksPath -> .githooks"
+else
+  echo "WARNING: could not set core.hooksPath (not a git checkout, or dubious ownership) - run it by hand: git config core.hooksPath .githooks"
+fi
 
 # Codex discovers skills in ~/.codex/skills/, beside its own .system/ - so the
 # directory stays real and each skill gets its own link. A skill removed from

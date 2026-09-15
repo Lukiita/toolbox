@@ -60,6 +60,32 @@ describe('the hooks watch window follows the feature slot', () => {
     expect(hooks.watchedPatterns).toEqual([/^lib\//]);
   });
 
+  it('a string where a RegExp belongs (a .mjs config) fails naming the field', () => {
+    const bad = { quality: { sourceWindow: '^apps/' } } as unknown as Parameters<
+      typeof resolveToolboxConfig
+    >[0];
+    expect(() => resolveToolboxConfig(bad)).toThrow(
+      /quality\.sourceWindow must be a RegExp, received string/,
+    );
+  });
+
+  it('an array of strings where RegExps belong reports "array", and a string path reports "string"', () => {
+    const cast = (v: unknown): Parameters<typeof resolveToolboxConfig>[0] =>
+      v as Parameters<typeof resolveToolboxConfig>[0];
+    expect(() => resolveToolboxConfig(cast({ hooks: { watchedPatterns: ['^src/'] } }))).toThrow(
+      /hooks\.watchedPatterns must be an array of RegExp, received array/,
+    );
+    expect(() => resolveToolboxConfig(cast({ quality: { duplicationPaths: 'src' } }))).toThrow(
+      /quality\.duplicationPaths must be an array of paths, received string/,
+    );
+    expect(() => resolveToolboxConfig(cast({ quality: { featureSlot: /x/ } }))).toThrow(
+      /quality\.featureSlot must be a regex source string, received object/,
+    );
+    expect(() => resolveToolboxConfig(cast({ hooks: { protectedBranches: 'main' } }))).toThrow(
+      /hooks\.protectedBranches must be an array of branch names, received string/,
+    );
+  });
+
   it('strips a /g flag from a project regex - .test() must not remember lastIndex', () => {
     const { quality } = resolveToolboxConfig({ quality: { sourceWindow: /^src\//g } });
     expect(quality.sourceWindow.test('src/a.ts')).toBe(true);

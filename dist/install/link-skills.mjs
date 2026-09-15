@@ -7,7 +7,7 @@
 // skills in the same folder (project-c has twenty), and a real directory with a
 // package skill's name is the project's, never replaced - it is reported so
 // the owner decides.
-import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, symlinkSync, unlinkSync, } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync, symlinkSync, unlinkSync, } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 /**
  * Every folder under `skills/` that has a SKILL.md.
@@ -28,8 +28,15 @@ export function shippedSkills(packageDir) {
 // is the project's pin, kept like a real directory would be. Only our own
 // links (into the package) and dangling ones are replaced.
 function isForeignLink(dest, packageDir) {
-    const target = resolve(dest, '..', readlinkSync(dest));
+    const target = resolve(realParent(dest), readlinkSync(dest));
     return existsSync(target) && !target.startsWith(packageDir);
+}
+// The directory the link is physically written into. When `.agents/skills`
+// (or any ancestor) is itself a symlink, a relative target computed from the
+// nominal path resolves from the wrong place and every link dangles (loop
+// round 1) - the OS resolves the link from where it really lives.
+function realParent(dest) {
+    return realpathSync(resolve(dest, '..'));
 }
 function isPresent(dest) {
     return existsSync(dest) || isSymlink(dest);
@@ -44,7 +51,7 @@ function destState(dest, packageDir, wanted) {
     return readlinkSync(dest) === wanted ? 'unchanged' : 'replace';
 }
 function linkOne(name, target, dest, packageDir, summary) {
-    const wanted = relative(resolve(dest, '..'), target);
+    const wanted = relative(realParent(dest), realpathSync(target));
     const state = destState(dest, packageDir, wanted);
     if (state === 'kept')
         return void summary.kept.push(name);

@@ -6,7 +6,7 @@
   "type": "module",
   "repository": "github:Lukiita/toolbox",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.18 <23 || >=23.6"
   },
   "bin": {
     "toolbox": "./dist/cli/toolbox.mjs"

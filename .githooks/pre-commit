@@ -1,12 +1,24 @@
 #!/bin/sh
-# Keeps the committed dist/ honest: when a source file is staged, rebuild and
-# stage dist/ with it, so no commit can carry src/ and dist/ out of sync.
-# (`pnpm build:check` is the RELEASE gate: it demands dist/ == HEAD before a
-# tag. In a commit that changes src/, dist/ is meant to differ from HEAD.)
-# Wired by install.sh (`git config core.hooksPath .githooks`) - not by husky,
-# because any lifecycle script in package.json would run (and be refused)
-# when the package is installed as a git dependency (ADR-0001).
-if git diff --cached --name-only | grep -qE '^src/.*\.mts$'; then
-  pnpm build || exit 1
-  git add dist
+# Refuses a commit whose src/ and dist/ would land out of sync. It VERIFIES
+# and never writes to the index: a hook that ran `git add dist` committed the
+# wrong build under partial staging (the build compiles the worktree, the
+# commit takes the index) and, on a pathspec commit (`git commit -- src/x`),
+# left the real index behind so the NEXT commit reverted dist/ (review,
+# loop round 1). Wired by install.sh (`git config core.hooksPath .githooks`)
+# - not by husky, because any lifecycle script in package.json would run (and
+# be refused) when the package is installed as a git dependency (ADR-0001).
+git diff --cached --name-only | grep -qE '^src/.*\.mts$' || exit 0
+
+if git diff --name-only -- src | grep -qE '\.mts$'; then
+  echo "pre-commit: src/ has unstaged changes; stage them all (or stash) so dist/ can be checked against what is being committed" >&2
+  exit 1
+fi
+pnpm build >/dev/null || { echo "pre-commit: the build failed" >&2; exit 1; }
+if ! git diff --quiet -- dist || [ -n "$(git ls-files --others --exclude-standard dist)" ]; then
+  echo "pre-commit: dist/ is out of date for the staged src/ - run \`pnpm build && git add dist\` and commit again" >&2
+  exit 1
+fi
+if ! git diff --quiet HEAD -- dist && git diff --cached --quiet -- dist; then
+  echo "pre-commit: dist/ changed but is not part of this commit - include it (\`git add dist\`, and no pathspec that leaves it out)" >&2
+  exit 1
 fi

@@ -111,16 +111,34 @@ export function readOwnBaseline(root: string): Baseline {
       `${BASELINE_FILE} not found at ${root}: copy templates/quality-gate/baseline.example.json there and run \`toolbox quality --update-baseline\``,
     );
   }
-  return JSON.parse(readFileSync(path, 'utf8')) as Baseline;
+  return parseBaseline(readFileSync(path, 'utf8'), path);
 }
 
-/** The baseline as it is at `rev`, or undefined when that commit has none. */
-function readBaselineAt(root: string, rev: string): Baseline | undefined {
+function parseBaseline(json: string, where: string): Baseline {
   try {
-    return JSON.parse(runGit(root, ['show', `${rev}:${BASELINE_FILE}`])) as Baseline;
+    return JSON.parse(json) as Baseline;
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `${where} is not valid JSON (${reason}); expected the baseline shape of templates/quality-gate/baseline.example.json`,
+    );
+  }
+}
+
+/**
+ * The baseline as it is at `rev`, or undefined when that commit has none.
+ * Only the missing file is "none": a malformed file at the base must fail,
+ * or the gate would fall back to the branch's own baseline and a PR that
+ * re-froze itself would pass (review, loop round 1).
+ */
+function readBaselineAt(root: string, rev: string): Baseline | undefined {
+  let json: string;
+  try {
+    json = runGit(root, ['show', `${rev}:${BASELINE_FILE}`]);
   } catch {
     return undefined;
   }
+  return parseBaseline(json, `${rev}:${BASELINE_FILE}`);
 }
 
 export interface BaselineSource {

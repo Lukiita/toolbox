@@ -13,7 +13,10 @@ rmSync('dist', { recursive: true, force: true });
 try {
   execFileSync('./node_modules/.bin/tsc', ['-p', 'tsconfig.build.json'], { stdio: 'inherit' });
 } catch {
-  console.error('build:check: the build failed (see above); dist/ was not compared');
+  execFileSync('git', ['checkout', '--', 'dist']);
+  console.error(
+    'build:check: the build failed (see above); dist/ restored from HEAD, not compared',
+  );
   process.exit(1);
 }
 const stale = execFileSync('git', ['status', '--porcelain', '--', 'dist'], {

@@ -2,6 +2,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readlinkSync,
   rmSync,
   symlinkSync,
@@ -85,6 +86,16 @@ describe('linkSkills', () => {
     symlinkSync('../../gone/retro', join(projectRoot, '.agents', 'skills', 'retro'), 'dir');
     const summary = linkSkills({ packageDir, projectRoot });
     expect(summary.linked).toContain('retro');
+  });
+
+  it('links correctly when .agents/skills is itself a symlink to elsewhere', () => {
+    const { packageDir, projectRoot } = scratch();
+    mkdirSync(join(projectRoot, '..', 'elsewhere', 'skills'), { recursive: true });
+    mkdirSync(join(projectRoot, '.agents'), { recursive: true });
+    symlinkSync('../../elsewhere/skills', join(projectRoot, '.agents', 'skills'), 'dir');
+    linkSkills({ packageDir, projectRoot });
+    const viaLink = join(projectRoot, '.agents', 'skills', 'code-review', 'SKILL.md');
+    expect(readFileSync(viaLink, 'utf8')).toContain('name: x');
   });
 
   it('leaves project-local skills with other names untouched', () => {
