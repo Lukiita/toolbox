@@ -63,7 +63,7 @@ system-mind-export.sh  flattens the study vault into one file for the claude.ai 
 | `codebase-design` | deep-module vocabulary (module, interface, seam, depth, leverage, locality), the deletion test, design-it-twice — vendored from mattpocock/skills |
 | `diagnosing-bugs` | hard-bug discipline: a tight red loop before any theory, minimise, falsifiable hypotheses, regression test at a real seam — vendored from mattpocock/skills |
 | `writing-for-agents` | how to write skills and AGENTS.md: context pointers, the two loads, leading words, no-op pruning — vendored from mattpocock/skills |
-| `retro` | end-of-session retrospective of the agent's *environment*: what should become a hook, a fitness function, a reviewer rule, a pointer, or a cut (proposes, never writes) |
+| `retro` | end-of-session retrospective of the agent's *environment*: what should become a hook, a fitness function, a reviewer rule, a pointer, or a cut (proposes; the proposals land as a note in `~/vault/inbox/`, never as an edit to the toolbox) |
 | `setup-pre-commit` | Husky + lint-staged formatter, typecheck and the tlc commit-msg check, each hook proven to bite |
 
 Not carried here: `skill-creator` — it is Anthropic's official skill, unpatched by us; vendoring it would be drift without value. Install it from the official channel when needed.
