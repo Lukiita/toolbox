@@ -17,7 +17,7 @@ A sessão atual, como aconteceu — é a fonte primária. Só se o usuário apon
 Passe todas; relate só as que têm **evidência** (um momento concreto da sessão). Cada uma diz quando costuma render:
 
 - **Navegação** — o agente demorou pra achar um arquivo, uma convenção, uma dependência escondida entre arquivos? Proposta: um ponteiro de contexto (uma linha no `AGENTS.md`/`CLAUDE.md` do projeto, ou na description de uma skill). *Rende quando* a sessão gastou tempo procurando.
-- **Checks automáticos** — o agente cometeu um erro que lint, typecheck, teste ou um guard pegaria? Proposta: regra de lint, fitness function no `quality-gate/`, guard em `hooks/`. *Rende quando* um erro só apareceu na revisão ou em runtime.
+- **Checks automáticos** — o agente cometeu um erro que lint, typecheck, teste ou um guard pegaria? Proposta: regra de lint, fitness function no `src/quality-gate/`, guard em `hooks/`. *Rende quando* um erro só apareceu na revisão ou em runtime.
 - **Regras do reviewer** — o `code-review` deixou passar algo que uma regra escrita pegaria? Ou tem regra que só gera ruído? Proposta: entrada nova ou cortada no `AGENTS.md` do projeto (o Revisor B cita regra textual). A revisão é quem impõe padrão, não a implementação: o implementador é o agente com mais pressão de contexto, o revisor o com menos. *Rende quando* a revisão errou.
 - **Steering global** — tem instrução no `AGENTS.md` global que deveria ser check automático ou regra do reviewer, em vez de texto carregado toda sessão? *Rende quando* o arquivo está grande.
 - **Economia de tool** — chamada cara que podia ser um comando só, MCP ou CLI que devolve muito mais do que o agente usou? *Rende quando* uma chamada custou contexto demais.
@@ -29,7 +29,7 @@ Passe todas; relate só as que têm **evidência** (um momento concreto da sess�
 Em português, ordenada por severidade (o que mais atrasou a sessão primeiro). Para cada proposta:
 
 - **Evidência** — o momento da sessão que motiva (cite).
-- **Alvo** — o arquivo que muda: `hooks/`, `quality-gate/`, `AGENTS.md` do projeto ou global, a description de uma skill.
+- **Alvo** — o arquivo que muda: `hooks/`, `src/quality-gate/`, `AGENTS.md` do projeto ou global, a description de uma skill.
 - **Texto proposto** — a regra, o ponteiro ou o check, pronto pra colar.
 
 ## Gravar

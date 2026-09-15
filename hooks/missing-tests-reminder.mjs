@@ -13,8 +13,8 @@ import { listFilesMissingTests } from './check-missing-tests.mjs';
 
 const MAX_LISTED = 10;
 
-function main() {
-  const pending = listFilesMissingTests();
+async function main() {
+  const pending = await listFilesMissingTests();
   if (pending.length === 0) return;
 
   const listed = pending.slice(0, MAX_LISTED).map((file) => `  • ${file}`);
@@ -31,4 +31,4 @@ function main() {
   );
 }
 
-main();
+await main();

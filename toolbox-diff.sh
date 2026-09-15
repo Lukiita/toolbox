@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# MIGRATION CHECKLIST while copies still exist (ADR-0001): each adaptation it lists becomes
+# a field in the project's toolbox.config.ts. Retires when the last copy is gone.
+#
 # Shows how far a project's copies of the toolbox's per-project components have
 # drifted from the source here. The symlinked parts (~/.agents/skills,
 # AGENTS.md) can never drift; the copied parts - a project's .agents/skills/,
@@ -110,10 +113,17 @@ compare_skills
 printf '== hooks  -> %s/\n' "$HOOKS_DIR"
 ADAPTED='guard-bash.mjs check-missing-tests.mjs' SKIP='README.md guard-bash-secrets.mjs' \
   compare_tree "$REPO_DIR/hooks" "$PROJECT/$HOOKS_DIR"
-printf '== quality-gate  -> %s/  (vitest.quality.config.ts at the project root)\n' "$QUALITY_DIR"
-ADAPTED='place-rule.mts size.mts complexity.mts cycles.mts gate.mts locale.mts vitest.quality.config.ts' \
-  SKIP='README.md *.example.*' ROOT_FILES='vitest.quality.config.ts' \
-  compare_tree "$REPO_DIR/quality-gate" "$PROJECT/$QUALITY_DIR"
+printf '== quality-gate  -> %s/  (src/quality-gate/ here; vitest.quality.config.ts at the project root)\n' "$QUALITY_DIR"
+# The library keeps the collectors in src/quality-gate/ and the copy-once files in
+# templates/quality-gate/; a project's copy has both in one folder. gate.mts is gone
+# from the library (run-gate.mts + measure.mts + baseline-store.mts replaced it).
+ADAPTED='place-rule.mts size.mts complexity.mts cycles.mts locale.mts' \
+  SKIP='README.md *.example.* run-gate.mts measure.mts baseline-store.mts git.mts' \
+  compare_tree "$REPO_DIR/src/quality-gate" "$PROJECT/$QUALITY_DIR"
+# Only the toolbox side for the templates: the project folder holds the collectors
+# too, and a project-side pass would list every one of them as "only in project".
+ADAPTED='vitest.quality.config.ts' SKIP='README.md *.example.*' ROOT_FILES='vitest.quality.config.ts' \
+  compare_toolbox_side "$REPO_DIR/templates/quality-gate" "$PROJECT/$QUALITY_DIR"
 printf '== archon  -> %s/\n' "$ARCHON_DIR"
 ADAPTED='README.md WORKFLOWS.md config.yaml repo-gate.sh' SKIP="$PY_NOISE" \
   compare_tree "$REPO_DIR/archon" "$PROJECT/$ARCHON_DIR"

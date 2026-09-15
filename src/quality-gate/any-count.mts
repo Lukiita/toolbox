@@ -35,7 +35,7 @@ export function explicitAnyCount(relPath: string, source: string): number {
 }
 
 /** Which files enter the count - the exact window `size.mts` measures. */
-export const isAnyCheckedFile = isSizedFile;
+export const isAnyCheckedFile: typeof isSizedFile = isSizedFile;
 
 /** Files that still carry `any`, worst first, ties by path. */
 export function filesWithAny(measured: readonly FileAnyCount[]): FileAnyCount[] {

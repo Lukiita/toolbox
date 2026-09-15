@@ -68,7 +68,7 @@
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
-      "note": "Production files over LINE_LIMIT (size.mts). Big files are where the next agent edit turns into a mess."
+      "note": "Production files over quality.lineLimit (size.mts). Big files are where the next agent edit turns into a mess."
     },
     "cc-over-limit": {
       "section": "Complexity",
@@ -76,7 +76,7 @@
       "mode": "baseline",
       "direction": "lower-is-better",
       "value": 0,
-      "note": "Functions with cyclomatic complexity above CC_LIMIT (complexity.mts, default 5 per Richards & Ford). Every path is a test someone owes; generative AI accumulates accidental complexity - the ratchet watches the model's laziness."
+      "note": "Functions with cyclomatic complexity above quality.ccLimit (complexity.mts, default 5 per Richards & Ford). Every path is a test someone owes; generative AI accumulates accidental complexity - the ratchet watches the model's laziness."
     },
     "explicit-any": {
       "section": "Types",

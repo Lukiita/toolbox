@@ -36,8 +36,7 @@ export default defineConfig({
     passWithNoTests: true,
     coverage: {
       provider: 'v8',
-      // `json` because the reader is the ratchet (`scripts/quality/gate.mts`), not
-      // a person.
+      // `json` because the reader is the ratchet (`toolbox quality`), not a person.
       reporter: ['json'],
       // Its own directory. `pnpm test:coverage` and `pnpm quality` write reports of
       // different slices, and in a shared directory the last one to run erased the

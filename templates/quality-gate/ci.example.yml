@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24 # the gate runs TypeScript directly (type stripping)
+          node-version: 24 # >= 22.18 works; the gate ships built, but a .ts toolbox.config needs type stripping (type stripping)
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
