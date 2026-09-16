@@ -50,7 +50,7 @@ Migration of an existing copy, one project at a time: `./toolbox-diff.sh <projec
 ## Developing the toolbox itself
 
 ```bash
-pnpm install && pnpm test && pnpm typecheck && pnpm build && pnpm quality
+pnpm install && pnpm test && pnpm test:py && pnpm typecheck && pnpm build && pnpm quality
 ```
 
 `src/` is TypeScript (`.mts`, tests beside each module), built to `dist/` — and **`dist/` is committed**. Two facts force that: Node refuses to strip types from files under `node_modules`, so `.mts` cannot ship as is; and pnpm 12 refuses a git dependency's build script unless the consumer allowlists it with the commit sha, which breaks on every bump. So nothing runs on install: the tag carries the build. `.githooks/pre-commit` refuses a commit that would carry `src/` and `dist/` out of sync — it fails if `src/` has unstaged changes, then rebuilds and fails if the staged `dist/` differs from the build, or if `dist/` changed but is not in the commit — and tells what to run (`./install.sh` sets `core.hooksPath`); `pnpm build` cleans `dist/` first, so a deleted source drops its orphan; `pnpm build:check` is the release gate — it fails unless `dist/` equals HEAD, run it before a tag. `hooks/` is plain `.mjs`. `skills/` and `templates/` ship as files.

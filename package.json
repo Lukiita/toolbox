@@ -21,6 +21,8 @@
     "hooks",
     "!hooks/*.test.ts",
     "skills",
+    "!skills/**/test_*.py",
+    "!skills/**/__pycache__",
     "templates",
     "toolbox.config.example.ts"
   ],
@@ -29,6 +31,7 @@
     "build:check": "node scripts/build-check.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:py": "python3 -m unittest discover -s skills/tlc-spec-driven/scripts -p 'test_*.py'",
     "quality": "node dist/cli/toolbox.mjs quality",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

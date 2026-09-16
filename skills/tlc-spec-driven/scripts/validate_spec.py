@@ -142,6 +142,49 @@ def classify_ears(text):
     return (True, "warn: SHALL present but no EARS lead keyword")
 
 
+# The header may carry a parenthetical - the skill's own P1 template writes
+# "**Acceptance Criteria** (each line is one EARS pattern):" - so anything
+# between the label and the colon is allowed. Anchoring on the bare label left
+# that story's block never opened (issue #9).
+AC_HEADER_RE = re.compile(r"^\*{0,2}Acceptance Criteria\*{0,2}[^:\n]*:?\s*$")
+NUMBERED_ITEM_RE = re.compile(r"^\s*\d+\.\s+(.*)$")
+
+
+def is_ac_terminator(line):
+    """Where an Acceptance Criteria block ends: the next heading, the
+    "**Independent Test**:" line that follows every story, or the "---"
+    between stories. A blank line is NOT a terminator: every markdown
+    formatter (prettier included) puts one between the header and the list,
+    and closing there silently skipped every criterion - a spec with an AC
+    missing SHALL passed with exit 0 (issue #9)."""
+    stripped = line.strip()
+    return bool(re.match(r"^#{1,3}\s", line)) or stripped.startswith("**") or stripped.startswith("---")
+
+
+def collect_acceptance_criteria(lines):
+    """Return [(line_no, item_text)] for every numbered item inside an
+    Acceptance Criteria block. An indented, non-blank line that is not a new
+    item continues the previous one (a hand-wrapped criterion keeps its SHALL
+    on the second line), joined with a space."""
+    items = []
+    in_ac = False
+    for i, ln in enumerate(lines, start=1):
+        if AC_HEADER_RE.match(ln.strip()):
+            in_ac = True
+            continue
+        if not in_ac:
+            continue
+        m = NUMBERED_ITEM_RE.match(ln)
+        if m:
+            items.append((i, m.group(1).strip()))
+        elif is_ac_terminator(ln):
+            in_ac = False
+        elif items and ln.strip() and ln[:1].isspace():
+            line_no, text = items[-1]
+            items[-1] = (line_no, text + " " + ln.strip())
+    return items
+
+
 def check(spec_path):
     with open(spec_path, "r", encoding="utf-8") as f:
         text = f.read()
@@ -154,25 +197,14 @@ def check(spec_path):
             errors.append(f"missing required section: ## {name}")
 
     # 2. Acceptance criteria are EARS-shaped (have a SHALL).
-    in_ac = False
-    for i, ln in enumerate(lines, start=1):
-        stripped = ln.strip()
-        if re.match(r"^\*{0,2}Acceptance Criteria\*{0,2}\s*:?\s*$", stripped):
-            in_ac = True
-            continue
-        if in_ac:
-            m = re.match(r"^\s*\d+\.\s+(.*)$", ln)
-            if m:
-                item = m.group(1).strip()
-                if PLACEHOLDER_RE.match(item):
-                    continue  # untouched template row
-                ok, note = classify_ears(item)
-                if not ok:
-                    errors.append(f"L{i}: acceptance criterion has no SHALL (not testable): {item[:70]}")
-                elif note.startswith("warn"):
-                    warnings.append(f"L{i}: AC has SHALL but no EARS keyword (WHEN/WHILE/WHERE/IF or ubiquitous 'The … shall'): {item[:60]}")
-            elif stripped == "" or re.match(r"^#{1,3}\s", ln) or stripped.startswith("**"):
-                in_ac = False
+    for line_no, item in collect_acceptance_criteria(lines):
+        if PLACEHOLDER_RE.match(item):
+            continue  # untouched template row
+        ok, note = classify_ears(item)
+        if not ok:
+            errors.append(f"L{line_no}: acceptance criterion has no SHALL (not testable): {item[:70]}")
+        elif note.startswith("warn"):
+            warnings.append(f"L{line_no}: AC has SHALL but no EARS keyword (WHEN/WHILE/WHERE/IF or ubiquitous 'The … shall'): {item[:60]}")
 
     # 3. Assumptions table cells filled.
     b = section_bounds(lines, "Assumptions & Open Questions")
