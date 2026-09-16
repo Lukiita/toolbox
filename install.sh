@@ -54,6 +54,9 @@ fi
 # the repo would leave a dangling link behind, which Codex lists as broken.
 for skill in "$REPO_DIR"/skills/*/; do
   skill="${skill%/}"
+  # skills/synced/ is Claude Code's skill-sync bucket, written through the
+  # ~/.claude/skills link - not a skill, and gitignored.
+  [ "$(basename "$skill")" = "synced" ] && continue
   link "$skill" "$HOME/.codex/skills/$(basename "$skill")"
 done
 for entry in "$HOME"/.codex/skills/*; do
