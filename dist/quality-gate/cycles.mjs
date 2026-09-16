@@ -38,7 +38,30 @@ function specifierCandidates(spec, fromFile, aliasPrefixes) {
         `${resolved}.tsx`,
         `${resolved}/index.ts`,
         `${resolved}/index.tsx`,
+        ...sourceOfEmit(resolved),
     ];
+}
+/**
+ * `./b.js` is the ESM-correct specifier for `b.ts` and what `moduleResolution: bundler`
+ * accepts, but the file on disk is the TypeScript one - so the emit extension is mapped back
+ * before matching. Without this the specifier matched nothing, the edge vanished with no
+ * message, and on a metric frozen at zero a missed edge reads as "no cycle" rather than as
+ * "could not resolve" (project-a review 2026-09-02, ported by issue #8).
+ */
+const EMIT_EXTENSIONS = {
+    '.js': ['.ts', '.tsx'],
+    '.jsx': ['.tsx'],
+    '.mjs': ['.mts'],
+    '.cjs': ['.cts'],
+};
+function sourceOfEmit(resolved) {
+    for (const [emit, sources] of Object.entries(EMIT_EXTENSIONS)) {
+        if (!resolved.endsWith(emit))
+            continue;
+        const stem = resolved.slice(0, -emit.length);
+        return sources.map((extension) => stem + extension);
+    }
+    return [];
 }
 function importSpecifiers(relPath, source) {
     const kind = relPath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;

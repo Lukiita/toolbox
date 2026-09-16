@@ -80,70 +80,125 @@ export function compareFileCounts(
   return failures.sort((a, b) => b.current - b.limit - (a.current - a.limit));
 }
 
+/** The entry the compared commit holds for a metric, under its current or its former key. */
+function comparedEntry(
+  compared: Baseline,
+  metric: string,
+  renamedFrom: Readonly<Record<string, string>>,
+): MetricBaseline | undefined {
+  const direct = compared.metrics[metric];
+  if (direct) return direct;
+  const previous = renamedFrom[metric];
+  if (previous === undefined) return undefined;
+  return compared.metrics[previous];
+}
+
+/** What only the engine may say about a metric: which way is worse, and whether it blocks. */
+export type MetricSemantics = Pick<MetricBaseline, 'direction' | 'mode'> & { gate?: boolean };
+
 /**
- * Reconciles a baseline read from ANOTHER revision (`--baseline-from`, which
- * CI points at the pull request's base) with the branch's own.
+ * The baseline this run actually compares against when `--baseline-from`
+ * points at ANOTHER revision (CI passes the pull request's base). Resolved
+ * ONCE, so the comparison and the report can never disagree - the first
+ * attempt threaded a fallback into the comparison alone, and the PR report
+ * came out with every table empty.
  *
- * It exists because comparing against the base has two blind spots that both
- * look like "metric is not in the baseline", while meaning opposite things:
+ * Three owners, split by what each is authoritative about:
  *
- * 1. **A renamed metric.** The base still calls it `cobertura-percentual`,
- *    the branch measures `coverage-percent`. Without the mapping the ratchet
- *    would lose the real comparison exactly on the pull request that renames
- *    the keys - the moment it is most needed. `legacyKeys` restores it: the
- *    old entry answers for the new name, at its frozen value.
- * 2. **A genuinely new metric.** The base never measured circular
- *    dependencies, so its absence is not a regression - there is nothing to
- *    have got worse. The branch's own entry takes over, and the "this pull
- *    request changes quality-baseline.json" diff is what puts a human on the
- *    re-freeze.
+ *   - the ENGINE owns what a metric MEANS: `direction`, `mode` and `gate`.
+ *     Those are facts about the measurement, not project data; `semantics`
+ *     carries them from `METRIC_DEFAULTS`, which lives in compiled code.
+ *   - the compared commit owns the NUMBER, under the metric's current key or
+ *     the one it was renamed from (`renamedFrom`, also code: a map read from
+ *     the baseline file would let the PR choose which frozen number it is
+ *     measured against).
+ *   - the local project owns the NAME: `section` and `label`, plus the report
+ *     language - today's preference, not a frozen number.
  *
- * What it deliberately does NOT do: soften the local run. With no
- * `--baseline-from`, an unregistered metric still fails loudly - there the
- * absence means someone added a collector and never froze it.
+ * A metric the compared commit genuinely never had keeps the local floor and
+ * is named in `fromLocalFloor`: that number is the one thing with no other
+ * source, so the report says out loud that the PR is approving itself for it
+ * rather than printing a silent green. The per-file map stays the compared
+ * commit's: file names were not renamed, and the branch's own map would let a
+ * file's regression approve itself.
  *
- * Born in project-b (2026-08-19), brought back here by toolbox issue #1.
- * Pure: takes both baselines, returns a new one.
+ * Provenance: born in project-b (2026-08-19) as reconcileBaselineFromRev,
+ * brought to the toolbox by issue #1; project-a's copy then found four
+ * self-approval routes in review (2026-09-02, rounds 4, 6, 7, 8 - each pinned
+ * in compare.test.ts) and split it on the engine-versus-data axis. Ported
+ * back by issue #8. Pure: takes both baselines, returns a new one.
  *
  * @example
- *   reconcileBaselineFromRev(base, own, { 'coverage-percent': 'cobertura-percentual' })
+ *   effectiveBaseline(base, own, LEGACY_METRIC_KEYS, METRIC_DEFAULTS)
  */
-export function reconcileBaselineFromRev(
-  fromRev: Baseline,
-  own: Baseline,
-  legacyKeys: Readonly<Record<string, string>> = {},
-): Baseline {
-  const metrics: Record<string, MetricBaseline> = { ...fromRev.metrics };
-  for (const [name, ownMeta] of Object.entries(own.metrics)) {
-    if (name in metrics) continue;
-    const legacy = legacyKeys[name];
-    const inherited = legacy ? fromRev.metrics[legacy] : undefined;
-    if (!inherited) {
-      metrics[name] = ownMeta;
-      continue;
-    }
-    // The legacy entry keeps the RULE - value, mode, direction, gate: taken
-    // from the branch, a flipped direction or `gate: false` on the rename PR
-    // would let the branch approve itself. Only label and section are the
-    // branch's - the old ones may be in another language. The legacy key
-    // itself goes: left in, the report renders an empty table under the old
-    // section for a metric nothing measures anymore.
-    metrics[name] = { ...inherited, label: ownMeta.label, section: ownMeta.section };
-    delete metrics[legacy as string];
+export function effectiveBaseline(
+  compared: Baseline,
+  local: Baseline,
+  renamedFrom: Readonly<Record<string, string>> = {},
+  semantics: Readonly<Record<string, MetricSemantics>> = {},
+): { baseline: Baseline; fromLocalFloor: string[] } {
+  requireInjectiveRenames(renamedFrom);
+  const metrics: Record<string, MetricBaseline> = {};
+  const fromLocalFloor: string[] = [];
+  for (const [metric, meta] of Object.entries(local.metrics)) {
+    const previous = comparedEntry(compared, metric, renamedFrom);
+    if (previous === undefined) fromLocalFloor.push(metric);
+    metrics[metric] = withEngineSemantics(resolved(meta, previous), semantics[metric]);
   }
-  // `language` comes from the branch, not the base: the report language is
-  // today's preference, not a frozen number. Taken from the base, a PR against
-  // a main older than the language choice printed the header in English and
-  // the sections in Portuguese, because label and section come from each
-  // metric's own metadata.
-  return { ...fromRev, language: own.language, metrics };
+  return {
+    baseline: { ...local, metrics, uncoveredByFile: compared.uncoveredByFile },
+    fromLocalFloor,
+  };
+}
+
+/**
+ * The layer under the engine's word: the compared commit's entry when it has
+ * one, otherwise the local entry forced to gate. Three layers because each
+ * was found the hard way: remove the engine and `direction` becomes editable
+ * in the PR; remove this and a metric with no engine default reads its flags
+ * from the file under review.
+ */
+function resolved(local: MetricBaseline, previous: MetricBaseline | undefined): MetricBaseline {
+  if (previous === undefined) return { ...local, gate: true };
+  return { ...previous, section: local.section, label: local.label };
+}
+
+/** Absent semantics leaves the entry alone - a metric the engine has no defaults for. */
+function withEngineSemantics(
+  entry: MetricBaseline,
+  semantics: MetricSemantics | undefined,
+): MetricBaseline {
+  if (semantics === undefined) return entry;
+  return {
+    ...entry,
+    direction: semantics.direction,
+    mode: semantics.mode,
+    gate: semantics.gate !== false,
+  };
+}
+
+/**
+ * Two metrics pointing at the same former key both read that key's number,
+ * `fromLocalFloor` stays empty, and a regression passes silently - one typo
+ * in a hand-maintained map is a silent green, the one outcome a gate may
+ * never produce (review 2026-09-02, round 4).
+ */
+function requireInjectiveRenames(renamedFrom: Readonly<Record<string, string>>): void {
+  const targets = Object.values(renamedFrom);
+  const duplicated = targets.find((target, i) => targets.indexOf(target) !== i);
+  if (duplicated === undefined) return;
+  throw new Error(
+    `renamedFrom maps more than one metric onto \`${duplicated}\`; each former key names exactly one measurement`,
+  );
 }
 
 /**
  * Returns the metrics that regressed. A metric present in the measurement and
  * absent from the baseline **fails**: an incomplete baseline would be a gate
  * that approves what it does not know, and the fix (`--update-baseline`) is
- * one line.
+ * one line. Feed it the result of `effectiveBaseline`, never a raw compared
+ * commit: a metric this project renamed or adopted after that commit is
+ * resolved there.
  */
 export function compareMetrics(
   baseline: Baseline,

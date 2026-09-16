@@ -2,23 +2,23 @@
 
 Canonical source of the frozen-baseline quality gate. **A PR may add code but may not worsen any metric — not even by one unit.** Deterministic, zero model cost (the same class as the Archon bash nodes), and it tests itself (every collector has a `.test.ts` beside it).
 
-In *Building Evolutionary Architectures* terms, this is an **architectural fitness function of the trend kind** — it gates on direction, not on a threshold. The threshold-kind fitness functions live beside it as templates: `eslint.fitness.example.mjs` (explicit types, complexity, depth, assertion-required tests) and `dependency-cruiser.example.cjs` (layer governance for the package-by-feature layout + cross-feature boundaries).
+In _Building Evolutionary Architectures_ terms, this is an **architectural fitness function of the trend kind** — it gates on direction, not on a threshold. The threshold-kind fitness functions live beside it as templates: `eslint.fitness.example.mjs` (explicit types, complexity, depth, assertion-required tests) and `dependency-cruiser.example.cjs` (layer governance for the package-by-feature layout + cross-feature boundaries).
 
 Born in project-b, hardened in Project A (`pnpm quality`, wired into `pnpm gate`), promoted to the toolbox on 2026-08-17 with three improvements: the **explicit-`any` metric**, `--update-baseline` now **creates and prunes** metric entries instead of silently skipping them, and the **report language is per project** (`"language": "en" | "pt"` in the baseline json) while the code is all English.
 
 ## The 10 metrics
 
-| metric | gate | what it protects |
-|---|---|---|
-| `coverage-percent` | ✔ | global line coverage (catches dilution) |
-| `uncoveredByFile` (per-file ratchet) | ✔ | local coverage regressions the global number hides |
-| `uncovered-lines` / `files-with-uncovered-lines` | info | context in the report |
-| `duplication-percent` / `duplication-fragments` | ✔ | copies an agent will edit inconsistently |
-| `pure-rule-outside-domain` | ✔ | business rules born outside the layer dirs: a `.ts` with a unit test beside it that is not in `domain/` or `application/` nor in a feature's `infra(structure)/`, `presentation/`, `use-case(s)/`, `command(s)/`, `query|queries/` (a feature is a folder with a `domain/`; all anchored by `quality.featureSlot`) — works for both package-by-feature and package-by-layer layouts; a metric of place, not content |
-| `circular-dependencies` | ✔ | strongly connected components in the production import graph — a cycle means nothing in it can be reused or understood alone; frozen at 0, cycles are forbidden outright |
-| `files-over-limit` | ✔ | files over the size limit — where agent edits turn into mess |
-| `cc-over-limit` | ✔ | functions over the cyclomatic-complexity limit (default 5) — every path is a test someone owes, and generative AI accumulates accidental complexity |
-| `explicit-any` | ✔ | AST count of `any` in production — type debt can only shrink |
+| metric                                           | gate | what it protects                                                                                                                                                                                                         |
+| ------------------------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coverage-percent`                               | ✔    | global line coverage (catches dilution)                                                                                                                                                                                  |
+| `uncoveredByFile` (per-file ratchet)             | ✔    | local coverage regressions the global number hides                                                                                                                                                                       |
+| `uncovered-lines` / `files-with-uncovered-lines` | info | context in the report                                                                                                                                                                                                    |
+| `duplication-percent` / `duplication-fragments`  | ✔    | copies an agent will edit inconsistently                                                                                                                                                                                 |
+| `pure-rule-outside-domain`                       | ✔    | business rules born outside the layer dirs: a `.ts` with a unit test beside it that is not in `domain/` or `application/` nor in a feature's `infra(structure)/`, `presentation/`, `use-case(s)/`, `command(s)/`, `query | queries/`(a feature is a folder with a`domain/`; all anchored by `quality.featureSlot`) — works for both package-by-feature and package-by-layer layouts; a metric of place, not content |
+| `circular-dependencies`                          | ✔    | strongly connected components in the production import graph — a cycle means nothing in it can be reused or understood alone; frozen at 0, cycles are forbidden outright                                                 |
+| `files-over-limit`                               | ✔    | files over the size limit — where agent edits turn into mess                                                                                                                                                             |
+| `cc-over-limit`                                  | ✔    | functions over the cyclomatic-complexity limit (default 5) — every path is a test someone owes, and generative AI accumulates accidental complexity                                                                      |
+| `explicit-any`                                   | ✔    | AST count of `any` in production — type debt can only shrink                                                                                                                                                             |
 
 ## Importing into a project
 
@@ -43,18 +43,18 @@ The code and console output are English. The **report** (terminal, job summary, 
 
 Every value a project used to edit inside a copied file is a field here. The library reads it; the code is never edited in a project. Defaults are the canonical values.
 
-| field | default | what it drives |
-| --- | --- | --- |
-| `sourceWindow` | `/^src\//` | which files are production code: size, `any`, complexity, cycles, the place rule and the coverage slice. A monorepo widens it (`/^apps\/[^/]+\/src\//`). |
-| `featureSlot` | `'^src/(?:([^/]+)/)?'` | the place rule's anchor — regex source with group 1 = the feature name (`src/<feature>/`), or nothing in the flat layout. A monorepo re-anchors it once. |
-| `lineLimit` | `400` | files over it enter the size count |
-| `ccLimit` | `5` | functions over it enter the complexity count (Richards & Ford's preference; industry tolerates 10) |
-| `aliasPrefixes` | `{ '@/': '' }` | non-relative import prefixes resolved as internal for the cycle collector |
-| `coveragePath` | `coverage-quality/coverage-final.json` | where the coverage run writes its json (see `vitest.quality.config.ts`) |
-| `vitestConfig` | `vitest.quality.config.ts` | the config the ratchet runs vitest with; `undefined` when the project default already measures the wide slice |
-| `duplicationPaths` | `['src']` | what jscpd scans |
-| `baseBranch` | `main` | the branch PRs merge into; the pre-push hook measures against its tip |
-| `prePushSkipTests` | `false` | whether the pre-push hook reuses the coverage json on disk instead of running the suite; opt in when coverage is not gated or the suite is too slow for a push |
+| field              | default                                | what it drives                                                                                                                                                 |
+| ------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sourceWindow`     | `/^src\//`                             | which files are production code: size, `any`, complexity, cycles, the place rule and the coverage slice. A monorepo widens it (`/^apps\/[^/]+\/src\//`).       |
+| `featureSlot`      | `'^src/(?:([^/]+)/)?'`                 | the place rule's anchor — regex source with group 1 = the feature name (`src/<feature>/`), or nothing in the flat layout. A monorepo re-anchors it once.       |
+| `lineLimit`        | `400`                                  | files over it enter the size count                                                                                                                             |
+| `ccLimit`          | `5`                                    | functions over it enter the complexity count (Richards & Ford's preference; industry tolerates 10)                                                             |
+| `aliasPrefixes`    | `{ '@/': '' }`                         | non-relative import prefixes resolved as internal for the cycle collector                                                                                      |
+| `coveragePath`     | `coverage-quality/coverage-final.json` | where the coverage run writes its json (see `vitest.quality.config.ts`)                                                                                        |
+| `vitestConfig`     | `vitest.quality.config.ts`             | the config the ratchet runs vitest with; `undefined` when the project default already measures the wide slice                                                  |
+| `duplicationPaths` | `['src']`                              | what jscpd scans                                                                                                                                               |
+| `baseBranch`       | `main`                                 | the branch PRs merge into; the pre-push hook measures against its tip                                                                                          |
+| `prePushSkipTests` | `false`                                | whether the pre-push hook reuses the coverage json on disk instead of running the suite; opt in when coverage is not gated or the suite is too slow for a push |
 
 Rule: an adaptation point without a config field is a bug — the table above is the schema, and a new knob in the code lands here in the same change.
 
@@ -74,7 +74,7 @@ The path that works:
 2. **If the worsening is yours, fix the code.** That is the point of the ratchet: it only exists while re-freezing is more expensive than fixing.
 3. **If the debt is accepted, re-freeze in a PR of its own**, on the base, reviewed alone, with the reason in the commit body. The quality job on **that** PR is red by construction — it compares against the base, and the base holds the old number. A red job on a re-freezing PR is expected, not a failure to work around. Merge it, then rebase the feature PR.
 
-Two cases are handled automatically when comparing against the base (`reconcileBaselineFromRev` in `compare.mts`): a **renamed metric** keeps comparing under its old name at the frozen value (`LEGACY_METRIC_KEYS` in `baseline-store.mts`), and a **new metric** the base never measured is adopted from the branch — there was nothing to worsen. Neither case softens the local run: with no `--baseline-from`, an unregistered metric still fails.
+Two cases are handled automatically when comparing against the base (`effectiveBaseline` in `compare.mts`): a **renamed metric** keeps comparing under its old name at the frozen value (`LEGACY_METRIC_KEYS` in `baseline-store.mts`), and a **new metric** the base never measured keeps the branch's own floor — there was nothing to worsen — but always gates and is named in the report as self-compared, so nobody reads a green on it as a comparison. What a metric means (direction, mode, gate) comes from `METRIC_DEFAULTS` in code, never from either baseline file: the baseline is what the pull request edits. Neither case softens the local run: with no `--baseline-from`, an unregistered metric still fails.
 
 With the pre-push hook installed (`pre-push.example.sh`), the local gate charges the **decision**, not the number: a regression against the base whose re-freeze is recorded on the branch passes with a warning that CI will be red, provided the code is no worse than what was frozen — worse than the branch's own baseline still blocks; an unrecorded regression blocks before the push. The "recorded on the branch" check diffs from the merge-base, so a re-freeze that landed on the base after the fork is not mistaken for yours: that case fails against the tip and the advice is to rebase.
 

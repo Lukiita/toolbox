@@ -16,6 +16,11 @@ const EN = {
         '> ⚠️ This PR changes `quality-baseline.json`. Re-freezing is legitimate, but it is',
         '> a decision — check the reason in the commit body before approving.',
     ],
+    localFloorNotice: (metrics) => [
+        `> ⚠️ The base commit has no baseline for ${metrics.length} metric(s): ${metrics.join(', ')}.`,
+        "> Those were compared against this branch's OWN frozen numbers, so for them this PR",
+        '> approves itself. Read them in the diff of `quality-baseline.json`.',
+    ],
     tableHeader: '| Metric | Baseline | Current | Δ |',
     regressionsTitle: '### Regressions',
     ratchetAdvice: [
@@ -44,6 +49,11 @@ const PT = {
     baselineChangedNotice: [
         '> ⚠️ Este PR altera o `quality-baseline.json`. Recongelar é legítimo, mas é',
         '> decisão — confira o motivo no corpo do commit antes de aprovar.',
+    ],
+    localFloorNotice: (metrics) => [
+        `> ⚠️ O commit-base não tem baseline para ${metrics.length} métrica(s): ${metrics.join(', ')}.`,
+        '> Essas foram comparadas contra os números congelados DESTE branch, ou seja: para elas',
+        '> este PR se aprova sozinho. Leia-as no diff do `quality-baseline.json`.',
     ],
     tableHeader: '| Métrica | Baseline | Atual | Δ |',
     regressionsTitle: '### Regressões',

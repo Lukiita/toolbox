@@ -109,6 +109,30 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     expect(result.report).toContain('HEAD');
   });
 
+  it('a metric the base never had is gated on the local floor, and both the warning and the report name it', () => {
+    const { root, config } = scratchRepo();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    const baselinePath = join(root, 'quality-baseline.json');
+    const frozen = JSON.parse(readFileSync(baselinePath, 'utf8')) as {
+      metrics: Record<string, unknown>;
+    };
+    delete frozen.metrics['circular-dependencies'];
+    writeFileSync(baselinePath, `${JSON.stringify(frozen, null, 2)}\n`);
+    execFileSync('git', ['commit', '-qam', 'base without the cycles metric'], { cwd: root });
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    const warnings: string[] = [];
+    const result = runQualityGate(
+      { ...env(root, config), warn: (m): void => void warnings.push(m) },
+      { ...run, baselineFrom: 'HEAD' },
+    );
+    expect(result.status).toBe('passed');
+    expect(warnings.join('\n')).toContain(
+      'HEAD has no baseline for 1 metric(s): circular-dependencies',
+    );
+    expect(result.report).toContain('circular-dependencies');
+    expect(result.report).toContain('approves itself');
+  });
+
   it('a base with no common history still yields a report (the re-freeze warning is just off)', () => {
     const { root, config } = scratchRepo();
     runQualityGate(env(root, config), { ...run, updateBaseline: true });

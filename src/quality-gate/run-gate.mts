@@ -103,7 +103,7 @@ function compareAndReport(
   measurement: Measurement,
   baselineFrom: string | undefined,
 ): GateResult {
-  const { base, origin } = readComparisonBaseline(env.root, baselineFrom, env.warn);
+  const { base, origin, fromLocalFloor } = readComparisonBaseline(env.root, baselineFrom, env.warn);
   const t = stringsFor(base.language);
   const failures = [
     ...compareMetrics(base, measurement.current, t),
@@ -118,6 +118,7 @@ function compareAndReport(
       generatedAt: new Date().toISOString(),
       baselineOrigin: origin,
       baselineChanged: origin ? baselineChangedSince(env.root, origin) : false,
+      localFloorMetrics: fromLocalFloor,
     },
     t,
   );

@@ -65,7 +65,7 @@ function refreeze(env, m) {
     return { status: 'refrozen', failures: [], current: m.current };
 }
 function compareAndReport(env, measurement, baselineFrom) {
-    const { base, origin } = readComparisonBaseline(env.root, baselineFrom, env.warn);
+    const { base, origin, fromLocalFloor } = readComparisonBaseline(env.root, baselineFrom, env.warn);
     const t = stringsFor(base.language);
     const failures = [
         ...compareMetrics(base, measurement.current, t),
@@ -79,6 +79,7 @@ function compareAndReport(env, measurement, baselineFrom) {
         generatedAt: new Date().toISOString(),
         baselineOrigin: origin,
         baselineChanged: origin ? baselineChangedSince(env.root, origin) : false,
+        localFloorMetrics: fromLocalFloor,
     }, t);
     const status = failures.length > 0 ? 'failed' : 'passed';
     return { status, failures, current: measurement.current, report };

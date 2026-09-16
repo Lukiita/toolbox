@@ -30,6 +30,12 @@ export interface ReportInput {
   baselineOrigin?: string;
   /** The PR touched `quality-baseline.json` - needs human eyes. */
   baselineChanged?: boolean;
+  /**
+   * Metrics the compared commit never had, so the local floor stood in. They are printed
+   * because a silent green on a self-compared metric is the hole `--baseline-from` exists to
+   * close (project-a review 2026-09-02, issue #8).
+   */
+  localFloorMetrics?: readonly string[];
 }
 
 function delta(value: number, base: number, unit?: string): string {
@@ -46,6 +52,11 @@ export function buildReport(input: ReportInput, t: GateStrings): string {
 
   if (input.baselineChanged) {
     lines.push(...t.baselineChangedNotice, '');
+  }
+
+  const localFloor = input.localFloorMetrics ?? [];
+  if (localFloor.length > 0) {
+    lines.push(...t.localFloorNotice(localFloor), '');
   }
 
   // One table per section, in the order the metrics appear in the baseline.

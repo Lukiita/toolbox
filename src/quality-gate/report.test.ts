@@ -128,3 +128,27 @@ describe('buildReport', () => {
     expect(md).toContain('### Regressões');
   });
 });
+
+// The notice exists because a PR report once came out with every table empty and a green
+// that was self-compared. An artefact added to make a hole visible needs a test, or the
+// next refactor removes it silently (project-a review 2026-09-02, round 4; issue #8).
+describe('buildReport - the self-compared metrics are named', () => {
+  it('prints the local-floor notice when some metric had no baseline in the compared commit', () => {
+    const md = buildReport(
+      { ...INPUT, localFloorMetrics: ['cc-over-limit', 'explicit-any'] },
+      stringsFor('pt'),
+    );
+    expect(md).toContain('cc-over-limit, explicit-any');
+    expect(md).toContain('se aprova sozinho');
+  });
+
+  it('says nothing when every metric was compared against the base', () => {
+    const md = buildReport({ ...INPUT, localFloorMetrics: [] }, stringsFor('pt'));
+    expect(md).not.toContain('se aprova sozinho');
+  });
+
+  it('prints it in English too', () => {
+    const md = buildReport({ ...INPUT, localFloorMetrics: ['m'] }, stringsFor('en'));
+    expect(md).toContain('approves itself');
+  });
+});

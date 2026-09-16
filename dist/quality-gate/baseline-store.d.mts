@@ -13,14 +13,18 @@ export interface BaselineSource {
     base: Baseline;
     /** The rev it came from; undefined when it is the branch's own. */
     origin?: string;
+    /** Metrics `origin` never had, gated against the branch's own floor - the report names them. */
+    fromLocalFloor: string[];
 }
 /**
  * The baseline to compare against: the branch's own, or the one at `rev`
- * (CI passes the PR's base) reconciled with the branch's - a renamed key
- * keeps comparing under the old name, a new metric is adopted from the
- * branch. A rev with no baseline yet (the PR that introduces the ratchet)
- * falls back to the branch's own, and says so through `warn` so nobody reads
- * "passed" believing the base was compared.
+ * (CI passes the PR's base) resolved with the branch's by `effectiveBaseline`
+ * - a renamed key keeps comparing under the old name, a metric the base never
+ * had keeps the local floor and is reported as self-compared, and what a
+ * metric means comes from METRIC_DEFAULTS, never from either file. A rev with
+ * no baseline yet (the PR that introduces the ratchet) falls back to the
+ * branch's own, and says so through `warn` so nobody reads "passed" believing
+ * the base was compared.
  */
 export declare function readComparisonBaseline(root: string, rev: string | undefined, warn: (message: string) => void): BaselineSource;
 /**

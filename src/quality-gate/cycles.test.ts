@@ -15,6 +15,39 @@ describe('importGraph', () => {
     expect(graph.get('src/a.ts')).toEqual(['src/b.ts']);
   });
 
+  // `./b.js` is the ESM-correct specifier for `b.ts` and what `moduleResolution: bundler`
+  // accepts. Unresolvable specifiers are dropped silently, so a missed edge reads as "no
+  // cycle" on a metric frozen at zero (project-a review 2026-09-02, ported by issue #8).
+  it('resolves a .js specifier to the TypeScript file that emits it', () => {
+    const graph = importGraph(
+      sources({
+        'src/a.ts': "import { b } from './b.js';",
+        'src/b.ts': 'export const b = 1;',
+      }),
+    );
+    expect(graph.get('src/a.ts')).toEqual(['src/b.ts']);
+  });
+
+  it('resolves a .mjs specifier to its .mts source', () => {
+    const graph = importGraph(
+      sources({
+        'src/a.mts': "import { b } from './b.mjs';",
+        'src/b.mts': 'export const b = 1;',
+      }),
+    );
+    expect(graph.get('src/a.mts')).toEqual(['src/b.mts']);
+  });
+
+  it('finds a cycle written with .js specifiers', () => {
+    const graph = importGraph(
+      sources({
+        'src/a.ts': "import { b } from './b.js';",
+        'src/b.ts': "import { a } from './a.js';",
+      }),
+    );
+    expect(circularDependencies(graph)).toEqual([['src/a.ts', 'src/b.ts']]);
+  });
+
   it('resolves a directory import to its index file', () => {
     const graph = importGraph(
       sources({

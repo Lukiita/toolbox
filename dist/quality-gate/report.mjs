@@ -23,6 +23,10 @@ export function buildReport(input, t) {
     if (input.baselineChanged) {
         lines.push(...t.baselineChangedNotice, '');
     }
+    const localFloor = input.localFloorMetrics ?? [];
+    if (localFloor.length > 0) {
+        lines.push(...t.localFloorNotice(localFloor), '');
+    }
     // One table per section, in the order the metrics appear in the baseline.
     const sections = [];
     for (const m of Object.values(baseline.metrics)) {

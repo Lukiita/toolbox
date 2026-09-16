@@ -32,16 +32,16 @@ Every "adaptation point" in a README today is a value a project edits inside a c
 file. In the library those values become **parameters** read from one file in the
 project, `toolbox.config.ts`:
 
-| Today (edited on import)                          | Tomorrow (config, as shipped)           |
-| ------------------------------------------------- | --------------------------------------- |
-| `place-rule.mts` → `FEATURE_SLOT`, `RULE_PATTERNS` | `quality.featureSlot` (the rule patterns derive from it) |
-| `size.mts` → `LINE_LIMIT`, `isSizedFile`           | `quality.lineLimit`, `quality.sourceWindow` |
-| `complexity.mts` → `CC_LIMIT`                      | `quality.ccLimit`                          |
-| `cycles.mts` → `ALIAS_PREFIXES`                    | `quality.aliasPrefixes`                    |
-| `gate.mts` → `ROOT`, coverage path, `src` for jscpd | the git root (not configurable), `quality.coveragePath`, `quality.duplicationPaths`, `quality.vitestConfig` |
-| `pre-push.example.sh` → `BASE_BRANCH`, `QUALITY_CMD`, `GATE_FLAGS` | `quality.baseBranch`, `quality.prePushSkipTests`; the one-line hook calls the binary by path |
-| `check-missing-tests.mjs` → `WATCHED_PATTERNS`, `EXEMPT_SUFFIXES` | `hooks.watchedPatterns` (derived from `featureSlot` unless pinned), `hooks.exemptSuffixes` |
-| `guard-bash.mjs` → `PROTECTED_BRANCHES`             | `hooks.protectedBranches` (the secrets and force-push rules are universal, no config) |
+| Today (edited on import)                                           | Tomorrow (config, as shipped)                                                                               |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `place-rule.mts` → `FEATURE_SLOT`, `RULE_PATTERNS`                 | `quality.featureSlot` (the rule patterns derive from it)                                                    |
+| `size.mts` → `LINE_LIMIT`, `isSizedFile`                           | `quality.lineLimit`, `quality.sourceWindow`                                                                 |
+| `complexity.mts` → `CC_LIMIT`                                      | `quality.ccLimit`                                                                                           |
+| `cycles.mts` → `ALIAS_PREFIXES`                                    | `quality.aliasPrefixes`                                                                                     |
+| `gate.mts` → `ROOT`, coverage path, `src` for jscpd                | the git root (not configurable), `quality.coveragePath`, `quality.duplicationPaths`, `quality.vitestConfig` |
+| `pre-push.example.sh` → `BASE_BRANCH`, `QUALITY_CMD`, `GATE_FLAGS` | `quality.baseBranch`, `quality.prePushSkipTests`; the one-line hook calls the binary by path                |
+| `check-missing-tests.mjs` → `WATCHED_PATTERNS`, `EXEMPT_SUFFIXES`  | `hooks.watchedPatterns` (derived from `featureSlot` unless pinned), `hooks.exemptSuffixes`                  |
+| `guard-bash.mjs` → `PROTECTED_BRANCHES`                            | `hooks.protectedBranches` (the secrets and force-push rules are universal, no config)                       |
 
 The code is never edited in a project. Only the config. Defaults equal today's canonical
 values, so a project with an empty config behaves like a fresh import.
@@ -115,7 +115,7 @@ later is a one-line change in each consumer. Publishing = tag + push.
 - **jscpd is the package's dependency**, resolved from the package, not from the project. A project whose own jscpd version differed will see `duplication-*` move on migration; that is the one metric to re-freeze knowingly.
 - **Hooks read the config lazily** from the built `dist/config/`, so the global secrets hook (wired from `~/.agents/hooks`) never depends on it to load. A hook never crashes on a broken or absent config: the universal rules (secrets, force push) run first, and the config falls back to the defaults with a note on stderr - a crash would be fail-open for a guard.
 - **The root is the git top-level, not a config field.** Every consumer runs the gate from its repo root; the old `ROOT = resolve(import.meta.dirname, '../..')` only existed because the script lived two folders down.
-- **`complexity.mts` and `size.mts` were ported from project-a's copy** (review of 2026-09-02: `?.`, default parameters, field initialisers, static blocks, `.mts`/`.cts` in the window), which had evolved past the toolbox - issue #1's drift in the other direction. Consumers behind that copy will see `cc-over-limit`, `files-over-limit` and `explicit-any` move on migration, in the direction of measuring more; run from this checkout against project-a's current tree, the library's metric table equals the one project-a's own copy prints (the pilot itself is still step 4 of the migration). Other collectors there (`compare`, `cycles`, `locale`, `report`) are also ahead and are a follow-up.
+- **`complexity.mts` and `size.mts` were ported from project-a's copy** (review of 2026-09-02: `?.`, default parameters, field initialisers, static blocks, `.mts`/`.cts` in the window), which had evolved past the toolbox - issue #1's drift in the other direction. Consumers behind that copy will see `cc-over-limit`, `files-over-limit` and `explicit-any` move on migration, in the direction of measuring more; run from this checkout against project-a's current tree, the library's metric table equals the one project-a's own copy prints (the pilot itself is still step 4 of the migration). The other collectors that were ahead there (`compare`, `cycles`, `locale`, `report`) were ported by issue #8 (2026-09-16): `effectiveBaseline` replaced `reconcileBaselineFromRev`, cycles resolve `./b.js` to `b.ts`, and the report names the metrics the base never had.
 
 ## Decided (2026-09-15)
 

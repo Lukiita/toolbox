@@ -4,6 +4,8 @@ export interface GateStrings {
     statusPassed: string;
     statusFailed: (count: number) => string;
     baselineChangedNotice: readonly string[];
+    /** Metrics the compared commit never had, so they were gated against this branch itself. */
+    localFloorNotice: (metrics: readonly string[]) => readonly string[];
     tableHeader: string;
     regressionsTitle: string;
     ratchetAdvice: readonly string[];

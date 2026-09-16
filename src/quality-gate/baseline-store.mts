@@ -6,7 +6,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { type Baseline, type MetricBaseline, reconcileBaselineFromRev } from './compare.mts';
+import { type Baseline, effectiveBaseline, type MetricBaseline } from './compare.mts';
 import { runGit } from './git.mts';
 
 export const BASELINE_FILE = 'quality-baseline.json';
@@ -159,22 +159,26 @@ export interface BaselineSource {
   base: Baseline;
   /** The rev it came from; undefined when it is the branch's own. */
   origin?: string;
+  /** Metrics `origin` never had, gated against the branch's own floor - the report names them. */
+  fromLocalFloor: string[];
 }
 
 /**
  * The baseline to compare against: the branch's own, or the one at `rev`
- * (CI passes the PR's base) reconciled with the branch's - a renamed key
- * keeps comparing under the old name, a new metric is adopted from the
- * branch. A rev with no baseline yet (the PR that introduces the ratchet)
- * falls back to the branch's own, and says so through `warn` so nobody reads
- * "passed" believing the base was compared.
+ * (CI passes the PR's base) resolved with the branch's by `effectiveBaseline`
+ * - a renamed key keeps comparing under the old name, a metric the base never
+ * had keeps the local floor and is reported as self-compared, and what a
+ * metric means comes from METRIC_DEFAULTS, never from either file. A rev with
+ * no baseline yet (the PR that introduces the ratchet) falls back to the
+ * branch's own, and says so through `warn` so nobody reads "passed" believing
+ * the base was compared.
  */
 export function readComparisonBaseline(
   root: string,
   rev: string | undefined,
   warn: (message: string) => void,
 ): BaselineSource {
-  if (!rev) return { base: readOwnBaseline(root) };
+  if (!rev) return { base: readOwnBaseline(root), fromLocalFloor: [] };
   // Only "the rev has no baseline" is caught: a missing OWN baseline must
   // surface as itself, not as a warning about the wrong file (found in review).
   const fromRev = readBaselineAt(root, rev);
@@ -183,12 +187,21 @@ export function readComparisonBaseline(
       `warning: ${rev} has no ${BASELINE_FILE} (the PR that introduces the ratchet).\n` +
         "Comparing against the branch's own baseline.",
     );
-    return { base: readOwnBaseline(root) };
+    return { base: readOwnBaseline(root), fromLocalFloor: [] };
   }
-  return {
-    base: reconcileBaselineFromRev(fromRev, readOwnBaseline(root), LEGACY_METRIC_KEYS),
-    origin: rev,
-  };
+  const { baseline, fromLocalFloor } = effectiveBaseline(
+    fromRev,
+    readOwnBaseline(root),
+    LEGACY_METRIC_KEYS,
+    METRIC_DEFAULTS,
+  );
+  if (fromLocalFloor.length > 0) {
+    warn(
+      `warning: ${rev} has no baseline for ${fromLocalFloor.length} metric(s): ${fromLocalFloor.join(', ')}.\n` +
+        "Those were compared against this branch's own frozen numbers.",
+    );
+  }
+  return { base: baseline, origin: rev, fromLocalFloor };
 }
 
 /**
