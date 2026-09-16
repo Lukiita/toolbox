@@ -3,25 +3,17 @@
 # Installs the toolbox on this machine: links the global environment to this
 # repo through symlinks. Idempotent - running it twice produces the same state.
 #
-# What it links:
+# What it links (the product only - skills and hooks; the personal setup,
+# AGENTS.md, Claude settings and subagents, lives in a private dotfiles repo
+# with its own installer):
 #   ~/.claude/skills    -> skills/            (Claude Code)
 #   ~/.agents/skills    -> skills/            (canonical multi-agent path;
 #                                              tlc, capability-sync and
 #                                              pr-review-triage reference it)
-#   ~/.agents/AGENTS.md -> agents/AGENTS.md   (agent-agnostic global rules)
-#   ~/.agents/katas     -> katas/             (architecture-kata practice output)
-#   ~/.codex/AGENTS.md  -> agents/AGENTS.md
-#   ~/.claude/CLAUDE.md -> claude/CLAUDE.md   (a one-line pointer to AGENTS.md)
-#   ~/.claude/agents    -> claude/agents/     (Claude Code subagent definitions)
+#   ~/.agents/hooks     -> hooks/             (the global secrets guard)
 #   ~/.codex/skills/<s> -> skills/<s>         (one link per skill: Codex keeps
 #                                              its own .system/ in that dir, so
 #                                              the dir itself cannot be a link)
-#
-# settings.json is deliberately NOT a symlink: Claude Code rewrites that file
-# on its own (e.g. /model saves into it), and an atomic write by the app would
-# replace the link with a real file, silently breaking the single source.
-# So: copy when absent; when present and divergent, show the diff and leave
-# the decision to you.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,11 +39,6 @@ link() { # link <target-in-repo> <destination-in-home>
 link "$REPO_DIR/skills" "$HOME/.claude/skills"
 link "$REPO_DIR/skills" "$HOME/.agents/skills"
 link "$REPO_DIR/hooks" "$HOME/.agents/hooks"
-link "$REPO_DIR/agents/AGENTS.md" "$HOME/.agents/AGENTS.md"
-link "$REPO_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
-link "$REPO_DIR/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
-link "$REPO_DIR/katas" "$HOME/.agents/katas"
-link "$REPO_DIR/claude/agents" "$HOME/.claude/agents"
 
 # This repo's own git hooks (pre-commit keeps the committed dist/ in sync with
 # src/). Plain core.hooksPath, not husky: a lifecycle script in package.json
@@ -75,17 +62,5 @@ for entry in "$HOME"/.codex/skills/*; do
     echo "prune:  $entry (dangling)"
   fi
 done
-
-SETTINGS_REPO="$REPO_DIR/claude/settings.json"
-SETTINGS_HOME="$HOME/.claude/settings.json"
-if [ ! -e "$SETTINGS_HOME" ]; then
-  cp "$SETTINGS_REPO" "$SETTINGS_HOME"
-  echo "copy:   $SETTINGS_HOME (new)"
-elif cmp -s "$SETTINGS_REPO" "$SETTINGS_HOME"; then
-  echo "ok:     $SETTINGS_HOME"
-else
-  echo "WARNING: $SETTINGS_HOME diverges from the repo - resolve by hand (install never overwrites):"
-  diff -u "$SETTINGS_HOME" "$SETTINGS_REPO" || true
-fi
 
 echo "toolbox installed."

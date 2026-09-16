@@ -1,6 +1,6 @@
 # toolbox
 
-My personal development environment, versioned. This repo is the **single source**: the machine consumes it through symlinks, and projects consume it as a **versioned package** (`@lukiita/toolbox`, ADR-0001) — any drift shows up in `git status` or in a version number, never hidden in copies.
+My agent toolbox, versioned. This repo is the **single source** for skills, agent hooks and the quality ratchet: the machine consumes it through symlinks, and projects consume it as a **versioned package** (`@lukiita/toolbox`, ADR-0001) — any drift shows up in `git status` or in a version number, never hidden in copies.
 
 The pattern came from Project A's `.agents/skills/`, which learned the hard way that copy-per-provider drifts — when the skills were rescued into this repo, the only difference between the `tlc-spec-driven` copies in project-b and Project A was the script path prefix.
 
@@ -17,14 +17,10 @@ Idempotent: running it again only confirms the state. What it links:
 |---|---|---|
 | `~/.claude/skills` | `skills/` | symlink |
 | `~/.agents/skills` | `skills/` | symlink (the canonical path skills reference) |
-| `~/.agents/AGENTS.md` | `agents/AGENTS.md` | symlink (agent-agnostic global instructions) |
-| `~/.codex/AGENTS.md` | `agents/AGENTS.md` | symlink |
 | `~/.codex/skills/<skill>` | `skills/<skill>` | one symlink **per skill** — Codex keeps its own `.system/` inside that directory, so the directory itself cannot be a link; dangling links are pruned |
 | `~/.agents/hooks` | `hooks/` | symlink (the global secrets guard is wired from here) |
-| `~/.agents/katas` | `katas/` | symlink (`architecture-kata` practice output — never a stray `katas/` inside a client repo) |
-| `~/.claude/agents` | `claude/agents/` | symlink (Claude Code subagent definitions) |
-| `~/.claude/CLAUDE.md` | `claude/CLAUDE.md` | symlink (a one-line pointer to AGENTS.md) |
-| `~/.claude/settings.json` | `claude/settings.json` | **copy** — Claude Code rewrites this file on its own; a symlink would be destroyed by the app's first atomic write. Divergence becomes a warning with a diff, never an overwrite. |
+
+The personal setup — `~/.agents/AGENTS.md` (global instructions), `~/.claude/CLAUDE.md`, `~/.claude/agents`, `~/.claude/settings.json` and the kata output — is not part of this repo: it lives in a private dotfiles repo with its own installer, so this one can be public and consumed as a package without carrying anyone's preferences.
 
 Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 
