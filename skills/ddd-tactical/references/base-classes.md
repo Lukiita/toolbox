@@ -12,13 +12,19 @@ Conceptually an identifier IS a value object — immutable, compared by value, n
 
 ```ts
 // shared/domain/identifier.ts
-export class Identifier<T extends string | number> {
-  // protected, not private: per-aggregate ids specialize it (below).
-  protected constructor(private readonly _value: T) {}
+export abstract class Identifier<T extends string | number> {
+  // Abstract, so forgetting the brand is a compile error (TS2515), not a
+  // convention someone has to remember: without it a typed id is structurally
+  // identical to its siblings and the swap compiles, passes lint and passes
+  // every test - the failure is the ABSENCE of a restriction. `protected`
+  // because `private abstract` is illegal (TS1243); a protected member still
+  // compares by declaration, so nominality holds (below).
+  protected abstract readonly __brand: string;
 
-  public static from<T extends string | number>(value: T): Identifier<T> {
-    return new Identifier(value);
-  }
+  // protected, not private: per-aggregate ids specialize it (below). There is
+  // no `from` here - an abstract class cannot construct itself, and every typed
+  // id declares its own anyway to return its own type.
+  protected constructor(private readonly _value: T) {}
 
   public get value(): T {
     return this._value;
@@ -30,19 +36,20 @@ export class Identifier<T extends string | number> {
 }
 ```
 
-**Typed ids per aggregate** — when two ids of the same primitive travel together (a Subscription holds its own id AND a planId), the generic `Identifier<string>` lets the compiler accept a swap. The specialization closes that — connascence of *type*, used in your favor:
+**Typed ids per aggregate** — every id is a typed id: `Identifier` is abstract, so there is no generic `Identifier<string>` to construct. When two ids of the same primitive travel together (a Subscription holds its own id AND a planId), a shared type would let the compiler accept a swap. The specialization closes that — connascence of *type*, used in your favor:
 
 ```ts
 // declared in the owning aggregate's file (subscription.aggregate.ts) and exported from there
 export class SubscriptionId extends Identifier<string> {
   // TypeScript typing is STRUCTURAL: an empty subclass would be identical to
-  // PlanId and the compiler would still accept the swap. A private brand makes
-  // the type nominal - private members compare by declaration, so two classes
-  // with their own brands are mutually incompatible. That is the whole trick.
-  private readonly __brand!: 'SubscriptionId';
+  // PlanId and the compiler would still accept the swap. The brand makes the
+  // type nominal - private and protected members compare by declaration, so
+  // two classes with their own brands are mutually incompatible. That is the
+  // whole trick. The base declares it abstract, so leaving this line out does
+  // not compile; `!` because it is a type-level marker, never assigned.
+  protected readonly __brand!: 'SubscriptionId';
 
-  // Each typed id redefines `from` (one line): the inherited one returns the
-  // generic Identifier, which the brand now - correctly - refuses.
+  // Each typed id declares its own `from` (one line), returning its own type.
   public static from(value: string): SubscriptionId {
     return new SubscriptionId(value);
   }
