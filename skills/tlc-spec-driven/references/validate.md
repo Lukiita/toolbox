@@ -195,7 +195,9 @@ After all checks complete, the Verifier MUST:
    **The cut is `.specs/`, not "code".** A later commit under `docs/` moves the stamp too, and the comparison will then report drift with no source change behind it. That is the deliberate trade: the alternative is an allowlist of code paths, which has to be maintained in every repo this skill lands in and rots silently. A false alarm from a docs commit costs one re-read; a missed alarm from a source commit ships a PR whose report is lying.
 3. **Return a compact summary in chat** to the orchestrator (see Compact Chat Summary section below). The orchestrator surfaces it to the user and routes any ranked gaps to fix tasks.
 
-**Deterministic backing (run it, do not eyeball it).** After writing the report, run `python3 <skill-dir>/scripts/validate_state.py <feature>`. It confirms the report is real - present, verdict filled to PASS, and backed by at least one `file:line` evidence citation - so a missing, hollow, placeholder, or FAIL report cannot slip through as done. A non-zero exit means the feature is NOT done: repair the report or route the FAIL gaps to fix tasks, then re-run. This is the closing gate of Execute and runs automatically, the same way the lessons layer runs at distillation; it is never a manual step. If no code-execution tool is available, confirm the same by reading `validation.md`.
+**The verdict line is a contract, not prose.** The report header carries exactly one line `**Verdict**: PASS ✅` or `**Verdict**: FAIL ❌` - that literal label, in English, whatever language the rest of the report is written in. It is the only place the verdict lives: the `## Validation: ... - PASS` heading is the chat summary and is never in the file, and the sensor's `**Result**:` line is the sensor's own outcome, not the report's. A report without that line, with it duplicated, translated (`Veredito`), or left as the placeholder is not done. Before this was written down, the 15 reports across four projects each invented their own place for the verdict and the gate read the sensor line instead (toolbox issue #1).
+
+**Deterministic backing (run it, do not eyeball it).** After writing the report, run `python3 <skill-dir>/scripts/validate_state.py <feature>`. It confirms the report is real - present, `**Verdict**` filled to PASS, and backed by at least one `file:line` evidence citation - so a missing, hollow, placeholder, or FAIL report cannot slip through as done. A non-zero exit means the feature is NOT done: repair the report or route the FAIL gaps to fix tasks, then re-run. This is the closing gate of Execute and runs automatically, the same way the lessons layer runs at distillation; it is never a manual step. If no code-execution tool is available, confirm the same by reading `validation.md`.
 
 ### 10. Distill Lessons (MANDATORY when validation.md has signal)
 
@@ -243,6 +245,7 @@ The Verifier returns this block to the orchestrator after completing all checks:
 **Diff range**: [commit range or branch..HEAD]
 **Commit verificado**: [full SHA of the last code commit - `git log -1 --format=%H -- . ':!.specs'`]
 **Verifier**: independent sub-agent (author ≠ verifier)
+**Verdict**: [PASS ✅ | FAIL ❌]
 
 ---
 

@@ -49,21 +49,30 @@ def _feature_dirs(root):
     return base, dirs
 
 
+# The one place a report carries its verdict. A literal contract, English
+# whatever language the prose is in: `**Verdict**: PASS ✅` or
+# `**Verdict**: FAIL ❌`, exactly once, in the report header (validate.md,
+# "Validation Report Template"). Nothing else is read - in particular not the
+# discrimination sensor's own `**Result**:` line, which by design carries its
+# own PASS/FAIL and was being taken for the report's (toolbox issue #1: a FAIL
+# report exited 0), and not the `## Validation: X - PASS` heading, which is the
+# chat summary and never in the file.
+VERDICT_LINE_RE = re.compile(r"^\*\*Verdict\*\*\s*:\s*(.*?)\s*$", re.MULTILINE)
+EXPECTED_VERDICT_LINE = "`**Verdict**: PASS ✅` or `**Verdict**: FAIL ❌`"
+
+
 def _verdict(text):
-    """Return 'pass', 'fail', 'unfilled', or None from a validation report."""
-    # Look at the '## Validation' heading first, then a '**Result**' line.
-    lines = text.splitlines()
-    candidates = [
-        ln for ln in lines
-        if re.search(r"^#{1,4}\s*validation\b", ln.strip(), re.IGNORECASE)
-        or re.search(r"\*{0,2}result\*{0,2}\s*:", ln.strip(), re.IGNORECASE)
-    ]
-    hay = " ".join(candidates) if candidates else text
-    has_pass = re.search(r"\bPASS\b", hay) is not None
-    has_fail = re.search(r"\bFAIL\b", hay) is not None
+    """Return 'pass', 'fail', 'unfilled', 'duplicated', or None (no verdict line)."""
+    values = VERDICT_LINE_RE.findall(text)
+    if not values:
+        return None
+    if len(values) > 1:
+        return "duplicated"
+    value = values[0]
+    has_pass = re.search(r"\bPASS\b", value) is not None
+    has_fail = re.search(r"\bFAIL\b", value) is not None
     if has_pass and has_fail:
-        # Both present on the verdict line = unfilled template "[PASS | FAIL]".
-        return "unfilled"
+        return "unfilled"  # the template placeholder "[PASS ✅ | FAIL ❌]"
     if has_pass:
         return "pass"
     if has_fail:
@@ -105,9 +114,14 @@ def _check_feature(fdir, name):
     text = open(vpath, encoding="utf-8", errors="replace").read()
     verdict = _verdict(text)
     if verdict is None:
-        errors.append(f"{name}: validation.md has no PASS/FAIL verdict (a prose-only report does not count)")
+        errors.append(
+            f"{name}: validation.md has no verdict line - the report header must carry exactly one "
+            f"{EXPECTED_VERDICT_LINE} (the sensor's **Result** line and prose do not count)"
+        )
+    elif verdict == "duplicated":
+        errors.append(f"{name}: validation.md has more than one **Verdict** line - keep exactly one, {EXPECTED_VERDICT_LINE}")
     elif verdict == "unfilled":
-        errors.append(f"{name}: validation.md verdict is still the template placeholder '[PASS | FAIL]' - not filled")
+        errors.append(f"{name}: validation.md verdict is still the template placeholder '[PASS ✅ | FAIL ❌]' - not filled")
     elif verdict == "fail":
         errors.append(f"{name}: validation.md verdict is FAIL - route the ranked gaps to fix tasks, then re-verify (feature is not done)")
     if verdict == "pass" and not EVIDENCE_RE.search(text):
