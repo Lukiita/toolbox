@@ -15,11 +15,12 @@ import { DomainError } from '@/src/shared/domain/domain-error';
 import { Identifier } from '@/src/shared/domain/identifier';
 import { Result } from '@/src/shared/domain/result';
 
-// The typed id lives with its owner and is exported from here. The private
-// brand is what makes it nominal - without it, TypeScript's structural typing
-// would still accept a PlanId in a SubscriptionId slot (base-classes.md).
+// The typed id lives with its owner and is exported from here. The brand is
+// what makes it nominal - without it, TypeScript's structural typing would
+// still accept a PlanId in a SubscriptionId slot. `Identifier` declares it
+// abstract, so an id without its brand does not compile (base-classes.md).
 export class SubscriptionId extends Identifier<string> {
-  private readonly __brand!: 'SubscriptionId';
+  protected readonly __brand!: 'SubscriptionId';
   public static from(value: string): SubscriptionId {
     return new SubscriptionId(value);
   }
@@ -28,7 +29,7 @@ export class SubscriptionId extends Identifier<string> {
 // In real code PlanId is exported from plan.aggregate.ts - declared here only
 // to keep the example self-contained.
 export class PlanId extends Identifier<string> {
-  private readonly __brand!: 'PlanId';
+  protected readonly __brand!: 'PlanId';
   public static from(value: string): PlanId {
     return new PlanId(value);
   }
