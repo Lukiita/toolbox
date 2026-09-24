@@ -124,9 +124,10 @@ is a pipeline stop, and that is an `exit 1`, not a judgement. Zero model cost.
 ### ③ Review
 
 `review` (fresh) reviews and triages, with **the `code-review` skill**:
-independent agents per lens — the bug lens twice over (two agents, same prompt,
-unaware of each other), the project-rules lens (`AGENTS.md`/`CLAUDE.md`,
-`.specs/capabilities/`, connascence, the Fowler smell baseline), a deterministic
+independent agents per lens — the bug lens (with security and performance)
+twice over (two agents, same prompt, unaware of each other), the project-rules
+lens (`AGENTS.md`/`CLAUDE.md`, `.specs/capabilities/`, connascence, the Fowler
+smell baseline, new patterns, out-of-scope drift), a deterministic
 base-divergence check, and a 0–100 confidence triage that only lets ≥ 80
 through. Its intent lens (diff vs. commit messages) does not run in this
 pipeline: a tlc repo has `.specs/`, so spec compliance belongs to the Verifier.

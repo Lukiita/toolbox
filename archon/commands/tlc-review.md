@@ -14,8 +14,9 @@ files, do not commit code.
 ## 1. Review
 
 Invoke the `code-review` skill with base `$BASE_BRANCH`. It runs its lenses as
-independent agents — bugs twice over, project rules (`AGENTS.md`/`CLAUDE.md`,
-`.specs/capabilities/`, connascence, the Fowler smell baseline) — plus a
+independent agents — bugs, security and performance twice over, project rules
+(`AGENTS.md`/`CLAUDE.md`, `.specs/capabilities/`, connascence, the Fowler smell
+baseline, new patterns, out-of-scope drift) — plus a
 deterministic base-divergence check, and already does the confidence triage,
 handing over only what passed the cut. Its intent lens (diff vs. commit messages)
 does not run here: this is a tlc repo, so spec compliance belongs to the Verifier

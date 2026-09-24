@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Reviews the branch diff against its base — BEFORE the PR exists, no PR needed. Independent reviewers in parallel (bugs twice over, project rules, and intent-vs-commits when there is no tlc flow), a confidence triage that drops false positives, and a deterministic base-divergence check. Use whenever the user asks for a code review, "revisa o que eu mudei", "olha esse diff", "tem bug nisso?", before opening a PR, or when an automated flow needs a review before the PR. Also when the user finishes an implementation and is about to commit or open a PR — reviewing before is cheaper than after. Do NOT use to review someone else's PR already open on GitHub (that is `/review`), nor to check that an implementation fulfils a spec (that is tlc-spec-driven's Verifier).
+description: Reviews the branch diff against its base — BEFORE the PR exists, no PR needed. Independent reviewers in parallel (bugs, security and performance twice over; project rules, new patterns and out-of-scope drift; intent-vs-commits when there is no tlc flow), a confidence triage that drops false positives, and a deterministic base-divergence check. Use whenever the user asks for a code review, "revisa o que eu mudei", "olha esse diff", "tem bug nisso?", before opening a PR, or when an automated flow needs a review before the PR. Also when the user finishes an implementation and is about to commit or open a PR — reviewing before is cheaper than after. Do NOT use to review someone else's PR already open on GitHub (that is `/review`), nor to check that an implementation fulfils a spec (that is tlc-spec-driven's Verifier).
 ---
 
 # Code review of the diff, before the PR
@@ -90,6 +90,15 @@ prioritises, a reviewer without one drifts into minutiae.
 inverted condition, off-by-one, unhandled `null`/`undefined`, missing `await`,
 swallowed error, race, unreleased resource, a value leaking where it should not.
 
+Then a second read as an **attacker**: input reaching a query, shell, path or
+HTML unescaped; a route or use case missing its authorization check (an id from
+the request trusted to belong to the caller); a secret or personal data in code,
+a log line or an error message. And as the **on-call** engineer: a query or
+external call inside a loop, an unbounded list loaded into memory, a missing
+timeout on an external call. Security and performance ride in this lens instead
+of their own agents because they are the same act — following a value to where
+it bites — and a separate agent would re-read the same diff for the same thread.
+
 Runs in **two agents with the same prompt**, unaware of each other. Do not merge
 the reports or drop duplicates before triage: a finding both brought is signal,
 and counts in its favour in step 4.
@@ -110,7 +119,7 @@ separate lens, so it gets no agent of its own.
 
 **Reviewer B — project rules.** Checks the diff against the repo's written rules
 — `CLAUDE.md` / `AGENTS.md`, at the root and in the touched directories — and
-`.specs/capabilities/`, when they exist. Four questions:
+`.specs/capabilities/`, when they exist. Six questions:
 
 1. Was a written rule violated? **Quote the rule verbatim** — a rule that cannot
    be quoted probably does not exist.
@@ -129,21 +138,34 @@ separate lens, so it gets no agent of its own.
    "what it is → how to fix") and flag it naming the smell and quoting the
    hunk. A written repo rule overrides the baseline; it is always a judgement
    call, never a hard violation — and what lint already catches does not count.
+5. A **new pattern** the codebase did not have? A design pattern, abstraction
+   layer, base class, library or folder convention with no precedent in the
+   neighbouring code and no ADR (`docs/adr/`) or AD-NNN (`.specs/STATE.md`)
+   recording it. Flag it as "new pattern: <name>", not as wrong — the finding
+   is that a human must choose to adopt it, because the next agent will copy it
+   as convention.
+6. A hunk **outside the change's purpose**? The purpose is the commit messages,
+   plus the feature spec when `.specs/` exists. A touched file nothing there
+   explains — a deleted queue, a schema or config change, a rewritten neighbour
+   function — is drift: the agent passed through and altered what it was not
+   asked to. Quote the hunk and say which purpose it fails to serve.
 
-Without the files behind questions 1 and 2, questions 3 and 4 and common sense
+Without the files behind questions 1 and 2, the other four and common sense
 remain: a convention established in the neighbouring code beats your
 preference.
 
 **Reviewer C — intent (only without tlc).** If the repo has no `.specs/` — that
 is, no Verifier will check the implementation against a spec — a third reviewer
 compares the diff with what the commits say (`git log "$BASE"..HEAD`, full
-messages; the PR description, if there is one). Three questions:
+messages; the PR description, if there is one). Two questions:
 
 1. Is something the message promises missing? Half-done work, a new `TODO`, an
    error path the commit claims to handle and does not.
-2. Did something nobody asked for get in? A refactor hitching a ride, a touched
-   file the message does not explain.
-3. Any leftovers? Debug logging, dead code, a test flag.
+2. Any leftovers? Debug logging, dead code, a test flag.
+
+What got in without being asked is Reviewer B's question 6 — it runs with or
+without tlc, since the Verifier checks the spec was met, not that nothing else
+changed.
 
 Quote the commit-message line in each finding. With `.specs/` present, this
 lens **does not run**: that is tlc's Verifier, with per-criterion tracing and a
