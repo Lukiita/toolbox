@@ -14,13 +14,12 @@ files, do not commit code.
 ## 1. Review
 
 Invoke the `code-review` skill with base `$BASE_BRANCH`. It runs its lenses as
-independent agents — bugs, security and performance twice over, project rules
-(`AGENTS.md`/`CLAUDE.md`, `.specs/capabilities/`, connascence, the Fowler smell
-baseline, new patterns, out-of-scope drift) — plus a
+independent agents (the roster lives in the skill, step 3), plus a
 deterministic base-divergence check, and already does the confidence triage,
-handing over only what passed the cut. Its intent lens (diff vs. commit messages)
-does not run here: this is a tlc repo, so spec compliance belongs to the Verifier
-that runs after you. If your runtime has no sub-agents, the skill has the
+handing over only what passed the cut. Its intent lens (promises in the commits
+vs. the diff) does not run here: this is a tlc repo, so spec compliance belongs
+to the Verifier that runs after you. Its out-of-scope question does run — the
+Verifier checks the spec was met, not that nothing else changed. If your runtime has no sub-agents, the skill has the
 sequential path written down — follow it, do not improvise a third.
 
 **Pass it this node's contract**: the report goes to `$ARTIFACTS_DIR/review.md`,
@@ -35,6 +34,12 @@ Classify each finding:
 
 - **must-fix**: a real bug, a security risk, a broken `CLAUDE.md` rule, or a
   broken scenario guaranteed in `.specs/capabilities/`.
+- **must-fix** too: out-of-scope drift the review confirmed — a hunk no commit
+  and no spec explains gets reverted, not debated.
+- **for a human**: every item under the report's *Decisions for a human* (a new
+  pattern nobody recorded). Neither fix nor dismiss — this pipeline has no one to
+  choose, so it rides into the PR body for the reviewer, and does not enter
+  `.must-fix`.
 - **won't-fix**: style, preference, a suggestion that conflicts with the repo's
   conventions, or a false positive. **Record the reason in one line** — a written
   reason is what prevents both lazy dismissal and blind obedience. There is no
@@ -52,7 +57,8 @@ or disable a check.
 ## 3. Record
 
 Append to the `$ARTIFACTS_DIR/review.md` the skill wrote the triage table
-(finding · classification · reason when won't-fix · `file:line`). That file goes
+(finding · classification · reason when won't-fix · `file:line`; the *for a
+human* items keep their own heading so the PR reviewer sees them first). That file goes
 into the PR body and is the **only** input of the node that fixes — a must-fix
 you do not describe precisely enough for another context to act on will not be
 fixed.

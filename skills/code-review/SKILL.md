@@ -140,15 +140,20 @@ separate lens, so it gets no agent of its own.
    call, never a hard violation — and what lint already catches does not count.
 5. A **new pattern** the codebase did not have? A design pattern, abstraction
    layer, base class, library or folder convention with no precedent in the
-   neighbouring code and no ADR (`docs/adr/`) or AD-NNN (`.specs/STATE.md`)
-   recording it. Flag it as "new pattern: <name>", not as wrong — the finding
-   is that a human must choose to adopt it, because the next agent will copy it
-   as convention.
-6. A hunk **outside the change's purpose**? The purpose is the commit messages,
-   plus the feature spec when `.specs/` exists. A touched file nothing there
-   explains — a deleted queue, a schema or config change, a rewritten neighbour
-   function — is drift: the agent passed through and altered what it was not
-   asked to. Quote the hunk and say which purpose it fails to serve.
+   neighbouring code and nothing recording the choice — an ADR (`docs/adr/`),
+   an AD-NNN (`.specs/STATE.md`), or the feature's `design.md`. Report it as
+   "new pattern: <name>" — a decision for a human, not a defect: the next agent
+   will copy it as convention, so someone must choose to adopt it. Step 4 keeps
+   these apart from the scored findings.
+6. A hunk **outside the change's purpose**? Read the purpose first: the full
+   commit messages (`git log --format='%h %B' "$BASE"..HEAD`) and, when
+   `.specs/features/` exists, the spec of the feature the commits name. A
+   touched file nothing there explains — a deleted queue, a schema or config
+   change, a rewritten neighbour function, a refactor hitching a ride — is
+   drift: the agent passed through and altered what it was not asked to. Files
+   the tlc flow itself writes (`.specs/STATE.md`, `.specs/capabilities/`, the
+   feature's own artifacts) are in scope by definition. Quote the hunk and say
+   which purpose it fails to serve.
 
 Without the files behind questions 1 and 2, the other four and common sense
 remain: a convention established in the neighbouring code beats your
@@ -198,6 +203,12 @@ identical guesses are still a guess.
 **Keep the ≥ 80.** The cut is high on purpose: every surviving item should
 deserve action, so the list gets read instead of skimmed.
 
+A "new pattern" (Reviewer B, question 5) skips the score: it is not a defect,
+so "how real is the bug" does not measure it. Confirm only that the pattern is
+new — no precedent in the neighbouring code, no ADR/AD/`design.md` recording it
+— and list it under **Decisions for a human**. An unconfirmed one is dropped
+like any other finding.
+
 ### 5. Report
 
 The report is state of the *branch*, not of the code, so it lives outside the
@@ -240,6 +251,9 @@ Portuguese with technical terms in English); the closing marker stays exact.
 - **Where**: `path/file.ts:42`
 - **Why**: <the reason, quoting the rule or the evidence>
 - **Confidence**: 90
+
+## Decisions for a human (<D>)
+<one line per new pattern: `file:line` — the pattern — "adopt, or revert?">
 
 ## Dropped at triage (<J>)
 <one line per item with its score — shows what was considered and why it fell>
