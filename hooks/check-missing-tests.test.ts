@@ -90,11 +90,41 @@ describe('codeHasBranching', () => {
 
       expect(codeHasBranching(source)).toBe(true);
     });
+
+    it('a backtick in a regex literal does not open a template that swallows the file', () => {
+      const source = [
+        "export const stripTicks = (s: string): string => s.replace(/`/g, '');",
+        'export const glob = (dir: string): string => `${dir}/*.ts`;',
+        "export function pick(x?: string): string { if (x) return x; return ''; }",
+        '/** end */',
+      ].join('\n');
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('`//` in a regex literal does not hide the `||` after it', () => {
+      const source = 'const isUrl = /https?:\\/\\//.test(s) || other;';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('a line comment ends at every line terminator JS knows, not only at `\\n`', () => {
+      expect(codeHasBranching('const a = 1; // note if (x) run();')).toBe(true);
+      expect(codeHasBranching('const a = 1; // note\rif (x) run();')).toBe(true);
+    });
   });
 
   it('a file with no branch and no comment has no branching', () => {
     const source = 'export abstract class Gateway {\n  public abstract run(): void;\n}';
 
     expect(codeHasBranching(source)).toBe(false);
+  });
+
+  // A guard that cannot read a file must not excuse it: before the fix the caller's `catch`
+  // turned a scanner crash into "no logic, no test needed" (review 2026-10-03).
+  it('a source the parser cannot get through is judged with its comments in, never excused', () => {
+    const tooDeepToParse = '`${'.repeat(50_000);
+
+    expect(codeHasBranching(`${tooDeepToParse}\nif (x) return;`)).toBe(true);
   });
 });

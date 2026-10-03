@@ -86,8 +86,23 @@ function isWatched(file, { watchedPatterns, exemptSuffixes }) {
  * codeHasBranching('// if (x)\nexport const a = 1;') // false
  */
 export function codeHasBranching(contents) {
-  const code = blankOutComments(contents);
+  const code = contentsWithoutComments(contents);
   return BRANCH_MARKERS.some((marker) => marker.test(code));
+}
+
+/**
+ * A source the parser cannot get through is judged with its comments in, as before issue #5.
+ * Asking for a test the file may not need is the safe side of a gate; excusing a file with
+ * logic is not. Without this, the `catch` in `hasBranching` - written for a file that cannot
+ * be READ - turned a parser crash (thousands of nested templates overflow the stack) into
+ * "no logic, no test needed" (review 2026-10-03).
+ */
+function contentsWithoutComments(contents) {
+  try {
+    return blankOutComments(contents);
+  } catch {
+    return contents;
+  }
 }
 
 function hasBranching(absolute) {

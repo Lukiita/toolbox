@@ -1,29 +1,40 @@
 /**
- * Comment scanner for `check-missing-tests.mjs`: keeps a branch marker written in prose
+ * Comment remover for `check-missing-tests.mjs`: keeps a branch marker written in prose
  * (`if (`, `||`, a `?` in a JSDoc sentence) from being read as a branch of the code.
  *
- * Why it exists (issue #5, ported from project-d, 2026-09-23): the heuristic used to test
+ * Why it exists (issue #5, first seen in project-d, 2026-09-23): the heuristic used to test
  * the whole file, comments included, so a logic-free `abstract class` port whose JSDoc says
  * "returns null if it does not exist || was deleted?" was required to have a test. The only
  * exits left to the author were a test with nothing to assert or a comment reworded to dodge
  * the regex - both worse than the bug.
  *
- * Why a scanner and not a comment regex: `//` and `/*` inside a string open no comment, and
- * a regex would erase the rest of the line after `'https://…'`, hiding a real `if`. The
- * scanner walks the source one chunk at a time - line comment, block comment, a whole string
- * or a single character of code - so it always knows whether it is inside a string.
- *
- * Known limitation, deliberately not solved: a regex literal that holds a quote or a comment
- * opener (`/['"]/`, `/https?:\/\//`) can confuse the scanner, which reads the quote as the
- * start of a string and the `//` as a comment. The direction is the one that matters for a
- * gate - code AFTER the regex can be hidden, so `/https?:\/\//.test(s) || other` reads as no
- * branch - but the damage stops at the end of that line (`closesString`), or at the next
- * closer for a regex that holds a block-comment opener. It did not show up in practice in the
- * repos that use this heuristic; telling a regex from a division needs the previous token,
- * which is a parser's job, and a parser here would cost more than the case it fixes.
+ * Why the TypeScript parser, and not a comment regex or a hand-written scanner: where a
+ * comment starts depends on what surrounds it. `//` inside `'https://…'`, inside a template or
+ * inside a regex literal (`/https?:\/\//`) opens nothing, and telling a regex from a division
+ * needs the token before it. The first cut was a character scanner ported from project-d;
+ * review (2026-10-03) showed it HIDING code - a backtick in a regex literal
+ * (`s.replace(/`/g, '')`) opened a template that swallowed the lines after it, a nested
+ * template turned a glob into a block comment, a line comment ran past U+2028 - and each fix
+ * grew a lexer. Hiding a branch is the one wrong answer a gate may not give: the file is
+ * excused from its test. The compiler already ships with this package (`dependencies`) and
+ * the ratchet's collectors read source through it (complexity.mts, cycles.mts, any-count.mts),
+ * so the hook asks the same parser instead of keeping a second, weaker one.
  */
+import { createRequire } from 'node:module';
 
-const QUOTES = `'"\``;
+const require = createRequire(import.meta.url);
+
+/** @type {typeof import('typescript') | undefined} */
+let compiler;
+
+/**
+ * The compiler, loaded on first use: it costs ~200 ms to load (measured 2026-10-03) and the
+ * Stop hook runs on every agent stop, almost always with no file to judge.
+ */
+function typescript() {
+  compiler ??= require('typescript');
+  return compiler;
+}
 
 /**
  * Replaces every comment with spaces and keeps every newline, so the result has the same
@@ -35,82 +46,37 @@ const QUOTES = `'"\``;
  * blankOutComments('a; // if (x)\nb;') // 'a;          \nb;'
  */
 export function blankOutComments(source) {
-  let blanked = '';
-  let position = 0;
-  while (position < source.length) {
-    const { end, isComment } = readChunk(source, position);
-    const chunk = source.slice(position, end);
-    blanked += isComment ? chunk.replace(/[^\n]/g, ' ') : chunk;
-    position = end;
+  const pieces = [];
+  let cursor = 0;
+  for (const { pos, end } of commentRanges(source)) {
+    // A repeat: an empty list between two tokens (`f()`, `{}`) is a leaf too, and reports the
+    // comment the token before it already reported. Blanking it twice would lengthen the text.
+    if (pos < cursor) continue;
+    pieces.push(source.slice(cursor, pos), source.slice(pos, end).replace(/[^\n]/g, ' '));
+    cursor = end;
   }
-  return blanked;
-}
-
-/** One chunk starting at `start`: a comment, a whole string, or one character of code. */
-function readChunk(source, start) {
-  const opener = source.slice(start, start + 2);
-  if (opener === '//') return { end: endOfLineComment(source, start), isComment: true };
-  if (opener === '/*') return { end: endOfBlockComment(source, start), isComment: true };
-  if (QUOTES.includes(source[start])) return { end: endOfString(source, start), isComment: false };
-  return { end: start + 1, isComment: false };
-}
-
-/** The newline stays outside the comment, so it survives the blanking. */
-function endOfLineComment(source, start) {
-  const newline = source.indexOf('\n', start);
-  return newline === -1 ? source.length : newline;
-}
-
-/** A block comment with no closer (truncated file) runs to the end, like a line one. */
-function endOfBlockComment(source, start) {
-  const closer = source.indexOf('*/', start + 2);
-  return closer === -1 ? source.length : closer + 2;
-}
-
-/** Walks past escapes (`\"`, `\\`) so an escaped quote does not end the string early. */
-function endOfString(source, start) {
-  const quote = source[start];
-  let position = start + 1;
-  while (position < source.length && !closesString(source[position], quote)) {
-    position = afterStringPiece(source, position, quote);
-  }
-  return Math.min(position + 1, source.length);
+  pieces.push(source.slice(cursor));
+  return pieces.join('');
 }
 
 /**
- * Only a template spans lines: an unclosed `'` or `"` ends at the newline, as it does in JS.
- * Without this the quote of a regex literal (`/['"]/`) opened a "string" that ran to the next
- * quote in the file, and what followed THAT quote was read as code - `'http://a'; if (x)` on
- * a later line lost its `if` to a comment that was never there (review of the port,
- * 2026-10-03, issue #5).
+ * Every comment of the source, in order. A comment is not a node of the tree: it rides as
+ * trivia before a token (leading) or after it on the same line (trailing), so every token is
+ * asked for both. JSDoc nodes are skipped - they ARE the comment, already found as the leading
+ * trivia of the token they document. Walking into one asks for trivia from inside comment
+ * text: a `//` written in a `@see` line was reported first, and the block around it was then
+ * dropped as a repeat, left unblanked.
  */
-function closesString(char, quote) {
-  if (char === quote) return true;
-  return char === '\n' && quote !== '`';
-}
-
-/** The next position inside a string: past an escape, past a whole `${…}`, or one character on. */
-function afterStringPiece(source, position, quote) {
-  if (source[position] === '\\') return position + 2;
-  const opensInterpolation = quote === '`' && source.startsWith('${', position);
-  return opensInterpolation ? endOfInterpolation(source, position + 2) : position + 1;
-}
-
-/**
- * `${…}` holds code, and that code may hold another template: skips to the matching brace, so
- * the inner backtick is not read as the end of the outer template. Before this,
- * `${dirs.map((d) => `${d}/*.ts`)}` left `/*.ts` as code, and the block comment it "opened"
- * blanked the rest of the file - a file with logic excused from its test, the one answer a
- * gate may never give (review of the port, 2026-10-03, issue #5).
- */
-function endOfInterpolation(source, start) {
-  let depth = 1;
-  let position = start;
-  while (position < source.length && depth > 0) {
-    const char = source[position];
-    if (char === '{') depth += 1;
-    if (char === '}') depth -= 1;
-    position = QUOTES.includes(char) ? endOfString(source, position) : position + 1;
-  }
-  return position;
+function commentRanges(source) {
+  const ts = typescript();
+  const sourceFile = ts.createSourceFile('source.ts', source, ts.ScriptTarget.Latest, false);
+  const ranges = [];
+  const visit = (node) => {
+    const children = node.getChildren(sourceFile).filter((child) => !ts.isJSDoc(child));
+    if (children.length > 0) return children.forEach(visit);
+    ranges.push(...(ts.getLeadingCommentRanges(source, node.getFullStart()) ?? []));
+    ranges.push(...(ts.getTrailingCommentRanges(source, node.getEnd()) ?? []));
+  };
+  visit(sourceFile);
+  return ranges;
 }

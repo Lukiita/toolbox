@@ -27,6 +27,29 @@ describe('blankOutComments', () => {
       expect(blankOutComments('x // y')).toBe(`x ${' '.repeat(4)}`);
     });
 
+    it('a comment inside a template interpolation', () => {
+      expect(blankOutComments('const s = `${a /* b */}`;')).toBe(
+        `const s = \`\${a ${' '.repeat(7)}}\`;`,
+      );
+    });
+
+    it('an apostrophe or a `//` inside a block comment opens nothing', () => {
+      expect(blankOutComments("/* it's // here */ x;")).toBe(`${' '.repeat(18)} x;`);
+    });
+
+    it('a comment inside empty parentheses or an empty block, once', () => {
+      expect(blankOutComments('f(/* c */);')).toBe(`f(${' '.repeat(7)});`);
+      expect(blankOutComments('const empty = {\n  // nothing yet\n};')).toBe(
+        `const empty = {\n${' '.repeat(16)}\n};`,
+      );
+    });
+
+    it('a JSDoc block whole, even when its text holds a comment opener', () => {
+      expect(blankOutComments('/**\n * @see // if (x)\n */\nexport const a = 1;')).toBe(
+        `${' '.repeat(3)}\n${' '.repeat(17)}\n${' '.repeat(3)}\nexport const a = 1;`,
+      );
+    });
+
     it('keeps length and line count of the input', () => {
       const source = '/** a\n * b */\nconst c = 1; // d\n';
       const blanked = blankOutComments(source);
@@ -75,6 +98,18 @@ describe('blankOutComments', () => {
       const source = "const s = 'a \\\n// still the string';";
 
       expect(blankOutComments(source)).toBe(source);
+    });
+
+    it('a regex literal holding a quote, a backtick or `//` is code, whole', () => {
+      const source = ['const quote = /[\'"`]/;', 'const url = /https?:\\/\\//;'].join('\n');
+
+      expect(blankOutComments(source)).toBe(source);
+    });
+
+    it('a shebang line is not a comment', () => {
+      expect(blankOutComments('#!/usr/bin/env node\n// c\nx;')).toBe(
+        `#!/usr/bin/env node\n${' '.repeat(4)}\nx;`,
+      );
     });
   });
 
