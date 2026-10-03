@@ -81,33 +81,39 @@ function isWatched(file, { watchedPatterns, exemptSuffixes }) {
  * comment does not count: a port described in prose has no path to cover (issue #5).
  *
  * @param {string} contents Source text of a TypeScript file.
+ * @param {string} [sourceName] What to call the source on stderr when its comments cannot be removed.
  * @returns {boolean} `true` when a branch marker appears outside every comment.
  * @example
  * codeHasBranching('// if (x)\nexport const a = 1;') // false
  */
-export function codeHasBranching(contents) {
-  const code = contentsWithoutComments(contents);
+export function codeHasBranching(contents, sourceName = 'a source') {
+  const code = contentsWithoutComments(contents, sourceName);
   return BRANCH_MARKERS.some((marker) => marker.test(code));
 }
 
 /**
- * A source the parser cannot get through is judged with its comments in, as before issue #5.
- * Asking for a test the file may not need is the safe side of a gate; excusing a file with
- * logic is not. Without this, the `catch` in `hasBranching` - written for a file that cannot
- * be READ - turned a parser crash (thousands of nested templates overflow the stack) into
- * "no logic, no test needed" (review 2026-10-03).
+ * A source the parser cannot get through, or one with a syntax error, is judged with its
+ * comments in, as before issue #5. Asking for a test the file may not need is the safe side
+ * of a gate; excusing a file with logic is not. Without this, the `catch` in `hasBranching` -
+ * written for a file that cannot be READ - turned a parser crash (thousands of nested
+ * templates overflow the stack) into "no logic, no test needed" (review 2026-10-03).
+ *
+ * The reason goes to stderr, as in `hooksConfigOrDefaults`: a compiler that fails to load
+ * would otherwise send every file back to the old over-asking behaviour with no trace.
  */
-function contentsWithoutComments(contents) {
+function contentsWithoutComments(contents, sourceName) {
   try {
     return blankOutComments(contents);
-  } catch {
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`toolbox hooks: ${sourceName} judged with its comments in (${reason})\n`);
     return contents;
   }
 }
 
 function hasBranching(absolute) {
   try {
-    return codeHasBranching(readFileSync(absolute, 'utf-8'));
+    return codeHasBranching(readFileSync(absolute, 'utf-8'), path.relative(ROOT, absolute));
   } catch {
     return false;
   }

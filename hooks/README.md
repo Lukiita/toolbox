@@ -11,7 +11,7 @@ Canonical source of the coding-agent hooks, born in Project A. They ship inside 
 
 `check-missing-tests.mjs` is the shared heuristic: the Stop hook imports it (warn) and **CI runs the same file as a blocking gate** (`node node_modules/@lukiita/toolbox/hooks/check-missing-tests.mjs --base <sha> --head <sha>`). One source of truth — if they diverged, agents and CI would disagree about what is required. The severity split is deliberate: mid-task the test may be one step away; at the pull request, it is not.
 
-"Has logic" means a branch marker (`if (`, `||`, `??`, `throw`…) in the **code**: `blank-out-comments.mjs` blanks comments out first, asking the TypeScript parser where they are, so a `?` in a JSDoc sentence is not a branch and `//` inside a string, a template or a regex literal is not a comment. A file the parser cannot get through is judged with its comments in: the hook over-asks rather than excuse it.
+"Has logic" means a branch marker (`if (`, `||`, `??`, `throw`…) in the **code**: `blank-out-comments.mjs` blanks comments out first, asking the TypeScript parser where they are, so a `?` in a JSDoc sentence is not a branch and `//` inside a string, a template or a regex literal is not a comment. A file with a syntax error, or one the parser cannot get through, is judged with its comments in and the reason goes to stderr: the hook over-asks rather than excuse it.
 
 ## Importing into a project
 

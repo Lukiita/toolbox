@@ -19,10 +19,6 @@ describe('blankOutComments', () => {
       expect(blankOutComments('/*\n x\n*/ y')).toBe('  \n  \n   y');
     });
 
-    it('an unterminated block comment runs to the end of the file', () => {
-      expect(blankOutComments('x /* if (a')).toBe(`x ${' '.repeat(8)}`);
-    });
-
     it('a line comment on the last line, with no newline after it', () => {
       expect(blankOutComments('x // y')).toBe(`x ${' '.repeat(4)}`);
     });
@@ -48,6 +44,32 @@ describe('blankOutComments', () => {
       expect(blankOutComments('/**\n * @see // if (x)\n */\nexport const a = 1;')).toBe(
         `${' '.repeat(3)}\n${' '.repeat(17)}\n${' '.repeat(3)}\nexport const a = 1;`,
       );
+    });
+
+    // One token can carry any number of comments: a block of commented-out lines is a single
+    // run of leading trivia. Collected with a spread, ~120k of them overflowed the argument
+    // list (review round 2, 2026-10-03).
+    it('every comment of a very long run, without overflowing', () => {
+      expect(blankOutComments(`${'// c\n'.repeat(200_000)}x;`)).toBe(
+        `${`${' '.repeat(4)}\n`.repeat(200_000)}x;`,
+      );
+    });
+  });
+
+  // The parser recovers from a syntax error instead of throwing, and a recovered tree is a
+  // guess about where strings and comments are. The caller judges such a file with its
+  // comments in (review round 2, 2026-10-03).
+  describe('refuses a source with a syntax error', () => {
+    it('an unterminated block comment', () => {
+      expect(() => blankOutComments('x /* if (a')).toThrow(
+        "syntax error at offset 10: '*/' expected.",
+      );
+    });
+
+    it('a stray backtick that flips string and code', () => {
+      const source = 'const s = `;\nconst url = `http://h/${p}`; if (a) b();\n';
+
+      expect(() => blankOutComments(source)).toThrow('syntax error at offset 26');
     });
 
     it('keeps length and line count of the input', () => {

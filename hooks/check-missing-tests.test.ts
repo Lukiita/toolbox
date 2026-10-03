@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { codeHasBranching } from './check-missing-tests.mjs';
 
@@ -122,9 +122,35 @@ describe('codeHasBranching', () => {
 
   // A guard that cannot read a file must not excuse it: before the fix the caller's `catch`
   // turned a scanner crash into "no logic, no test needed" (review 2026-10-03).
-  it('a source the parser cannot get through is judged with its comments in, never excused', () => {
-    const tooDeepToParse = '`${'.repeat(50_000);
+  describe('a source it cannot trust is judged with its comments in, never excused', () => {
+    beforeEach(() => {
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
 
-    expect(codeHasBranching(`${tooDeepToParse}\nif (x) return;`)).toBe(true);
+    it('too deep for the parser, which overflows its stack', () => {
+      const tooDeepToParse = '`${'.repeat(50_000);
+
+      expect(codeHasBranching(`${tooDeepToParse}\nif (x) return;`)).toBe(true);
+    });
+
+    // The parser does not throw on a syntax error: it recovers, and the tree it hands back is
+    // a guess. Here the stray backtick flips string and code, and the `if` was blanked as the
+    // tail of a "comment" starting at `//h/` (review round 2, 2026-10-03).
+    it('a syntax error, where the recovered tree is a guess', () => {
+      const source = 'const s = `;\nconst url = `http://h/${p}`; if (a) b();\n';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('says on stderr which source and why, as the other hook fallbacks do', () => {
+      codeHasBranching('x /* if (a', 'src/billing/domain/fee.ts');
+
+      expect(process.stderr.write).toHaveBeenCalledWith(
+        "toolbox hooks: src/billing/domain/fee.ts judged with its comments in (syntax error at offset 10: '*/' expected.)\n",
+      );
+    });
   });
 });
