@@ -264,7 +264,8 @@ export function compareMetrics(
  * baseline does not know - `compareMetrics` already fails that one.
  *
  * Provenance: born in project-d (2026-09-30), brought to the toolbox by issue #7. Feed it the
- * result of `effectiveBaseline`, like `compareMetrics`, so both judge the same frozen numbers.
+ * branch's OWN baseline, not the result of `effectiveBaseline` - see `slackInOwnBaseline` in
+ * run-gate.mts for the two ways the compared baseline misled it.
  *
  * @example
  *   improvedMetrics(baseline, { 'pure-rule-outside-domain': 107 })
@@ -277,7 +278,9 @@ export function improvedMetrics(
   const improvements: Improvement[] = [];
   for (const [metric, value] of Object.entries(current)) {
     const expected = baseline.metrics[metric];
-    if (expected === undefined || !isTightenable(expected, value)) continue;
+    // `!expected`, as in `compareMetrics`: a hand-edited `null` entry is that function's
+    // "not in the baseline" failure, not a TypeError here that loses the report.
+    if (!expected || !isTightenable(expected, value)) continue;
     const suffix = expected.unit ?? '';
     improvements.push({
       metric,

@@ -186,7 +186,11 @@ describe('buildReport - improvements', () => {
     expect(md).not.toContain('Failed');
   });
 
-  it('keeps the section out of the regressions block, which the pre-push hook cuts out', () => {
+  // `--update-baseline` re-freezes EVERY metric: followed on a failed report it would freeze the
+  // regression along with the gain, against the advice printed right below it (review
+  // 2026-10-03, both bug reviewers). A failed report is about the failure; the reminder comes
+  // back on the next green run, because the slack is still there.
+  it('prints no reminder on a failed report: its one advice is about the regression', () => {
     const md = buildReport(
       {
         ...INPUT,
@@ -195,9 +199,8 @@ describe('buildReport - improvements', () => {
       },
       t,
     );
-    const block = md.slice(md.indexOf(REGRESSIONS_START), md.indexOf(REGRESSIONS_END));
-    expect(block).not.toContain('tighten the baseline');
-    expect(md).toContain('tighten the baseline');
+    expect(md).toContain('### Regressions');
+    expect(md).not.toContain('tighten the baseline');
   });
 
   it('follows the project language', () => {

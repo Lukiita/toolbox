@@ -68,7 +68,7 @@ const env = (root: string, config: QualityConfig): GateEnvironment => ({
 const run = { updateBaseline: false, skipTests: true };
 
 interface FrozenBaseline {
-  metrics: Record<string, { value: number }>;
+  metrics: Record<string, { value: number; mode?: 'baseline' | 'floor' }>;
 }
 
 /** Edits the frozen baseline and commits it: the "base" a later `--baseline-from` run reads. */
@@ -82,6 +82,26 @@ function commitEditedBaseline(
   edit(frozen);
   writeFileSync(baselinePath, `${JSON.stringify(frozen, null, 2)}\n`);
   execFileSync('git', ['commit', '-qam', message], { cwd: root });
+}
+
+const againstHead = { ...run, baselineFrom: 'HEAD' };
+
+/**
+ * A repository re-frozen at what it measures (no displaced rule), whose HEAD then commits a
+ * looser number for that metric: the "base" a `--baseline-from HEAD` run compares against,
+ * with slack in it.
+ */
+function repoWhoseBaseFrozeFiveDisplacedRules(mode: 'baseline' | 'floor' = 'baseline'): {
+  root: string;
+  config: QualityConfig;
+} {
+  const repo = scratchRepo();
+  runQualityGate(env(repo.root, repo.config), { ...run, updateBaseline: true });
+  commitEditedBaseline(repo.root, 'base that froze five displaced rules', (frozen) => {
+    frozen.metrics['pure-rule-outside-domain'].value = 5;
+    frozen.metrics['pure-rule-outside-domain'].mode = mode;
+  });
+  return repo;
 }
 
 describe('runQualityGate (end to end on a temp repository)', () => {
@@ -115,16 +135,33 @@ describe('runQualityGate (end to end on a temp repository)', () => {
   // The CI path: the base commit froze 5 displaced rules, the code measures 0. The gate still
   // passes - the section only reminds that the 5 is slack the next PR could give back.
   it('reminds to tighten when a metric measures better than the base froze, and still passes', () => {
-    const { root, config } = scratchRepo();
-    runQualityGate(env(root, config), { ...run, updateBaseline: true });
-    commitEditedBaseline(root, 'base that froze five displaced rules', (frozen) => {
-      frozen.metrics['pure-rule-outside-domain'].value = 5;
-    });
-    const result = runQualityGate(env(root, config), { ...run, baselineFrom: 'HEAD' });
+    const { root, config } = repoWhoseBaseFrozeFiveDisplacedRules();
+    const result = runQualityGate(env(root, config), againstHead);
     expect(result.status).toBe('passed');
     expect(result.failures).toEqual([]);
     expect(result.report).toContain('### Improvements — tighten the baseline');
     expect(result.report).toContain('- Pure rules outside the domain: 5 → 0');
+  });
+
+  // The pull request that did the tightening: its own baseline holds the measured number, the
+  // base still holds the loose one. Judged against the base (what CI compares for failures),
+  // that very PR was told to "freeze it now" (review 2026-10-03, both bug reviewers).
+  it('stays silent on the pull request that already tightened its own baseline', () => {
+    const { root, config } = repoWhoseBaseFrozeFiveDisplacedRules();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    const result = runQualityGate(env(root, config), againstHead);
+    expect(result.status).toBe('passed');
+    expect(result.report).not.toContain('tighten the baseline');
+  });
+
+  // With `--baseline-from` the compared baseline takes `mode` from the engine's defaults, where
+  // every metric is `baseline`: a floor the project chose looked frozen, and the reminder asked
+  // to move the target (review 2026-10-03). The choice lives in the project's own file.
+  it('leaves a floor the project chose out of the reminder on the CI path too', () => {
+    const { root, config } = repoWhoseBaseFrozeFiveDisplacedRules('floor');
+    const result = runQualityGate(env(root, config), againstHead);
+    expect(result.status).toBe('passed');
+    expect(result.report).not.toContain('tighten the baseline');
   });
 
   it('fails when a file loses coverage after the freeze, naming the file', () => {

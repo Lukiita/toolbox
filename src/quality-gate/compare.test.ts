@@ -402,4 +402,12 @@ describe('improvedMetrics', () => {
   it('leaves out a metric the baseline does not know - that case already fails elsewhere', () => {
     expect(improvedMetrics(BASE, { novel: 0 })).toEqual([]);
   });
+
+  // A hand-edited baseline can hold `null` for a metric. `compareMetrics` reports that one as
+  // "not in the baseline"; the reminder must skip it too, not take the gate down with a
+  // TypeError before the report exists (review 2026-10-03).
+  it('leaves out a metric whose baseline entry is null, instead of throwing', () => {
+    const handEdited = { metrics: { broken: null }, uncoveredByFile: {} } as unknown as Baseline;
+    expect(improvedMetrics(handEdited, { broken: 1 })).toEqual([]);
+  });
 });

@@ -20,7 +20,13 @@ import {
   refreezeBaseline,
   writeBaseline,
 } from './baseline-store.mts';
-import { compareFileCounts, compareMetrics, type Failure, improvedMetrics } from './compare.mts';
+import {
+  compareFileCounts,
+  compareMetrics,
+  type Failure,
+  type Improvement,
+  improvedMetrics,
+} from './compare.mts';
 import { type GateStrings, stringsFor } from './locale.mts';
 import { type Measurement, measureRepository } from './measure.mts';
 import { PLACE_RULE_HOMES } from './place-rule.mts';
@@ -98,6 +104,19 @@ function refreeze(env: GateEnvironment, m: Measurement): GateResult {
   return { status: 'refrozen', failures: [], current: m.current };
 }
 
+/**
+ * The slack worth a reminder is in the branch's OWN baseline - the file that becomes the
+ * base's when this merges - not in the baseline the failures are compared against. With
+ * `--baseline-from` that one holds the base commit's numbers and the engine's `mode` (every
+ * default is `baseline`), so judging improvements there told the pull request that had just
+ * tightened to "freeze it now", and listed a floor the project chose as if it were frozen
+ * (review 2026-10-03). Nothing here gates, so reading the branch's own file opens no
+ * self-approval route; the failures keep comparing against the base for exactly that reason.
+ */
+function slackInOwnBaseline(env: GateEnvironment, measurement: Measurement): Improvement[] {
+  return improvedMetrics(readOwnBaseline(env.root), measurement.current);
+}
+
 function compareAndReport(
   env: GateEnvironment,
   measurement: Measurement,
@@ -114,7 +133,7 @@ function compareAndReport(
       baseline: base,
       current: measurement.current,
       failures,
-      improvements: improvedMetrics(base, measurement.current),
+      improvements: slackInOwnBaseline(env, measurement),
       details: reportDetails(measurement, env.config, t),
       generatedAt: new Date().toISOString(),
       baselineOrigin: origin,

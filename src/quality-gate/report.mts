@@ -25,8 +25,8 @@ export interface ReportInput {
   current: Record<string, number>;
   failures: readonly Failure[];
   /**
-   * Metrics measured better than frozen. Printed as a reminder to tighten the baseline; never
-   * counted as a failure (issue #7).
+   * Metrics measured better than frozen. Printed as a reminder to tighten the baseline, on a
+   * passing report only; never counted as a failure (issue #7).
    */
   improvements?: readonly Improvement[];
   details?: readonly ReportDetail[];
@@ -50,12 +50,15 @@ function delta(value: number, base: number, unit?: string): string {
 }
 
 /**
- * The "tighten the baseline" section, or nothing when no metric improved. It sits OUTSIDE the
- * regressions markers: a consumer that cuts that block out prints failures only, and a
- * reminder is not one.
+ * The "tighten the baseline" section, or nothing when no metric improved - and nothing on a
+ * failed report. `--update-baseline` re-freezes EVERY metric: printed beside a regression, the
+ * advice would freeze the regression along with the gain and contradict the ratchet advice
+ * right below it (review 2026-10-03). The slack is still there on the next green run, and so
+ * is the reminder.
  */
-function improvementLines(improvements: readonly Improvement[], t: GateStrings): string[] {
-  if (improvements.length === 0) return [];
+function improvementLines(input: ReportInput, t: GateStrings): string[] {
+  const improvements = input.improvements ?? [];
+  if (improvements.length === 0 || input.failures.length > 0) return [];
   const items = improvements.map((i) => `- ${i.label}: ${i.from} → ${i.to}`);
   return [t.improvementsTitle, '', ...items, '', ...t.tightenAdvice, ''];
 }
@@ -94,7 +97,7 @@ export function buildReport(input: ReportInput, t: GateStrings): string {
     lines.push('');
   }
 
-  lines.push(...improvementLines(input.improvements ?? [], t));
+  lines.push(...improvementLines(input, t));
 
   if (failures.length > 0) {
     lines.push(REGRESSIONS_START, t.regressionsTitle, '');

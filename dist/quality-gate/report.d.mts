@@ -12,8 +12,8 @@ export interface ReportInput {
     current: Record<string, number>;
     failures: readonly Failure[];
     /**
-     * Metrics measured better than frozen. Printed as a reminder to tighten the baseline; never
-     * counted as a failure (issue #7).
+     * Metrics measured better than frozen. Printed as a reminder to tighten the baseline, on a
+     * passing report only; never counted as a failure (issue #7).
      */
     improvements?: readonly Improvement[];
     details?: readonly ReportDetail[];
