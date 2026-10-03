@@ -15,9 +15,12 @@
  *
  * Known limitation, deliberately not solved: a regex literal that holds a quote or a comment
  * opener (`/['"]/`, `/https?:\/\//`) can confuse the scanner, which reads the quote as the
- * start of a string. It did not show up in practice in the repos that use this heuristic;
- * telling a regex from a division needs the previous token, which is a parser's job, and a
- * parser here would cost more than the case it fixes.
+ * start of a string and the `//` as a comment. The direction is the one that matters for a
+ * gate - code AFTER the regex can be hidden, so `/https?:\/\//.test(s) || other` reads as no
+ * branch - but the damage stops at the end of that line (`closesString`), or at the next
+ * closer for a regex that holds a block-comment opener. It did not show up in practice in the
+ * repos that use this heuristic; telling a regex from a division needs the previous token,
+ * which is a parser's job, and a parser here would cost more than the case it fixes.
  */
 
 const QUOTES = `'"\``;
@@ -68,8 +71,46 @@ function endOfBlockComment(source, start) {
 function endOfString(source, start) {
   const quote = source[start];
   let position = start + 1;
-  while (position < source.length && source[position] !== quote) {
-    position += source[position] === '\\' ? 2 : 1;
+  while (position < source.length && !closesString(source[position], quote)) {
+    position = afterStringPiece(source, position, quote);
   }
   return Math.min(position + 1, source.length);
+}
+
+/**
+ * Only a template spans lines: an unclosed `'` or `"` ends at the newline, as it does in JS.
+ * Without this the quote of a regex literal (`/['"]/`) opened a "string" that ran to the next
+ * quote in the file, and what followed THAT quote was read as code - `'http://a'; if (x)` on
+ * a later line lost its `if` to a comment that was never there (review of the port,
+ * 2026-10-03, issue #5).
+ */
+function closesString(char, quote) {
+  if (char === quote) return true;
+  return char === '\n' && quote !== '`';
+}
+
+/** The next position inside a string: past an escape, past a whole `${…}`, or one character on. */
+function afterStringPiece(source, position, quote) {
+  if (source[position] === '\\') return position + 2;
+  const opensInterpolation = quote === '`' && source.startsWith('${', position);
+  return opensInterpolation ? endOfInterpolation(source, position + 2) : position + 1;
+}
+
+/**
+ * `${…}` holds code, and that code may hold another template: skips to the matching brace, so
+ * the inner backtick is not read as the end of the outer template. Before this,
+ * `${dirs.map((d) => `${d}/*.ts`)}` left `/*.ts` as code, and the block comment it "opened"
+ * blanked the rest of the file - a file with logic excused from its test, the one answer a
+ * gate may never give (review of the port, 2026-10-03, issue #5).
+ */
+function endOfInterpolation(source, start) {
+  let depth = 1;
+  let position = start;
+  while (position < source.length && depth > 0) {
+    const char = source[position];
+    if (char === '{') depth += 1;
+    if (char === '}') depth -= 1;
+    position = QUOTES.includes(char) ? endOfString(source, position) : position + 1;
+  }
+  return position;
 }

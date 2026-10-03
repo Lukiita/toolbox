@@ -64,5 +64,23 @@ describe('blankOutComments', () => {
 
       expect(blankOutComments(source)).toBe(source);
     });
+
+    it('a template nested inside `${}` belongs to the outer template', () => {
+      const source = 'const glob = `${dirs.map((d) => `${d}/*.ts`)}`;';
+
+      expect(blankOutComments(source)).toBe(source);
+    });
+
+    it('a quoted string continued over a line with a backslash is still one string', () => {
+      const source = "const s = 'a \\\n// still the string';";
+
+      expect(blankOutComments(source)).toBe(source);
+    });
+  });
+
+  describe('an unclosed quote', () => {
+    it('ends at the newline, so the comment on the next line is still blanked', () => {
+      expect(blankOutComments("const q = /'/;\n// c")).toBe(`const q = /'/;\n${' '.repeat(4)}`);
+    });
   });
 });

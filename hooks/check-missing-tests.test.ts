@@ -64,6 +64,32 @@ describe('codeHasBranching', () => {
 
       expect(codeHasBranching(source)).toBe(true);
     });
+
+    it('`/*` in a template nested inside `${}` does not open a block comment', () => {
+      const source = 'const glob = `${dirs.map((d) => `${d}/*.ts`)}`;\nif (x) return;';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('`//` in a template nested inside `${}` does not hide the `||` after it', () => {
+      const source = 'const url = `${join(`http://a`)}`; const v = a || b;';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('a brace inside `${}` does not end the interpolation early', () => {
+      const source = 'const s = `${fmt({ a: 1 }, `x/*y`)}`;\nif (z) return;';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('a quote in a regex literal cannot swallow the line after it', () => {
+      const source = ['const quote = /[\'"]/;', "const url = 'http://a'; if (x) return;"].join(
+        '\n',
+      );
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
   });
 
   it('a file with no branch and no comment has no branching', () => {
