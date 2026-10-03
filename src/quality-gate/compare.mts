@@ -47,8 +47,23 @@ export interface Failure {
   message: string;
 }
 
+/** A metric measured better than its frozen value: the slack the next PR could give back. */
+export interface Improvement {
+  metric: string;
+  label: string;
+  /** The frozen value, with its unit. */
+  from: string;
+  /** What was measured, with its unit. */
+  to: string;
+}
+
 function worsened(direction: Direction, limit: number, current: number): boolean {
   return direction === 'lower-is-better' ? current > limit : current < limit;
+}
+
+/** Strictly better: a tie is not an improvement, so only a real gain leaves slack to report. */
+function improved(direction: Direction, limit: number, current: number): boolean {
+  return direction === 'lower-is-better' ? current < limit : current > limit;
 }
 
 /**
@@ -234,4 +249,51 @@ export function compareMetrics(
     });
   }
   return failures;
+}
+
+/**
+ * Returns the `baseline`-mode metrics measured strictly better than their frozen value. The
+ * ratchet only fails on worsening, so a gain nobody freezes becomes slack: the next PR can give
+ * it back without failing and nothing in the report says so. Measured in project-d on
+ * 2026-09-30: pure rules outside the domain at 107 with the baseline still at 112 - five
+ * displaced rules would have passed. Pure and read-only: it never fails the gate, it feeds the
+ * report's "tighten the baseline" reminder.
+ *
+ * A `floor` stays out on purpose: it is a chosen target, and passing it is no reason to move
+ * it. So does an informative metric (`gate: false`), which never gates anyway, and a metric the
+ * baseline does not know - `compareMetrics` already fails that one.
+ *
+ * Provenance: born in project-d (2026-09-30), brought to the toolbox by issue #7. Feed it the
+ * result of `effectiveBaseline`, like `compareMetrics`, so both judge the same frozen numbers.
+ *
+ * @example
+ *   improvedMetrics(baseline, { 'pure-rule-outside-domain': 107 })
+ *   // => [{ metric: 'pure-rule-outside-domain', label: '...', from: '112', to: '107' }]
+ */
+export function improvedMetrics(
+  baseline: Baseline,
+  current: Record<string, number>,
+): Improvement[] {
+  const improvements: Improvement[] = [];
+  for (const [metric, value] of Object.entries(current)) {
+    const expected = baseline.metrics[metric];
+    if (expected === undefined || !isTightenable(expected, value)) continue;
+    const suffix = expected.unit ?? '';
+    improvements.push({
+      metric,
+      label: expected.label,
+      from: `${expected.value}${suffix}`,
+      to: `${value}${suffix}`,
+    });
+  }
+  return improvements;
+}
+
+/**
+ * Frozen (not a floor), gating, and measured strictly better than frozen. Split out of
+ * `improvedMetrics` to keep each function under the project's cyclomatic-complexity limit.
+ */
+function isTightenable(expected: MetricBaseline, current: number): boolean {
+  if (expected.mode !== 'baseline' || expected.gate === false) return false;
+  return improved(expected.direction, expected.value, current);
 }

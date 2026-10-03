@@ -67,6 +67,23 @@ const env = (root: string, config: QualityConfig): GateEnvironment => ({
 });
 const run = { updateBaseline: false, skipTests: true };
 
+interface FrozenBaseline {
+  metrics: Record<string, { value: number }>;
+}
+
+/** Edits the frozen baseline and commits it: the "base" a later `--baseline-from` run reads. */
+function commitEditedBaseline(
+  root: string,
+  message: string,
+  edit: (frozen: FrozenBaseline) => void,
+): void {
+  const baselinePath = join(root, 'quality-baseline.json');
+  const frozen = JSON.parse(readFileSync(baselinePath, 'utf8')) as FrozenBaseline;
+  edit(frozen);
+  writeFileSync(baselinePath, `${JSON.stringify(frozen, null, 2)}\n`);
+  execFileSync('git', ['commit', '-qam', message], { cwd: root });
+}
+
 describe('runQualityGate (end to end on a temp repository)', () => {
   it('re-freezes: every measured metric gets an entry with a real value', () => {
     const { root, config } = scratchRepo();
@@ -86,6 +103,28 @@ describe('runQualityGate (end to end on a temp repository)', () => {
     expect(result.status).toBe('passed');
     expect(result.failures).toEqual([]);
     expect(result.report).toContain('<!-- quality-gate -->');
+  });
+
+  it('says nothing about improvements right after a re-freeze: nothing is looser than measured', () => {
+    const { root, config } = scratchRepo();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    const result = runQualityGate(env(root, config), run);
+    expect(result.report).not.toContain('tighten the baseline');
+  });
+
+  // The CI path: the base commit froze 5 displaced rules, the code measures 0. The gate still
+  // passes - the section only reminds that the 5 is slack the next PR could give back.
+  it('reminds to tighten when a metric measures better than the base froze, and still passes', () => {
+    const { root, config } = scratchRepo();
+    runQualityGate(env(root, config), { ...run, updateBaseline: true });
+    commitEditedBaseline(root, 'base that froze five displaced rules', (frozen) => {
+      frozen.metrics['pure-rule-outside-domain'].value = 5;
+    });
+    const result = runQualityGate(env(root, config), { ...run, baselineFrom: 'HEAD' });
+    expect(result.status).toBe('passed');
+    expect(result.failures).toEqual([]);
+    expect(result.report).toContain('### Improvements — tighten the baseline');
+    expect(result.report).toContain('- Pure rules outside the domain: 5 → 0');
   });
 
   it('fails when a file loses coverage after the freeze, naming the file', () => {
@@ -112,13 +151,9 @@ describe('runQualityGate (end to end on a temp repository)', () => {
   it('a metric the base never had is gated on the local floor, and both the warning and the report name it', () => {
     const { root, config } = scratchRepo();
     runQualityGate(env(root, config), { ...run, updateBaseline: true });
-    const baselinePath = join(root, 'quality-baseline.json');
-    const frozen = JSON.parse(readFileSync(baselinePath, 'utf8')) as {
-      metrics: Record<string, unknown>;
-    };
-    delete frozen.metrics['circular-dependencies'];
-    writeFileSync(baselinePath, `${JSON.stringify(frozen, null, 2)}\n`);
-    execFileSync('git', ['commit', '-qam', 'base without the cycles metric'], { cwd: root });
+    commitEditedBaseline(root, 'base without the cycles metric', (frozen) => {
+      delete frozen.metrics['circular-dependencies'];
+    });
     runQualityGate(env(root, config), { ...run, updateBaseline: true });
     const warnings: string[] = [];
     const result = runQualityGate(

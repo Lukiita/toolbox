@@ -11,7 +11,7 @@
 // a caller decides what to print and how to exit. The report language is per
 // project: `"language": "en" | "pt"` in the baseline json (see locale.mts).
 import { baselineChangedSince, readComparisonBaseline, readOwnBaseline, refreezeBaseline, writeBaseline, } from "./baseline-store.mjs";
-import { compareFileCounts, compareMetrics } from "./compare.mjs";
+import { compareFileCounts, compareMetrics, improvedMetrics } from "./compare.mjs";
 import { stringsFor } from "./locale.mjs";
 import { measureRepository } from "./measure.mjs";
 import { PLACE_RULE_HOMES } from "./place-rule.mjs";
@@ -75,6 +75,7 @@ function compareAndReport(env, measurement, baselineFrom) {
         baseline: base,
         current: measurement.current,
         failures,
+        improvements: improvedMetrics(base, measurement.current),
         details: reportDetails(measurement, env.config, t),
         generatedAt: new Date().toISOString(),
         baselineOrigin: origin,

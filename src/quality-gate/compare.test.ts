@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type Baseline, compareMetrics, effectiveBaseline } from './compare.mts';
+import { type Baseline, compareMetrics, effectiveBaseline, improvedMetrics } from './compare.mts';
 import { stringsFor } from './locale.mts';
 
 const t = stringsFor('en');
@@ -320,5 +320,86 @@ describe('renames cannot come from the baseline file at all', () => {
       uncoveredByFile: {},
     };
     expect(Object.keys(withMap.metrics)).toEqual([]);
+  });
+});
+
+// Without this, a metric that improved leaves slack under the frozen number: the next PR can
+// give the gain back without failing. Measured in project-d on 2026-09-30: the pure rules
+// outside the domain dropped to 107 with the baseline still frozen at 112 - five displaced
+// rules would have passed. Expected values are the literals of that case, never recomputed.
+describe('improvedMetrics', () => {
+  const FROZEN: Baseline = {
+    metrics: {
+      'pure-rule-outside-domain': {
+        section: 'Architecture',
+        label: 'Pure rules outside the domain',
+        mode: 'baseline',
+        direction: 'lower-is-better',
+        value: 112,
+      },
+      'coverage-percent': {
+        section: 'Coverage',
+        label: 'Line coverage',
+        mode: 'baseline',
+        direction: 'higher-is-better',
+        value: 80,
+      },
+      'duplication-percent': {
+        section: 'Duplication',
+        label: 'Duplicated lines',
+        mode: 'baseline',
+        direction: 'lower-is-better',
+        value: 5.91,
+        unit: '%',
+      },
+    },
+    uncoveredByFile: {},
+  };
+
+  it('lists a lower-is-better metric that went down, with where it was and where it is', () => {
+    expect(improvedMetrics(FROZEN, { 'pure-rule-outside-domain': 107 })).toEqual([
+      {
+        metric: 'pure-rule-outside-domain',
+        label: 'Pure rules outside the domain',
+        from: '112',
+        to: '107',
+      },
+    ]);
+  });
+
+  it('lists a higher-is-better metric that went up', () => {
+    expect(improvedMetrics(FROZEN, { 'coverage-percent': 83 })).toEqual([
+      { metric: 'coverage-percent', label: 'Line coverage', from: '80', to: '83' },
+    ]);
+  });
+
+  it('keeps the unit on both numbers', () => {
+    expect(improvedMetrics(FROZEN, { 'duplication-percent': 5.87 })).toEqual([
+      {
+        metric: 'duplication-percent',
+        label: 'Duplicated lines',
+        from: '5.91%',
+        to: '5.87%',
+      },
+    ]);
+  });
+
+  it('leaves out a metric tied with the baseline or worse, in either direction', () => {
+    expect(improvedMetrics(FROZEN, { 'pure-rule-outside-domain': 112 })).toEqual([]);
+    expect(improvedMetrics(FROZEN, { 'pure-rule-outside-domain': 113 })).toEqual([]);
+    expect(improvedMetrics(FROZEN, { 'coverage-percent': 80 })).toEqual([]);
+    expect(improvedMetrics(FROZEN, { 'coverage-percent': 79 })).toEqual([]);
+  });
+
+  it('leaves out a floor: it is a chosen target, not a frozen number to lower', () => {
+    expect(improvedMetrics(BASE, { coverage: 95 })).toEqual([]);
+  });
+
+  it('leaves out an informative metric (gate: false), which never gates anyway', () => {
+    expect(improvedMetrics(BASE, { informative: 0 })).toEqual([]);
+  });
+
+  it('leaves out a metric the baseline does not know - that case already fails elsewhere', () => {
+    expect(improvedMetrics(BASE, { novel: 0 })).toEqual([]);
   });
 });

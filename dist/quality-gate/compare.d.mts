@@ -28,6 +28,15 @@ export interface Failure {
     current: number;
     message: string;
 }
+/** A metric measured better than its frozen value: the slack the next PR could give back. */
+export interface Improvement {
+    metric: string;
+    label: string;
+    /** The frozen value, with its unit. */
+    from: string;
+    /** What was measured, with its unit. */
+    to: string;
+}
 /**
  * Per-file ratchet. It exists because the global sum does NOT work: measured
  * on 2026-08-05 against `e6d4144`, `actions.ts` went from 208 to 213 uncovered
@@ -91,3 +100,23 @@ export declare function effectiveBaseline(compared: Baseline, local: Baseline, r
  * resolved there.
  */
 export declare function compareMetrics(baseline: Baseline, current: Record<string, number>, t: GateStrings): Failure[];
+/**
+ * Returns the `baseline`-mode metrics measured strictly better than their frozen value. The
+ * ratchet only fails on worsening, so a gain nobody freezes becomes slack: the next PR can give
+ * it back without failing and nothing in the report says so. Measured in project-d on
+ * 2026-09-30: pure rules outside the domain at 107 with the baseline still at 112 - five
+ * displaced rules would have passed. Pure and read-only: it never fails the gate, it feeds the
+ * report's "tighten the baseline" reminder.
+ *
+ * A `floor` stays out on purpose: it is a chosen target, and passing it is no reason to move
+ * it. So does an informative metric (`gate: false`), which never gates anyway, and a metric the
+ * baseline does not know - `compareMetrics` already fails that one.
+ *
+ * Provenance: born in project-d (2026-09-30), brought to the toolbox by issue #7. Feed it the
+ * result of `effectiveBaseline`, like `compareMetrics`, so both judge the same frozen numbers.
+ *
+ * @example
+ *   improvedMetrics(baseline, { 'pure-rule-outside-domain': 107 })
+ *   // => [{ metric: 'pure-rule-outside-domain', label: '...', from: '112', to: '107' }]
+ */
+export declare function improvedMetrics(baseline: Baseline, current: Record<string, number>): Improvement[];

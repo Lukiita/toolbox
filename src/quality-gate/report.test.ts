@@ -152,3 +152,58 @@ describe('buildReport - the self-compared metrics are named', () => {
     expect(md).toContain('approves itself');
   });
 });
+
+// The ratchet only fails on worsening, so a gain nobody froze is slack the next PR can give
+// back. The section reminds; it never fails the gate. Measured in project-d on 2026-09-30:
+// frozen 112, measured 107 (issue #7).
+describe('buildReport - improvements', () => {
+  const IMPROVED = [
+    {
+      metric: 'pure-rule-outside-domain',
+      label: 'Pure rules outside the domain',
+      from: '112',
+      to: '107',
+    },
+    { metric: 'duplication-percent', label: 'Duplicated lines', from: '2.2%', to: '2.1%' },
+  ];
+
+  it('lists each improved metric with before and after, and the command to freeze it', () => {
+    const md = buildReport({ ...INPUT, improvements: IMPROVED }, t);
+    expect(md).toContain('### Improvements — tighten the baseline');
+    expect(md).toContain('- Pure rules outside the domain: 112 → 107');
+    expect(md).toContain('- Duplicated lines: 2.2% → 2.1%');
+    expect(md).toContain('`toolbox quality --update-baseline`');
+  });
+
+  it('stays silent when nothing improved, or when the field is absent', () => {
+    expect(buildReport({ ...INPUT, improvements: [] }, t)).not.toContain('Improvements');
+    expect(buildReport(INPUT, t)).not.toContain('Improvements');
+  });
+
+  it('does not fail the gate: a report with improvements and no failures still says passed', () => {
+    const md = buildReport({ ...INPUT, improvements: IMPROVED }, t);
+    expect(md).toContain('**Status:** ✅ Passed');
+    expect(md).not.toContain('Failed');
+  });
+
+  it('keeps the section out of the regressions block, which the pre-push hook cuts out', () => {
+    const md = buildReport(
+      {
+        ...INPUT,
+        improvements: IMPROVED,
+        failures: [{ metric: 'a', limit: 208, current: 213, message: '`a` went up' }],
+      },
+      t,
+    );
+    const block = md.slice(md.indexOf(REGRESSIONS_START), md.indexOf(REGRESSIONS_END));
+    expect(block).not.toContain('tighten the baseline');
+    expect(md).toContain('tighten the baseline');
+  });
+
+  it('follows the project language', () => {
+    const md = buildReport({ ...INPUT, improvements: IMPROVED }, stringsFor('pt'));
+    expect(md).toContain('### Melhorias — aperte o baseline');
+    expect(md).toContain('`toolbox quality --update-baseline`');
+    expect(md).not.toContain('Improvements');
+  });
+});

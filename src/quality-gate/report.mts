@@ -5,7 +5,7 @@
 // test. And the HTML marker at the top is what lets CI **edit** the same
 // comment on every push instead of stacking one per commit.
 
-import type { Baseline, Failure } from './compare.mts';
+import type { Baseline, Failure, Improvement } from './compare.mts';
 import type { GateStrings } from './locale.mts';
 
 export const MARKER = '<!-- quality-gate -->';
@@ -24,6 +24,11 @@ export interface ReportInput {
   baseline: Baseline;
   current: Record<string, number>;
   failures: readonly Failure[];
+  /**
+   * Metrics measured better than frozen. Printed as a reminder to tighten the baseline; never
+   * counted as a failure (issue #7).
+   */
+  improvements?: readonly Improvement[];
   details?: readonly ReportDetail[];
   generatedAt: string;
   /** Where the baseline came from: `origin/main` in CI, the worktree locally. */
@@ -42,6 +47,17 @@ function delta(value: number, base: number, unit?: string): string {
   const d = Math.round((value - base) * 100) / 100;
   if (d === 0) return '—';
   return `${d > 0 ? '+' : ''}${d}${unit ?? ''}`;
+}
+
+/**
+ * The "tighten the baseline" section, or nothing when no metric improved. It sits OUTSIDE the
+ * regressions markers: a consumer that cuts that block out prints failures only, and a
+ * reminder is not one.
+ */
+function improvementLines(improvements: readonly Improvement[], t: GateStrings): string[] {
+  if (improvements.length === 0) return [];
+  const items = improvements.map((i) => `- ${i.label}: ${i.from} → ${i.to}`);
+  return [t.improvementsTitle, '', ...items, '', ...t.tightenAdvice, ''];
 }
 
 export function buildReport(input: ReportInput, t: GateStrings): string {
@@ -77,6 +93,8 @@ export function buildReport(input: ReportInput, t: GateStrings): string {
     }
     lines.push('');
   }
+
+  lines.push(...improvementLines(input.improvements ?? [], t));
 
   if (failures.length > 0) {
     lines.push(REGRESSIONS_START, t.regressionsTitle, '');

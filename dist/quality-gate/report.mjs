@@ -16,6 +16,17 @@ function delta(value, base, unit) {
         return '—';
     return `${d > 0 ? '+' : ''}${d}${unit ?? ''}`;
 }
+/**
+ * The "tighten the baseline" section, or nothing when no metric improved. It sits OUTSIDE the
+ * regressions markers: a consumer that cuts that block out prints failures only, and a
+ * reminder is not one.
+ */
+function improvementLines(improvements, t) {
+    if (improvements.length === 0)
+        return [];
+    const items = improvements.map((i) => `- ${i.label}: ${i.from} → ${i.to}`);
+    return [t.improvementsTitle, '', ...items, '', ...t.tightenAdvice, ''];
+}
 export function buildReport(input, t) {
     const { baseline, current, failures, generatedAt } = input;
     const lines = [MARKER, '', t.reportTitle, ''];
@@ -47,6 +58,7 @@ export function buildReport(input, t) {
         }
         lines.push('');
     }
+    lines.push(...improvementLines(input.improvements ?? [], t));
     if (failures.length > 0) {
         lines.push(REGRESSIONS_START, t.regressionsTitle, '');
         for (const f of failures)

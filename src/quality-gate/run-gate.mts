@@ -20,7 +20,7 @@ import {
   refreezeBaseline,
   writeBaseline,
 } from './baseline-store.mts';
-import { compareFileCounts, compareMetrics, type Failure } from './compare.mts';
+import { compareFileCounts, compareMetrics, type Failure, improvedMetrics } from './compare.mts';
 import { type GateStrings, stringsFor } from './locale.mts';
 import { type Measurement, measureRepository } from './measure.mts';
 import { PLACE_RULE_HOMES } from './place-rule.mts';
@@ -114,6 +114,7 @@ function compareAndReport(
       baseline: base,
       current: measurement.current,
       failures,
+      improvements: improvedMetrics(base, measurement.current),
       details: reportDetails(measurement, env.config, t),
       generatedAt: new Date().toISOString(),
       baselineOrigin: origin,

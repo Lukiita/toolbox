@@ -9,6 +9,9 @@ export interface GateStrings {
     tableHeader: string;
     regressionsTitle: string;
     ratchetAdvice: readonly string[];
+    /** Heading of the reminder for metrics measured better than frozen (issue #7). */
+    improvementsTitle: string;
+    tightenAdvice: readonly string[];
     baselineOriginSuffix: (origin: string) => string;
     footer: (generatedAt: string, originSuffix: string) => string;
     metricNotInBaseline: (metric: string) => string;
