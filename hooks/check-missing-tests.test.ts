@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+
+import { codeHasBranching } from './check-missing-tests.mjs';
+
+/**
+ * Specified behavior (issue #5):
+ *
+ * The branching that requires a test is the CODE's. A `?`, `||` or `if (` written inside a
+ * comment creates no alternate path to regress, so a logic-free `abstract class` port whose
+ * JSDoc describes its contract in prose must not trigger the hook. Removing comments must not
+ * swallow code: `//` or `/*` inside a string does not open a comment.
+ */
+describe('codeHasBranching', () => {
+  describe('ignores what is written in a comment', () => {
+    it('an `if` in a line comment', () => {
+      const source = ['// if (x) something happens', 'export const value = 1;'].join('\n');
+
+      expect(codeHasBranching(source)).toBe(false);
+    });
+
+    it('`||` and `?` in the JSDoc block of an abstract-class port', () => {
+      const source = [
+        '/**',
+        ' * Finds the owner - returns null if it does not exist || was deleted?',
+        ' */',
+        'export abstract class OwnerGateway {',
+        '  public abstract find(id: string): Promise<Owner | null>;',
+        '}',
+      ].join('\n');
+
+      expect(codeHasBranching(source)).toBe(false);
+    });
+
+    it('`&&` and `throw` in a block comment that opens and closes on one line', () => {
+      const source = 'export const limit = 10; /* a && b, else throw */';
+
+      expect(codeHasBranching(source)).toBe(false);
+    });
+  });
+
+  describe('still sees the branching of the code', () => {
+    it('a real `if`', () => {
+      expect(codeHasBranching('if (x) return;')).toBe(true);
+    });
+
+    it('a real `??` next to a comment', () => {
+      const source = 'const name = input ?? fallback; // default value';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('a real `if` right after a block comment on the same line', () => {
+      expect(codeHasBranching('/* guard */ if (x) return;')).toBe(true);
+    });
+
+    it('`//` inside a string does not hide the `if` that follows it', () => {
+      const source = "const url = 'https://example.com'; if (x) return;";
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+
+    it('`/*` inside a string does not open a block comment', () => {
+      const source = 'const glob = "src/*.ts"; if (x) return; const end = "*/";';
+
+      expect(codeHasBranching(source)).toBe(true);
+    });
+  });
+
+  it('a file with no branch and no comment has no branching', () => {
+    const source = 'export abstract class Gateway {\n  public abstract run(): void;\n}';
+
+    expect(codeHasBranching(source)).toBe(false);
+  });
+});

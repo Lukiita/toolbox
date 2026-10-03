@@ -24,6 +24,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { blankOutComments } from './blank-out-comments.mjs';
 import { hooksConfigOrDefaults, isEntrypoint, repoRoot } from './hook-context.mjs';
 
 const ROOT = repoRoot();
@@ -75,10 +76,23 @@ function isWatched(file, { watchedPatterns, exemptSuffixes }) {
   return !/^index\.(ts|mts|cts)$/.test(path.basename(file));
 }
 
+/**
+ * Whether the source has a branch of its own - one that can regress. A marker written in a
+ * comment does not count: a port described in prose has no path to cover (issue #5).
+ *
+ * @param {string} contents Source text of a TypeScript file.
+ * @returns {boolean} `true` when a branch marker appears outside every comment.
+ * @example
+ * codeHasBranching('// if (x)\nexport const a = 1;') // false
+ */
+export function codeHasBranching(contents) {
+  const code = blankOutComments(contents);
+  return BRANCH_MARKERS.some((marker) => marker.test(code));
+}
+
 function hasBranching(absolute) {
   try {
-    const contents = readFileSync(absolute, 'utf-8');
-    return BRANCH_MARKERS.some((marker) => marker.test(contents));
+    return codeHasBranching(readFileSync(absolute, 'utf-8'));
   } catch {
     return false;
   }
