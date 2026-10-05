@@ -9,7 +9,7 @@ Model the domain so the rules live inside it — not scattered across services, 
 
 ## Project decisions come first
 
-Before any reference below, read `.agents/skills/ddd-tactical/PROJECT.md` in the repository you are working in, when it exists. It records what that repository settled differently from the defaults here — which id recipe, which error vocabulary, the kernel's own names — and it **wins** wherever the two disagree. The references stay the generic skill, copied unedited; `PROJECT.md` is the repository's one layer over them, so updating the skill never overwrites a local decision (born in project-d, which kept its divergences there instead of editing its copy).
+Before any reference below, read `.agents/skill-decisions/ddd-tactical.md` in the project you are working in, when it exists. It records what the project settled differently from the defaults here — which id recipe, which error vocabulary, the kernel's own names — and it **wins** wherever the two disagree. The references stay generic and that file is the project's one layer over them: it is the project's own, outside the skill's directory, so an update of the skill never touches it (`Lukiita/toolbox` ADR-0002).
 
 ## The three questions (answer before writing any code)
 
@@ -21,7 +21,7 @@ The global `AGENTS.md` (§ How I build software) fixes them — **what is the ag
 |---|---|---|
 | A concept defined by its **value**, interchangeable, immutable (Money, Email, CPF, a date range) | Value Object | [value-object.md](references/value-object.md) |
 | A concept with **identity** that survives change (an Order, a Subscription) | Entity / Aggregate | [entity-aggregate.md](references/entity-aggregate.md) |
-| An **id** the compiler refuses to swap for another concept's (`SubscriptionId` vs `PlanId`) | Typed id — a branded primitive | [typed-ids.md](references/typed-ids.md) |
+| An **id** the compiler refuses to swap for another concept's (`SubscriptionId` vs `PlanId`) | Typed id | [typed-ids.md](references/typed-ids.md) |
 | The base classes everything extends (framework-free, in the shared kernel) | `shared/domain` | [base-classes.md](references/base-classes.md) |
 | Failing — which error type, which channel: rule refused or use case blocked → returned in `Result`; infra down → thrown | `Result` + `DomainError` / `ApplicationError` / `InfrastructureError` | [domain-errors.md](references/domain-errors.md) |
 | Loading and saving aggregates without the domain knowing the database | Repository port | [repository.md](references/repository.md) |
@@ -55,10 +55,10 @@ Why the constructor is private and empty: a `new` that throws forces try/catch o
 
 ## Per-project decisions (settle them once, at the first aggregate)
 
-Write each answer in the repository's `PROJECT.md` (above), so the next session reads the decision and the code never mixes two answers.
+Write each answer in the project's decisions file (above), with a pointer to the ADR that holds the reasons where the project keeps them: the next session reads the decision, and the code never mixes two answers.
 
 - **Does `restore` validate?** Greenfield: yes, same rules as `create` — the database was born under the invariant, and a violation there is corruption worth failing loudly on. Legacy: no — a validating `restore` makes invalid rows UNREADABLE, so nobody can even load them to fix them. Lenient restore then pairs with a validating save: you can read broken data, you cannot persist more of it. The debt only shrinks — a ratchet applied to data. Full pattern in [entity-aggregate.md](references/entity-aggregate.md).
-- **Which id recipe?** The branded primitive — the default, an id that is its string at runtime — or a class per concept, an id that knows its concept at runtime. One recipe per repository; both, their prices and when the class earns its place are in [typed-ids.md](references/typed-ids.md).
+- **Which id recipe?** The branded primitive unless the project has reason to pay for a class per concept — [typed-ids.md](references/typed-ids.md) prices both.
 - **Domain events on or off?** The `AggregateRoot` base collects them, but wire a dispatcher only when some effect genuinely needs decoupling. Publishing events nobody consumes is ceremony.
 
 ## Where things live (package by feature)

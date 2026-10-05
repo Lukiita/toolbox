@@ -9,6 +9,34 @@
 // @ts-check
 import tseslint from 'typescript-eslint';
 
+// ddd-tactical (typed-ids.md): a type assertion forges a typed id - `raw as
+// SubscriptionId` compiles, and in the class recipe so does `{ value } as
+// SubscriptionId`. The selector fails an assertion whose target NAMES an id
+// type, anywhere but inside the factory object that holds the only
+// legitimate ones. Leans on the house naming: id types are `<Concept>Id`.
+//
+// The first cut exempted every declarator whose name ended in `Id`, so
+// `const subscriptionId = raw as SubscriptionId` - the most natural forge -
+// passed (review 2026-10-05). The exemption is now the factory itself: a
+// PascalCase `*Id` constant initialised with an object literal.
+//
+// Run against ESLint 9.39 and 10.7 with typescript-eslint 8 (2026-10-05), 20
+// forges fail: plain `as`, double cast, `<XId>raw`, a camelCase `*Id` variable,
+// a union, an array, a tuple, a generic (`Promise<XId>`), a qualified name, an
+// import type, `Brand<'X'>` itself. The factories pass, with or without
+// `as const` / `satisfies`. What it cannot see: another concept's id asserted
+// INSIDE a factory object; an assertion to a type that only CONTAINS an id
+// (`{ id: raw } as SubscriptionProps`); an alias that renames the id type.
+// `@typescript-eslint/no-unsafe-type-assertion` (type-aware) closes those too,
+// at the price of refusing every narrowing assertion.
+const ID_TYPE =
+  ":matches(TSTypeReference[typeName.name=/Id$/], TSTypeReference[typeName.right.name=/Id$/], TSTypeReference[typeName.name='Brand'], TSImportType[qualifier.name=/Id$/])";
+const ID_FACTORY =
+  "VariableDeclarator[id.name=/^[A-Z]\\w*Id$/]:matches([init.type='ObjectExpression'], [init.expression.type='ObjectExpression'])";
+const FORGED_ID = `:matches(TSAsExpression, TSTypeAssertion) > .typeAnnotation:matches(${ID_TYPE}, :has(${ID_TYPE})):not(${ID_FACTORY} *)`;
+const FORGED_ID_MESSAGE =
+  'An id is named only by its own factories: call <Concept>Id.restore(value) (ddd-tactical, typed-ids.md).';
+
 export default tseslint.config({
   files: ['src/**/*.ts', 'src/**/*.tsx'],
   rules: {
@@ -43,23 +71,7 @@ export default tseslint.config({
     'max-depth': ['error', 2],
 
     // ddd-tactical (typed-ids.md): an id is named only by its own factories.
-    // A type assertion to a `*Id` type anywhere else forges one - `raw as
-    // SubscriptionId` compiles, and in the class recipe so does
-    // `{ value } as SubscriptionId`. Exempt: the `const <Name>Id = { create,
-    // restore }` that holds the only legitimate assertions. Leans on the house
-    // naming (id types end in `Id`). Run against ESLint 9 and 10 with
-    // typescript-eslint 8 (2026-10-05): plain `as`, double cast, `<XId>raw`,
-    // `as XId[]` and a cast inside an object literal fail; the factories pass.
-    // Known gap: another concept's id asserted INSIDE a factory object passes.
-    'no-restricted-syntax': [
-      'error',
-      {
-        selector:
-          ':matches(TSAsExpression, TSTypeAssertion) > .typeAnnotation:matches(TSTypeReference[typeName.name=/Id$/], TSArrayType:has(TSTypeReference[typeName.name=/Id$/])):not(VariableDeclarator[id.name=/Id$/] *)',
-        message:
-          'An id is named only by its own factories: call <Name>Id.restore(value) (ddd-tactical, typed-ids.md).',
-      },
-    ],
+    'no-restricted-syntax': ['error', { selector: FORGED_ID, message: FORGED_ID_MESSAGE }],
   },
 });
 

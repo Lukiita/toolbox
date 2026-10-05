@@ -247,7 +247,7 @@ src/<feature>/
     ├── controllers/               subscription.controller.ts + use-case-error.mapper.ts
     └── requests/                  renew-subscription.request.ts (shape validation)
 src/shared/                        the kernel, layered like a feature - each layer may import only its own and the ones below
-├── domain/                        base classes, Money, Id, Result, domain-error.ts
+├── domain/                        base classes, Money, Brand, Result, domain-error.ts
 ├── application/                   application-error.ts (+ the UseCaseError union)
 ├── infra/                         infrastructure-error.ts
 └── presentation/                  application-error.mapper.ts, thrown-error.filter.ts

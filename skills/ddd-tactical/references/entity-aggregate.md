@@ -118,7 +118,7 @@ public save(subscription: Subscription): Promise<Result<void, DomainError>> {
 }
 ```
 
-You can read broken data, triage it (`violations()` over a batch), fix it — and the system never persists new damage. The debt only shrinks: a ratchet applied to data. Record which mode the project uses in its `PROJECT.md` (and in an ADR where the project keeps them); the two modes must not mix silently.
+You can read broken data, triage it (`violations()` over a batch), fix it — and the system never persists new damage. The debt only shrinks: a ratchet applied to data. Record which mode the project uses with its other per-project decisions ([SKILL.md](../SKILL.md)); the two modes must not mix silently.
 
 ## Rules that keep the model rich
 

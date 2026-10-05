@@ -58,10 +58,9 @@ export abstract class ValueObject<Props extends Record<string, unknown>> {
 export abstract class Entity<Props extends { id: string | number }> {
   protected constructor(protected readonly props: Props) {}
 
-  // `Props['id']`, the id exactly as the aggregate declared it, brand
-  // included. Typed as the bare primitive (or, before issue #4, as the base
-  // class of every id) the getter handed back an untyped id, and
-  // `repository.findById(subscription.id)` did not compile.
+  // `Props['id']`: the id exactly as the aggregate declared it, brand
+  // included. Typed as the bare primitive, the getter would hand back an
+  // untyped id and `repository.findById(subscription.id)` would not compile.
   public get id(): Props['id'] {
     return this.props.id;
   }
