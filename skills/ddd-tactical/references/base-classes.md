@@ -25,6 +25,9 @@ declare const brand: unique symbol;
 export type Brand<Name extends string, Primitive extends string | number = string> = Primitive & {
   readonly [brand]: Name;
 };
+
+/** Any typed id, whatever its concept - what `Entity` asks of an aggregate's `id`. */
+export type TypedId = Brand<string, string | number>;
 ```
 
 The key is a `unique symbol` declared once, here, so this helper is the only thing that can produce the brand. A string-literal field (`{ __brand: 'UserId' }`) is matched by any type that happens to carry the same field — another library's brand, a hand-written object type — and the two become interchangeable in silence. The concept **name** is what tells two ids apart: `Brand<'UserId'>` written in two features is one type, right when both mean the same concept, so different concepts get different names.
@@ -55,12 +58,17 @@ export abstract class ValueObject<Props extends Record<string, unknown>> {
 
 ```ts
 // shared/domain/entity.ts
-export abstract class Entity<Props extends { id: string | number }> {
+import type { TypedId } from './brand';
+
+// `TypedId`, a constraint a bare `string` does not satisfy: "every id is a
+// typed id" is a compile error here (TS2344), where a `string | number`
+// constraint left it a sentence nobody enforced.
+export abstract class Entity<Props extends { id: TypedId }> {
   protected constructor(protected readonly props: Props) {}
 
-  // `Props['id']`: the id exactly as the aggregate declared it, brand
-  // included. Typed as the bare primitive, the getter would hand back an
-  // untyped id and `repository.findById(subscription.id)` would not compile.
+  // `Props['id']`: the id exactly as the aggregate declared it, concept
+  // included. Typed as `TypedId`, the getter would hand back an id of no
+  // concept and `repository.findById(subscription.id)` would not compile.
   public get id(): Props['id'] {
     return this.props.id;
   }
@@ -85,6 +93,7 @@ export abstract class Entity<Props extends { id: string | number }> {
 
 ```ts
 // shared/domain/aggregate-root.ts
+import type { TypedId } from './brand';
 import { Entity } from './entity';
 
 export interface DomainEvent {
@@ -92,9 +101,7 @@ export interface DomainEvent {
   readonly occurredAt: Date;
 }
 
-export abstract class AggregateRoot<
-  Props extends { id: string | number },
-> extends Entity<Props> {
+export abstract class AggregateRoot<Props extends { id: TypedId }> extends Entity<Props> {
   private readonly _events: DomainEvent[] = [];
 
   // Events are COLLECTED here and PUBLISHED by whoever saves the aggregate

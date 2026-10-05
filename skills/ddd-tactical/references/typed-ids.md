@@ -37,13 +37,14 @@ Measured with `tsc --strict` 5.9.3:
 | a raw `'abc'` passed where a `SubscriptionId` is expected | TS2345 |
 | `subscriptionId === planId` | TS2367 — the types have no overlap |
 | `subscriptionIds.includes(planId)` | TS2345 |
+| an aggregate declared with `id: string` | TS2344 — the kernel asks for a typed id |
 | `const text: string = subscriptionId` | compiles — an id is still text |
 | `raw as SubscriptionId` outside the two doors | compiles — the lint rule below refuses it |
 
 The last two rows are the price of a brand:
 
 - **Where an id is accepted as plain text, the brand is gone.** Two ids of different concepts that both reached a `string` parameter compare as text. With UUIDs two concepts never share a value; with serial keys they do (plan 5, subscription 5) — a project on serial keys weighs the class recipe below.
-- **An assertion forges an id.** The typed-id block of `templates/quality-gate/eslint.fitness.example.mjs` in `@lukiita/toolbox` fails an assertion whose target names an id type — `<Concept>Id` bare or inside a union, an array, a tuple or a generic, or `Brand<…>` itself — anywhere but inside a factory object. Copy it into the project's lint config with the first typed id; its header lists what it cannot see.
+- **An assertion forges an id.** The typed-id block of `templates/quality-gate/eslint.fitness.example.mjs` in `@lukiita/toolbox` fails the forges an agent reaches for first — an assertion straight to an id type, to a union or an array of it, or to `Brand<…>` — anywhere but inside a factory. Copy it into the project's lint config with the first typed id; its header lists what it sees, and what only the type-aware `no-unsafe-type-assertion` can.
 
 ## The alternative: a class per concept
 
