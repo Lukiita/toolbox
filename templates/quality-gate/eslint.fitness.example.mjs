@@ -41,6 +41,25 @@ export default tseslint.config({
 
     // AGENTS.md: max 2 indentation levels - early returns over nested ifs.
     'max-depth': ['error', 2],
+
+    // ddd-tactical (typed-ids.md): an id is named only by its own factories.
+    // A type assertion to a `*Id` type anywhere else forges one - `raw as
+    // SubscriptionId` compiles, and in the class recipe so does
+    // `{ value } as SubscriptionId`. Exempt: the `const <Name>Id = { create,
+    // restore }` that holds the only legitimate assertions. Leans on the house
+    // naming (id types end in `Id`). Run against ESLint 9 and 10 with
+    // typescript-eslint 8 (2026-10-05): plain `as`, double cast, `<XId>raw`,
+    // `as XId[]` and a cast inside an object literal fail; the factories pass.
+    // Known gap: another concept's id asserted INSIDE a factory object passes.
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector:
+          ':matches(TSAsExpression, TSTypeAssertion) > .typeAnnotation:matches(TSTypeReference[typeName.name=/Id$/], TSArrayType:has(TSTypeReference[typeName.name=/Id$/])):not(VariableDeclarator[id.name=/Id$/] *)',
+        message:
+          'An id is named only by its own factories: call <Name>Id.restore(value) (ddd-tactical, typed-ids.md).',
+      },
+    ],
   },
 });
 

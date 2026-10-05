@@ -11,28 +11,26 @@ Deciding the boundary is the three-questions exercise from SKILL.md. One test th
 import { addMonths } from 'date-fns'; // pure computation lib - allowed in the domain (see SKILL.md)
 
 import { AggregateRoot } from '@/src/shared/domain/aggregate-root';
+import type { Brand } from '@/src/shared/domain/brand';
 import { DomainError } from '@/src/shared/domain/domain-error';
-import { Identifier } from '@/src/shared/domain/identifier';
 import { Result } from '@/src/shared/domain/result';
 
-// The typed id lives with its owner and is exported from here. The private
-// brand is what makes it nominal - without it, TypeScript's structural typing
-// would still accept a PlanId in a SubscriptionId slot (base-classes.md).
-export class SubscriptionId extends Identifier<string> {
-  private readonly __brand!: 'SubscriptionId';
-  public static from(value: string): SubscriptionId {
-    return new SubscriptionId(value);
-  }
-}
+// The typed id lives with its owner and is exported from here: a type for
+// signatures and, under the same name, its two factories. The brand is what
+// keeps a PlanId out of a SubscriptionId slot (typed-ids.md).
+export type SubscriptionId = Brand<'SubscriptionId'>;
+export const SubscriptionId = {
+  create: (): SubscriptionId => crypto.randomUUID() as SubscriptionId,
+  restore: (value: string): SubscriptionId => value as SubscriptionId,
+};
 
 // In real code PlanId is exported from plan.aggregate.ts - declared here only
 // to keep the example self-contained.
-export class PlanId extends Identifier<string> {
-  private readonly __brand!: 'PlanId';
-  public static from(value: string): PlanId {
-    return new PlanId(value);
-  }
-}
+export type PlanId = Brand<'PlanId'>;
+export const PlanId = {
+  create: (): PlanId => crypto.randomUUID() as PlanId,
+  restore: (value: string): PlanId => value as PlanId,
+};
 
 // Exported: restore() and the repository mapper speak this type.
 export interface SubscriptionProps {
@@ -65,7 +63,7 @@ export class Subscription extends AggregateRoot<SubscriptionProps> {
     return Result.ok(
       new Subscription({
         ...input,
-        id: SubscriptionId.from(crypto.randomUUID()),
+        id: SubscriptionId.create(),
         status: 'active',
       }),
     );
@@ -120,7 +118,7 @@ public save(subscription: Subscription): Promise<Result<void, DomainError>> {
 }
 ```
 
-You can read broken data, triage it (`violations()` over a batch), fix it — and the system never persists new damage. The debt only shrinks: a ratchet applied to data. Record which mode the project uses in an ADR; the two modes must not mix silently.
+You can read broken data, triage it (`violations()` over a batch), fix it — and the system never persists new damage. The debt only shrinks: a ratchet applied to data. Record which mode the project uses in its `PROJECT.md` (and in an ADR where the project keeps them); the two modes must not mix silently.
 
 ## Rules that keep the model rich
 

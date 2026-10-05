@@ -38,7 +38,7 @@ export class RenewSubscriptionHandler {
   // handler can fail because a RULE refused or because it never REACHED the
   // rule. An InfrastructureError is not in the signature - it is thrown.
   public async execute(command: RenewSubscriptionCommand): Promise<Result<void, UseCaseError>> {
-    const subscription = await this.subscriptions.findById(SubscriptionId.from(command.subscriptionId));
+    const subscription = await this.subscriptions.findById(SubscriptionId.restore(command.subscriptionId));
     if (!subscription) {
       // The aggregate never says "not found" - the HANDLER does. That makes it
       // an application outcome, not a domain refusal (domain-errors.md).

@@ -6,48 +6,30 @@ The abstract classes every domain block extends. They live in `src/shared/domain
 
 Extending `AggregateRoot` from `@nestjs/cqrs` (or an ORM's base entity) puts a framework import inside `domain/` — the one place the layer rules forbid it. The costs are concrete: the framework's release cycle becomes your domain's release cycle (strong connascence with code you don't own), unit tests load framework machinery, and moving one feature to a worker or another runtime drags NestJS with it. Own the ~60 lines below instead; wire the framework at the edge (adapter recipe at the bottom).
 
-## `Identifier`
+## `Brand`
 
-Conceptually an identifier IS a value object — immutable, compared by value, no identity of its own. It stays outside the `ValueObject` base on purpose: that base's props-bag and structural equality serve multi-part values (`Money` = amount + currency); the identifier wraps a single primitive and is the most-used type in the system, so the machinery buys nothing here. Standalone is also the common market shape (Vernon's `UniqueEntityID`). The lesson generalizes: taxonomy ("is a VO") does not obligate inheritance ("extends ValueObject") — inherit for reuse, not to satisfy a diagram.
-
-```ts
-// shared/domain/identifier.ts
-export class Identifier<T extends string | number> {
-  // protected, not private: per-aggregate ids specialize it (below).
-  protected constructor(private readonly _value: T) {}
-
-  public static from<T extends string | number>(value: T): Identifier<T> {
-    return new Identifier(value);
-  }
-
-  public get value(): T {
-    return this._value;
-  }
-
-  public equals(other: Identifier<T>): boolean {
-    return other instanceof Identifier && other._value === this._value;
-  }
-}
-```
-
-**Typed ids per aggregate** — when two ids of the same primitive travel together (a Subscription holds its own id AND a planId), the generic `Identifier<string>` lets the compiler accept a swap. The specialization closes that — connascence of *type*, used in your favor:
+The kernel of every typed id. The recipe built on it, its rules and the class-based alternative are in [typed-ids.md](typed-ids.md).
 
 ```ts
-// declared in the owning aggregate's file (subscription.aggregate.ts) and exported from there
-export class SubscriptionId extends Identifier<string> {
-  // TypeScript typing is STRUCTURAL: an empty subclass would be identical to
-  // PlanId and the compiler would still accept the swap. A private brand makes
-  // the type nominal - private members compare by declaration, so two classes
-  // with their own brands are mutually incompatible. That is the whole trick.
-  private readonly __brand!: 'SubscriptionId';
+// shared/domain/brand.ts
+declare const brand: unique symbol;
 
-  // Each typed id redefines `from` (one line): the inherited one returns the
-  // generic Identifier, which the brand now - correctly - refuses.
-  public static from(value: string): SubscriptionId {
-    return new SubscriptionId(value);
-  }
-}
+/**
+ * A primitive that carries the name of its concept for the compiler only:
+ * `Brand<'SubscriptionId'>` IS a string when the program runs.
+ *
+ * @example
+ *   type SubscriptionId = Brand<'SubscriptionId'>;       // a string
+ *   type LegacyOrderId = Brand<'LegacyOrderId', number>; // a serial key
+ */
+export type Brand<Name extends string, Primitive extends string | number = string> = Primitive & {
+  readonly [brand]: Name;
+};
 ```
+
+The key is a `unique symbol` declared once, here, so this helper is the only thing that can produce the brand. A string-literal field (`{ __brand: 'UserId' }`) is matched by any type that happens to carry the same field — another library's brand, a hand-written object type — and the two become interchangeable in silence. The concept **name** is what tells two ids apart: `Brand<'UserId'>` written in two features is one type, right when both mean the same concept, so different concepts get different names.
+
+An identifier IS a value object by taxonomy — immutable, compared by value, no identity of its own — and it stays outside the `ValueObject` base on purpose: that base's props-bag and structural equality serve multi-part values (`Money` = amount + currency), while an id is one primitive and the most-used type in the system. The lesson generalizes: taxonomy ("is a VO") does not obligate inheritance ("extends ValueObject") — inherit for reuse, not to satisfy a diagram.
 
 ## `ValueObject`
 
@@ -73,12 +55,14 @@ export abstract class ValueObject<Props extends Record<string, unknown>> {
 
 ```ts
 // shared/domain/entity.ts
-import { Identifier } from './identifier';
-
-export abstract class Entity<Props extends { id: Identifier<string> }> {
+export abstract class Entity<Props extends { id: string | number }> {
   protected constructor(protected readonly props: Props) {}
 
-  public get id(): Identifier<string> {
+  // `Props['id']`, the id exactly as the aggregate declared it, brand
+  // included. Typed as the bare primitive (or, before issue #4, as the base
+  // class of every id) the getter handed back an untyped id, and
+  // `repository.findById(subscription.id)` did not compile.
+  public get id(): Props['id'] {
     return this.props.id;
   }
 
@@ -86,7 +70,7 @@ export abstract class Entity<Props extends { id: Identifier<string> }> {
   // their current state looks - that is what identity means.
   public equals(other: Entity<Props>): boolean {
     if (other === this) return true;
-    return other instanceof this.constructor && other.id.equals(this.id);
+    return other instanceof this.constructor && other.id === this.id;
   }
 
   // The persistence door: repositories need to READ the state to map it to
@@ -103,7 +87,6 @@ export abstract class Entity<Props extends { id: Identifier<string> }> {
 ```ts
 // shared/domain/aggregate-root.ts
 import { Entity } from './entity';
-import type { Identifier } from './identifier';
 
 export interface DomainEvent {
   readonly name: string;
@@ -111,7 +94,7 @@ export interface DomainEvent {
 }
 
 export abstract class AggregateRoot<
-  Props extends { id: Identifier<string> },
+  Props extends { id: string | number },
 > extends Entity<Props> {
   private readonly _events: DomainEvent[] = [];
 
