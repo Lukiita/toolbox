@@ -1,0 +1,156 @@
+# The toolbox's own gate. Until 2026-10-12 every merge was checked by hand
+# (`pnpm test`, `typecheck`, `build:check`, `quality` run locally) and the
+# only status on a PR was CodeRabbit's, which skips repos under ten stars -
+# a green check that reviewed nothing. This workflow is the quality half of
+# templates/quality-gate/ci.example.yml applied to the repo that ships it,
+# plus the gates only this repo has: dist/ in sync with src/ (ADR-0001 commits
+# dist/), the Python tests of tlc-spec-driven's scripts, and prettier.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# One place for the pnpm version. Not `packageManager` in package.json: under
+# pnpm 12 that field makes pnpm lock its own binaries for every platform
+# (160 lockfile lines) and `--frozen-lockfile` refuses the lockfile until
+# they are committed - measured 2026-10-12.
+env:
+  PNPM_VERSION: 12.4.2
+
+# A new push to the same branch supersedes the run in flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # publishes and edits the quality report comment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The baseline that counts is the PR's BASE, not the branch's: without
+          # the history, a PR that re-freezes the baseline approves itself.
+          fetch-depth: 0
+          # This job runs code coming FROM the pull request before posting the
+          # comment, and it holds `pull-requests: write`. Checkout writes
+          # GITHUB_TOKEN into .git/config by default, within reach of that
+          # code. The `gh api` calls below receive GH_TOKEN explicitly.
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # engines: >=22.18 <23 || >=23.6; toolbox.config.ts needs Node's type stripping
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Prettier
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      # tlc-spec-driven's validation scripts are Python with stdlib tests
+      # (unittest, no third-party imports) - the runner's python3 is enough.
+      - name: Tests (Python, tlc-spec-driven scripts)
+        run: pnpm test:py
+
+      # dist/ is committed (ADR-0001: a git dependency is not built on install).
+      # A fresh build must reproduce it byte for byte, or the tag ships stale
+      # code. The pre-commit hook checks the same thing locally; this is the
+      # second line.
+      - name: dist/ matches src/
+        run: pnpm build:check
+
+      # A PR may add code; it may not add logic without a co-located test.
+      # The hook is this repo's own file, not the published copy.
+      - name: Changed files with logic must have a co-located test
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.sha }}
+        run: node hooks/check-missing-tests.mjs --base "$BASE" --head "$HEAD"
+
+      # A PR may not make any metric worse than the base's baseline. Zero
+      # model cost - the cheapest layer, and it catches what a review misses
+      # out of fatigue.
+      - name: Quality ratchet
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then
+            pnpm quality --baseline-from "$BASE" --out quality-report.md
+          else
+            pnpm quality --out quality-report.md
+          fi
+
+      - name: Job summary
+        if: always() && hashFiles('quality-report.md') != ''
+        run: cat quality-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One fixed comment, edited in place - one comment per push would pile
+      # noise onto the PR. The HTML marker at the top of the report is what
+      # allows the edit (MARKER in report.mts); changing the marker duplicates
+      # the comment instead of updating it.
+      - name: Pull request comment
+        if: always() && github.event_name == 'pull_request' && hashFiles('quality-report.md') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          ID=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- quality-gate -->")) | .id] | first // empty')
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$ID" -F body=@quality-report.md >/dev/null
+            echo "comment $ID updated"
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@quality-report.md >/dev/null
+            echo "comment created"
+          fi
+
+      # The report as an artifact: what a future agent (or the babysitting
+      # loop) downloads to read the regressions without re-running the gate.
+      - name: Upload report
+        if: always() && hashFiles('quality-report.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: quality-report.md
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Two levels on purpose. Critical BLOCKS: a failure here means something
+      # new and severe arrived through the lockfile - no known debt lives at
+      # this level, so no unrelated change gets punished. High WARNS: known
+      # debt stays visible on every run without stopping the world.
+      - name: Audit (critical blocks)
+        run: pnpm audit --audit-level critical
+
+      - name: Audit (high warns)
+        run: pnpm audit --audit-level high || echo "::warning::high-severity advisories present - not blocking; document the known debt"
