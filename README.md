@@ -29,7 +29,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 Projects used to copy `skills/`, `hooks/` and `quality-gate/` and adapt them by hand; the copies drifted (issues #1 and #2 were fixes born in a copy). Now a project depends on the package and configures it:
 
 ```bash
-pnpm add -D github:Lukiita/toolbox#v1.0.0     # a tag is a version (v1.0.0 = the first release); no registry, no build step
+pnpm add -D github:Lukiita/toolbox#v1.1.0     # a tag is a version; no registry, no build step
 pnpm exec toolbox install                      # links every shipped skill into .agents/skills/
 cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 ```
@@ -39,7 +39,7 @@ cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 - **Hooks**: wired from `node_modules/@lukiita/toolbox/hooks/` — see `hooks/README.md`.
 - **Config**: one file, `toolbox.config.ts`, holds every value a project used to edit inside a copied file (source window, feature slot, limits, alias prefixes, base branch, protected branches). Empty config = canonical setup. The code is never edited in a project.
 
-Updating a project is `pnpm update @lukiita/toolbox`. Publishing is a build and a tag: `pnpm build:check && git tag v1.1.0 && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move.
+Updating a project is `pnpm update @lukiita/toolbox`. Publishing is a build and a tag: `pnpm build:check && git tag vX.Y.Z && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move.
 
 Migration of an existing copy, one project at a time: `./toolbox-diff.sh <project>` lists the adaptations — each one becomes a config field — then delete `scripts/quality/`, `tools/agent-hooks/` and the toolbox-owned skills, and run `pnpm quality --update-baseline` once: the numbers must not move (a moved number means the config is wrong, not the baseline). Two known exceptions: `duplication-*` moves either way when the project's jscpd version differs from the package's pinned 5.0.14 (5.2.1 counts more clones on the same tree), and `cc-over-limit`/`files-over-limit`/`explicit-any` measure more for a copy older than project-a's 2026-09-02 collectors, which the package now carries.
 
