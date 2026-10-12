@@ -4,12 +4,14 @@ Canonical source of the coding-agent hooks, born in Project A. They ship inside 
 
 ## The two hooks
 
-| hook | event | severity | what it does |
-|---|---|---|---|
-| `guard-bash.mjs` | PreToolUse (Bash) | **deny** | closes the shell path to secrets (`cat .env`, `grep *.pem`…) that the provider's Read-deny cannot see, blocks `git push --force` without lease, blocks direct pushes to protected branches |
-| `missing-tests-reminder.mjs` | Stop | warn only | lists changed files with logic and no co-located `.test.ts` — never blocks, no state, cannot loop |
+| hook                         | event             | severity  | what it does                                                                                                                                                                               |
+| ---------------------------- | ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `guard-bash.mjs`             | PreToolUse (Bash) | **deny**  | closes the shell path to secrets (`cat .env`, `grep *.pem`…) that the provider's Read-deny cannot see, blocks `git push --force` without lease, blocks direct pushes to protected branches |
+| `missing-tests-reminder.mjs` | Stop              | warn only | lists changed files with logic and no co-located `.test.ts` — never blocks, no state, cannot loop                                                                                          |
 
 `check-missing-tests.mjs` is the shared heuristic: the Stop hook imports it (warn) and **CI runs the same file as a blocking gate** (`node node_modules/@lukiita/toolbox/hooks/check-missing-tests.mjs --base <sha> --head <sha>`). One source of truth — if they diverged, agents and CI would disagree about what is required. The severity split is deliberate: mid-task the test may be one step away; at the pull request, it is not.
+
+"Has logic" means a branch marker (`if (`, `||`, `??`, `throw`…) in the **code**: `blank-out-comments.mjs` blanks comments out first, asking the TypeScript parser where they are, so a `?` in a JSDoc sentence is not a branch and `//` inside a string, a template or a regex literal is not a comment. A file with a syntax error, or one the parser cannot get through, is judged with its comments in and the reason goes to stderr: the hook over-asks rather than excuse it.
 
 ## Importing into a project
 
@@ -24,14 +26,22 @@ The hooks ship inside the `@lukiita/toolbox` package (ADR-0001) — nothing is c
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lukiita/toolbox/hooks/guard-bash.mjs\"", "timeout": 10 }
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lukiita/toolbox/hooks/guard-bash.mjs\"",
+            "timeout": 10
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lukiita/toolbox/hooks/missing-tests-reminder.mjs\"", "timeout": 30 }
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/node_modules/@lukiita/toolbox/hooks/missing-tests-reminder.mjs\"",
+            "timeout": 30
+          }
         ]
       }
     ]
@@ -45,11 +55,11 @@ The hooks ship inside the `@lukiita/toolbox` package (ADR-0001) — nothing is c
 
 ## Config (`toolbox.config.ts`, section `hooks`)
 
-| field | default | what it drives |
-| --- | --- | --- |
-| `watchedPatterns` | `src/<feature>/domain\|application/` and the flat layout | files that must have a co-located test (the same window as the ratchet's rule places; edges are excluded on purpose — watching them would fail every PR that touches a screen) |
-| `exemptSuffixes` | `.test.ts`, `.test.mts`, `.test.cts`, `.d.ts`, `.d.mts`, `.d.cts`, `.types.ts`, `.type.ts`, `.config.ts`, `.constants.ts`, `.fixtures.ts` | artefacts with no behaviour of their own (`index.ts|mts|cts` barrels are exempt too) |
-| `protectedBranches` | `['main', 'develop']` | a direct `git push` to one of these is denied |
+| field               | default                                                                                                                                   | what it drives                                                                                                                                                                 |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `watchedPatterns`   | `src/<feature>/domain\|application/` and the flat layout                                                                                  | files that must have a co-located test (the same window as the ratchet's rule places; edges are excluded on purpose — watching them would fail every PR that touches a screen) |
+| `exemptSuffixes`    | `.test.ts`, `.test.mts`, `.test.cts`, `.d.ts`, `.d.mts`, `.d.cts`, `.types.ts`, `.type.ts`, `.config.ts`, `.constants.ts`, `.fixtures.ts` | artefacts with no behaviour of their own (`index.ts\|mts\|cts` barrels are exempt too)                                                                                         |
+| `protectedBranches` | `['main', 'develop']`                                                                                                                     | a direct `git push` to one of these is denied                                                                                                                                  |
 
 The secrets rule needs no config: it is universal, and `guard-bash-secrets.mjs` runs it globally from `~/.agents/hooks` for every repo.
 
