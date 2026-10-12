@@ -13,12 +13,12 @@ cd toolbox && ./install.sh
 
 Idempotent: running it again only confirms the state. What it links:
 
-| target | source | how |
-|---|---|---|
-| `~/.claude/skills` | `skills/` | symlink |
-| `~/.agents/skills` | `skills/` | symlink (the canonical path skills reference) |
+| target                    | source           | how                                                                                                                                                   |
+| ------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.claude/skills`        | `skills/`        | symlink                                                                                                                                               |
+| `~/.agents/skills`        | `skills/`        | symlink (the canonical path skills reference)                                                                                                         |
 | `~/.codex/skills/<skill>` | `skills/<skill>` | one symlink **per skill** — Codex keeps its own `.system/` inside that directory, so the directory itself cannot be a link; dangling links are pruned |
-| `~/.agents/hooks` | `hooks/` | symlink (the global secrets guard is wired from here) |
+| `~/.agents/hooks`         | `hooks/`         | symlink (the global secrets guard is wired from here)                                                                                                 |
 
 The personal setup — `~/.agents/AGENTS.md` (global instructions), `~/.claude/CLAUDE.md`, `~/.claude/agents`, `~/.claude/settings.json` and the kata output — is not part of this repo: it lives in a private dotfiles repo with its own installer, so this one can be public and consumed as a package without carrying anyone's preferences.
 
@@ -71,23 +71,23 @@ system-mind-export.sh  flattens the study vault into one file for the claude.ai 
 
 ## Skills
 
-| skill | role |
-|---|---|
-| `grilling` | relentless interview to stress-test a decision |
-| `grill-with-docs` | grilling + domain-modeling (produces glossary and ADRs along the way) |
-| `domain-modeling` | ubiquitous language (`CONTEXT.md`) + ADRs (`docs/adr/`) |
-| `tlc-spec-driven` | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`) |
-| `ddd-tactical` | the house tactical-DDD style as templates: aggregates, VOs, typed ids, repositories+mappers, lightweight CQRS (ships its own `evals/`) |
-| `sql-quality` | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`) |
-| `architecture-kata` | socratic architecture coach: generated katas with a hidden gabarito + co-designing real greenfields — think-first, verdict only in the review (ships its own `evals/`) |
-| `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
-| `code-review` | pre-PR diff review: bug lens ×2 (independent, with an attacker and an on-call read), project rules + smell baseline + new-pattern and out-of-scope drift, intent-vs-commits lens outside tlc, triage at ≥80 |
-| `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
-| `codebase-design` | deep-module vocabulary (module, interface, seam, depth, leverage, locality), the deletion test, design-it-twice — vendored from mattpocock/skills |
-| `diagnosing-bugs` | hard-bug discipline: a tight red loop before any theory, minimise, falsifiable hypotheses, regression test at a real seam — vendored from mattpocock/skills |
-| `writing-for-agents` | how to write skills and AGENTS.md: context pointers, the two loads, leading words, no-op pruning — vendored from mattpocock/skills |
-| `retro` | end-of-session retrospective of the agent's *environment*: what should become a hook, a fitness function, a reviewer rule, a pointer, or a cut (proposes; the proposals land as a note in `~/vault/inbox/`, never as an edit to the toolbox) |
-| `setup-pre-commit` | Husky + lint-staged formatter, typecheck and the tlc commit-msg check, each hook proven to bite |
+| skill                | role                                                                                                                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grilling`           | relentless interview to stress-test a decision                                                                                                                                                                                               |
+| `grill-with-docs`    | grilling + domain-modeling (produces glossary and ADRs along the way)                                                                                                                                                                        |
+| `domain-modeling`    | ubiquitous language (`CONTEXT.md`) + ADRs (`docs/adr/`)                                                                                                                                                                                      |
+| `tlc-spec-driven`    | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`)                                                                                                                                                                  |
+| `ddd-tactical`       | the house tactical-DDD style as templates: aggregates, VOs, typed ids, repositories+mappers, lightweight CQRS (ships its own `evals/`)                                                                                                       |
+| `sql-quality`        | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`)                                                                            |
+| `architecture-kata`  | socratic architecture coach: generated katas with a hidden gabarito + co-designing real greenfields — think-first, verdict only in the review (ships its own `evals/`)                                                                       |
+| `capability-sync`    | living behavioral contract (`.specs/capabilities/`)                                                                                                                                                                                          |
+| `code-review`        | pre-PR diff review: bug lens ×2 (independent, with an attacker and an on-call read), project rules + smell baseline + new-pattern and out-of-scope drift, intent-vs-commits lens outside tlc, triage at ≥80                                  |
+| `pr-review-triage`   | triage of open-PR review comments (CodeRabbit etc.)                                                                                                                                                                                          |
+| `codebase-design`    | deep-module vocabulary (module, interface, seam, depth, leverage, locality), the deletion test, design-it-twice — vendored from mattpocock/skills                                                                                            |
+| `diagnosing-bugs`    | hard-bug discipline: a tight red loop before any theory, minimise, falsifiable hypotheses, regression test at a real seam — vendored from mattpocock/skills                                                                                  |
+| `writing-for-agents` | how to write skills and AGENTS.md: context pointers, the two loads, leading words, no-op pruning — vendored from mattpocock/skills                                                                                                           |
+| `retro`              | end-of-session retrospective of the agent's _environment_: what should become a hook, a fitness function, a reviewer rule, a pointer, or a cut (proposes; the proposals land as a note in `~/vault/inbox/`, never as an edit to the toolbox) |
+| `setup-pre-commit`   | Husky + lint-staged formatter, typecheck and the tlc commit-msg check, each hook proven to bite                                                                                                                                              |
 
 Not carried here: `skill-creator` — it is Anthropic's official skill, unpatched by us; vendoring it would be drift without value. Install it from the official channel when needed.
 
@@ -97,7 +97,7 @@ Evaluated and deferred (2026-08-27, full sweep of mattpocock/skills): `prototype
 
 **The interview method has three homes and one boundary** (mapped 2026-08-18): `grilling` stress-tests a raw idea or plan BEFORE any feature exists — and recommends answers; tlc's Discuss clarifies gray areas INSIDE an already-bounded feature (scope is sacred there); `architecture-kata` coaches greenfield architecture and recommends nothing until its review. The route for a raw idea: `/grill-with-docs` (grilling + glossary/ADRs as they crystallize) → tlc Specify consumes the sharpened plan. Specify itself suggests that route when clarification reveals the WHAT is still contested — a local tlc patch, documented in its `UPSTREAM.md`.
 
-**Added 2026-08-27** (from the mattpocock/skills sweep): `code-review` dropped its cost tuning — the parent now loads the diff at triage, the bug lens runs in two independent agents, and an intent lens (diff vs. commit messages, Matt's *Spec* axis adapted) runs only where no tlc Verifier exists; its Revisor B carries a Fowler smell baseline (`references/smells.md`; a written repo rule overrides it); `arch-review` gained a sixth lens, **depth**, and a survey mode (hot spots from recent commits → deletion test → a rejected candidate becomes an ADR) on `codebase-design`'s vocabulary; tlc got three local patches (test seams named in Design, no file paths in the spec, expand–contract for wide refactors — `UPSTREAM.md` items 8–10); `diagnosing-bugs` hands "no seam for a regression test" to `arch-review`; and `grilling` keeps one-question-at-a-time **on purpose** while upstream moved to rounds — the `architecture-kata` contract and AGENTS.md's "one idea at a time" depend on it (its `UPSTREAM.md` records the fork).
+**Added 2026-08-27** (from the mattpocock/skills sweep): `code-review` dropped its cost tuning — the parent now loads the diff at triage, the bug lens runs in two independent agents, and an intent lens (diff vs. commit messages, Matt's _Spec_ axis adapted) runs only where no tlc Verifier exists; its Revisor B carries a Fowler smell baseline (`references/smells.md`; a written repo rule overrides it); `arch-review` gained a sixth lens, **depth**, and a survey mode (hot spots from recent commits → deletion test → a rejected candidate becomes an ADR) on `codebase-design`'s vocabulary; tlc got three local patches (test seams named in Design, no file paths in the spec, expand–contract for wide refactors — `UPSTREAM.md` items 8–10); `diagnosing-bugs` hands "no seam for a regression test" to `arch-review`; and `grilling` keeps one-question-at-a-time **on purpose** while upstream moved to rounds — the `architecture-kata` contract and AGENTS.md's "one idea at a time" depend on it (its `UPSTREAM.md` records the fork).
 
 ## Third-party skills — the upstream contract
 
@@ -116,10 +116,10 @@ The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 
 ## ai-memory — the episodic recall layer (pilot)
 
-[ai-memory](https://github.com/akitaonrails/ai-memory) (Akita, MIT) runs as a local Docker server with lifecycle hooks: it auto-captures sanitized session observations, consolidates them into a git-versioned wiki at session end, and hands the next agent — including a *different* agent (Codex, Cursor) — a "where you left off" briefing. The boundary that keeps it from becoming a second source of truth:
+[ai-memory](https://github.com/akitaonrails/ai-memory) (Akita, MIT) runs as a local Docker server with lifecycle hooks: it auto-captures sanitized session observations, consolidates them into a git-versioned wiki at session end, and hands the next agent — including a _different_ agent (Codex, Cursor) — a "where you left off" briefing. The boundary that keeps it from becoming a second source of truth:
 
-- **Repo docs stay the curated source of truth** — `CONTEXT.md`, `docs/adr/`, `.specs/capabilities/`, lessons. Decisions live there and only there; ai-memory's bootstrap *indexes* them, never replaces them.
-- **The wiki is episodic recall only** — what happened, what was tried and failed, where a session stopped. An agent may *recall* from it; it never *decides* from it against a repo doc.
+- **Repo docs stay the curated source of truth** — `CONTEXT.md`, `docs/adr/`, `.specs/capabilities/`, lessons. Decisions live there and only there; ai-memory's bootstrap _indexes_ them, never replaces them.
+- **The wiki is episodic recall only** — what happened, what was tried and failed, where a session stopped. An agent may _recall_ from it; it never _decides_ from it against a repo doc.
 - Consolidation currently runs in **zero-LLM mode** — see the wiring note below for why. Hooks are installed for Claude Code only during the pilot, and the resulting `settings.json` delta is captured back into `claude/settings.json` here (the toolbox versions that file as a copy — an out-of-band edit would read as drift). Capture `ignore_paths` aligns with the secrets guard.
 
 **How this machine is wired** (pilot, 2026-08-18): server = `akitaonrails/ai-memory:latest` container (name `ai-memory`, published on host loopback :49374, volume `ai-memory-data`) running in **zero-LLM mode** — only `AI_MEMORY_AUTH_TOKEN`, read from `~/.ai-memory-auth-token` (600, required — inside the container the server binds non-loopback and refuses to run auth-less). Capture and FTS5/entity/graph search work; consolidation falls back to rule-based summaries; embeddings disabled. **Why no LLM provider:** the `anthropic-oauth` path (subscription token from `claude setup-token`, stored at `~/.ai-memory-token`) is gated by Anthropic's request classifier — instant `429 rate_limit_error` with the generic message `"Error"`, reproduced 2026-08-18 with a fresh token, a quiet session and window to spare; not a volume limit, and a new token does not help. Revisit when picking a real provider (API key + Haiku ≈ US$0.05/session, `copilot` if a Copilot subscription exists, or local Ollama via `openai-compat`) or when ai-memory ships a workaround. The bootstrap for Project A is sized and ready (26 sources, ~145k tokens, 8 chunks) — run it right after a provider lands. Client = bash wrapper at `~/.local/bin/ai-memory`. The MCP entry lives in `~/.claude.json` — machine-local, carries the bearer token, never versioned. The 9 lifecycle hooks live in `claude/settings.json` here in **secretless form**: the token enters at run time via `$(cat ~/.ai-memory-auth-token)`, never inline (the installer writes it inline; the capture step rewrote it). Known caveat: the shell hook flavor does not enforce capture-policy v1 (`ignore_paths`) client-side — the global secrets guard stays the first line against secret reads.
@@ -130,7 +130,7 @@ Skills here are **global**. A project that needs them at headless runtime (e.g. 
 
 A project that settles something differently from a skill's defaults writes it in **`.agents/skill-decisions/<skill>.md`** — its own versioned file, outside the skill's directory, so neither a linked skill nor a re-copied one ever overwrites it. A skill that honours the convention reads that file first and lets it win; `ddd-tactical` is the first ([ADR-0002](docs/adr/0002-project-decisions-over-a-skill.md)).
 
-Copies drift silently — `git status` only sees the symlinked half. **`./toolbox-diff.sh <project-root>`** shows the other half: per component (`.agents/skills/`, `tools/agent-hooks/`, `scripts/quality/`, `.archon/`), every file that differs from the source here, with `+added -deleted` counts and a label — *adaptation point* (the component README says that file is edited on import, so a small diff is expected and a large one is a stale copy wearing an excuse), *only in toolbox*, *only in project*. An unlabeled line is a copy that is simply behind. Run it before piloting a skill in a project and after improving a copy. Measured the day it was written (2026-08-28): Project A's `ddd-tactical` was 284 lines behind, its `code-review` a whole rewrite behind.
+Copies drift silently — `git status` only sees the symlinked half. **`./toolbox-diff.sh <project-root>`** shows the other half: per component (`.agents/skills/`, `tools/agent-hooks/`, `scripts/quality/`, `.archon/`), every file that differs from the source here, with `+added -deleted` counts and a label — _adaptation point_ (the component README says that file is edited on import, so a small diff is expected and a large one is a stale copy wearing an excuse), _only in toolbox_, _only in project_. An unlabeled line is a copy that is simply behind. Run it before piloting a skill in a project and after improving a copy. Measured the day it was written (2026-08-28): Project A's `ddd-tactical` was 284 lines behind, its `code-review` a whole rewrite behind.
 
 ## archon/ — importing into a project
 
