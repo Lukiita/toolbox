@@ -81,7 +81,7 @@ system-mind-export.sh  flattens the study vault into one file for the claude.ai 
 | `sql-quality` | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`) |
 | `architecture-kata` | socratic architecture coach: generated katas with a hidden gabarito + co-designing real greenfields — think-first, verdict only in the review (ships its own `evals/`) |
 | `capability-sync` | living behavioral contract (`.specs/capabilities/`) |
-| `code-review` | pre-PR diff review: bug lens ×2 (independent), project rules + smell baseline, intent-vs-commits lens outside tlc, triage at ≥80 |
+| `code-review` | pre-PR diff review: bug lens ×2 (independent, with an attacker and an on-call read), project rules + smell baseline + new-pattern and out-of-scope drift, intent-vs-commits lens outside tlc, triage at ≥80 |
 | `pr-review-triage` | triage of open-PR review comments (CodeRabbit etc.) |
 | `codebase-design` | deep-module vocabulary (module, interface, seam, depth, leverage, locality), the deletion test, design-it-twice — vendored from mattpocock/skills |
 | `diagnosing-bugs` | hard-bug discipline: a tight red loop before any theory, minimise, falsifiable hypotheses, regression test at a real seam — vendored from mattpocock/skills |

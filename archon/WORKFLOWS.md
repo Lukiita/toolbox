@@ -124,12 +124,13 @@ is a pipeline stop, and that is an `exit 1`, not a judgement. Zero model cost.
 ### ③ Review
 
 `review` (fresh) reviews and triages, with **the `code-review` skill**:
-independent agents per lens — the bug lens twice over (two agents, same prompt,
-unaware of each other), the project-rules lens (`AGENTS.md`/`CLAUDE.md`,
-`.specs/capabilities/`, connascence, the Fowler smell baseline), a deterministic
-base-divergence check, and a 0–100 confidence triage that only lets ≥ 80
-through. Its intent lens (diff vs. commit messages) does not run in this
-pipeline: a tlc repo has `.specs/`, so spec compliance belongs to the Verifier.
+independent agents per lens (roster in the skill — the bug lens runs in two agents
+unaware of each other), a deterministic base-divergence check, and a 0–100
+confidence triage that only lets ≥ 80 through. Its intent lens (commit promises
+vs. diff) does not run in this pipeline: a tlc repo has `.specs/`, so spec
+compliance belongs to the Verifier. Out-of-scope drift does run and is
+must-fix; a new pattern nobody recorded goes to the PR body as a decision for a
+human, never to `fix`.
 
 **`review` does not fix** — it is read-only over the code, and that is a
 property of the graph, not a promise in a prompt: the node that reviews has
