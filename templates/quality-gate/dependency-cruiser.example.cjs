@@ -46,7 +46,7 @@ module.exports = {
       name: 'application-orchestrates-its-own-domain',
       severity: 'error',
       comment:
-        'Command handlers reach their own domain, their own application layer and the shared domain/application kernel; infra and presentation - the feature\'s AND shared\'s - are below them, never imported upward. A handler importing InfrastructureError to catch it is the smell this guards (domain-errors.md: handlers never catch the thrown channel). Note the deliberate asymmetry (ddd-tactical application-cqrs.md): queries import the ORM inline - that is node_modules, not an internal path, so this rule does not fight the read side.',
+        "Command handlers reach their own domain, their own application layer and the shared domain/application kernel; infra and presentation - the feature's AND shared's - are below them, never imported upward. A handler importing InfrastructureError to catch it is the smell this guards (domain-errors.md: handlers never catch the thrown channel). Note the deliberate asymmetry (ddd-tactical application-cqrs.md): queries import the ORM inline - that is node_modules, not an internal path, so this rule does not fight the read side.",
       from: { path: '^src/([^/]+)/application/' },
       to: {
         path: '^src/($1|shared)/(infra|presentation)/',
@@ -77,7 +77,7 @@ module.exports = {
       name: 'cross-feature-via-public-api',
       severity: 'error',
       comment:
-        'A feature never reaches into another feature\'s internals - only its published API (the root index.ts). If a symbol is not exported there, it is private to the feature.',
+        "A feature never reaches into another feature's internals - only its published API (the root index.ts). If a symbol is not exported there, it is private to the feature.",
       from: { path: '^src/([^/]+)/' },
       to: {
         path: '^src/(?!shared/)([^/]+)/',
