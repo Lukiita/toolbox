@@ -49,6 +49,8 @@ Migration of an existing copy, one project at a time: `./toolbox-diff.sh <projec
 pnpm install && pnpm test && pnpm test:py && pnpm typecheck && pnpm build && pnpm quality
 ```
 
+The same gates run in CI (`.github/workflows/ci.yml`) on every pull request and on every push to `main`, plus `pnpm format:check`, the co-located-test hook over the changed files, and the quality ratchet measured against the **PR base's** baseline — the quality half of `templates/quality-gate/ci.example.yml` applied to the repo that ships it, so the template is proven here before a project copies it. A dependency audit runs beside it: critical blocks, high warns.
+
 `src/` is TypeScript (`.mts`, tests beside each module), built to `dist/` — and **`dist/` is committed**. Two facts force that: Node refuses to strip types from files under `node_modules`, so `.mts` cannot ship as is; and pnpm 12 refuses a git dependency's build script unless the consumer allowlists it with the commit sha, which breaks on every bump. So nothing runs on install: the tag carries the build. `.githooks/pre-commit` refuses a commit that would carry `src/` and `dist/` out of sync — it fails if `src/` has unstaged changes, then rebuilds and fails if the staged `dist/` differs from the build, or if `dist/` changed but is not in the commit — and tells what to run (`./install.sh` sets `core.hooksPath`); `pnpm build` cleans `dist/` first, so a deleted source drops its orphan; `pnpm build:check` is the release gate — it fails unless `dist/` equals HEAD, run it before a tag. `hooks/` is plain `.mjs`. `skills/` and `templates/` ship as files.
 
 ## Structure
