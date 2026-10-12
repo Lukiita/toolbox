@@ -42,8 +42,8 @@ export interface SubscriptionRow {
 export class SubscriptionMapper {
   public static toDomain(row: SubscriptionRow): Subscription {
     return Subscription.restore({
-      id: SubscriptionId.from(row.id),
-      planId: PlanId.from(row.plan_id), // typed ids: swapping the columns here would not compile
+      id: SubscriptionId.restore(row.id),
+      planId: PlanId.restore(row.plan_id), // typed ids: swapping the columns here would not compile
       status: row.status as SubscriptionProps['status'],
       currentPeriodEnd: new Date(row.current_period_end),
     });
@@ -52,8 +52,8 @@ export class SubscriptionMapper {
   public static toPersistence(subscription: Subscription): SubscriptionRow {
     const props = subscription.snapshot(); // readonly copy - the persistence door on Entity
     return {
-      id: props.id.value,
-      plan_id: props.planId.value,
+      id: props.id, // a branded id IS its string - nothing to unwrap (typed-ids.md)
+      plan_id: props.planId,
       status: props.status,
       current_period_end: props.currentPeriodEnd.toISOString(),
     };
@@ -79,7 +79,7 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
     const { data } = await this.client
       .from('subscriptions')
       .select('*')
-      .eq('id', id.value)
+      .eq('id', id)
       .maybeSingle<SubscriptionRow>();
     if (!data) return null;
     return SubscriptionMapper.toDomain(data); // rehydration - restore lives inside the mapper
@@ -100,7 +100,7 @@ export class SupabaseSubscriptionRepository implements SubscriptionRepository {
       // into a 503 and logs `cause`. The Supabase error type stops here.
       throw new InfrastructureError(
         'subscription.persistence-failed',
-        `upsert of subscription ${subscription.id.value} failed: ${error.message}`,
+        `upsert of subscription ${subscription.id} failed: ${error.message}`,
         { cause: error },
       );
     }

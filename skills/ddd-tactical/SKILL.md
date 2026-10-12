@@ -7,6 +7,10 @@ description: Tactical domain-driven design in TypeScript — model aggregates, e
 
 Model the domain so the rules live inside it — not scattered across services, handlers and SQL. The enemy has a name: the anemic model, a pile of loose functions orchestrating queries where the database enforces what the domain should own.
 
+## Project decisions come first
+
+Before any reference below, read `.agents/skill-decisions/ddd-tactical.md` in the project you are working in, when it exists. It records what the project settled differently from the defaults here — which id recipe, which error vocabulary, the kernel's own names — and it **wins** wherever the two disagree. The references stay generic and that file is the project's one layer over them: it is the project's own, outside the skill's directory, so an update of the skill never touches it (`Lukiita/toolbox` ADR-0002).
+
 ## The three questions (answer before writing any code)
 
 The global `AGENTS.md` (§ How I build software) fixes them — **what is the aggregate**, **what invariant does it protect**, **what illegal state becomes unrepresentable** — together with the rule that ceremony scales with the problem while the questions don't, and the money rule. They are always loaded, so this skill does not restate them; it adds the step: write the three answers as one short paragraph before coding — in the task, the design doc, or a comment. If you cannot answer them, the modeling conversation is not over; ask, don't guess.
@@ -17,6 +21,7 @@ The global `AGENTS.md` (§ How I build software) fixes them — **what is the ag
 |---|---|---|
 | A concept defined by its **value**, interchangeable, immutable (Money, Email, CPF, a date range) | Value Object | [value-object.md](references/value-object.md) |
 | A concept with **identity** that survives change (an Order, a Subscription) | Entity / Aggregate | [entity-aggregate.md](references/entity-aggregate.md) |
+| An **id** the compiler refuses to swap for another concept's (`SubscriptionId` vs `PlanId`) | Typed id | [typed-ids.md](references/typed-ids.md) |
 | The base classes everything extends (framework-free, in the shared kernel) | `shared/domain` | [base-classes.md](references/base-classes.md) |
 | Failing — which error type, which channel: rule refused or use case blocked → returned in `Result`; infra down → thrown | `Result` + `DomainError` / `ApplicationError` / `InfrastructureError` | [domain-errors.md](references/domain-errors.md) |
 | Loading and saving aggregates without the domain knowing the database | Repository port | [repository.md](references/repository.md) |
@@ -50,7 +55,10 @@ Why the constructor is private and empty: a `new` that throws forces try/catch o
 
 ## Per-project decisions (settle them once, at the first aggregate)
 
+Write each answer in the project's decisions file (above), with a pointer to the ADR that holds the reasons where the project keeps them: the next session reads the decision, and the code never mixes two answers.
+
 - **Does `restore` validate?** Greenfield: yes, same rules as `create` — the database was born under the invariant, and a violation there is corruption worth failing loudly on. Legacy: no — a validating `restore` makes invalid rows UNREADABLE, so nobody can even load them to fix them. Lenient restore then pairs with a validating save: you can read broken data, you cannot persist more of it. The debt only shrinks — a ratchet applied to data. Full pattern in [entity-aggregate.md](references/entity-aggregate.md).
+- **Which id recipe?** The branded primitive unless the project has reason to pay for a class per concept — [typed-ids.md](references/typed-ids.md) prices both.
 - **Domain events on or off?** The `AggregateRoot` base collects them, but wire a dispatcher only when some effect genuinely needs decoupling. Publishing events nobody consumes is ceremony.
 
 ## Where things live (package by feature)
@@ -68,7 +76,7 @@ src/<feature>/
     ├── controllers/               routes/handlers - call commands/queries, map the returned errors once
     └── requests/                  input contracts with SHAPE validation (zod/class-validator)
 src/shared/                        the kernel, layered like a feature (same import direction)
-├── domain/                        base classes + universal VOs (Money, Id, Result, DomainError)
+├── domain/                        base classes + universal types (Money, Brand, Result, DomainError)
 ├── application/                   ApplicationError + the UseCaseError union
 ├── infra/                         InfrastructureError (the only thrown house error)
 └── presentation/                  the global filter for the thrown channel

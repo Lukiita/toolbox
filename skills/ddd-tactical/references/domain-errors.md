@@ -60,7 +60,7 @@ Deliberately the same shape as `DomainError`: callers treat both identically (ch
 
 ## Why the `kind` field
 
-TypeScript typing is structural: two classes with identical members are interchangeable to the compiler, so `Result<void, DomainError>` would silently accept `Result.fail(new ApplicationError(...))` and the signature would stop telling the truth. A literal-typed field makes the types nominal — the same trick as the private brand on typed ids ([base-classes.md](base-classes.md)) — but **public**, so the error mapper can `switch (error.kind)` and the compiler checks the switch is exhaustive. A private brand would give nominality without the switch.
+TypeScript typing is structural: two classes with identical members are interchangeable to the compiler, so `Result<void, DomainError>` would silently accept `Result.fail(new ApplicationError(...))` and the signature would stop telling the truth. A literal-typed field makes the types nominal — the idea behind the brand on typed ids ([typed-ids.md](typed-ids.md)) — and here it is a real, **public** field, so the error mapper can `switch (error.kind)` and the compiler checks the switch is exhaustive. A compile-time-only brand would give nominality without the switch.
 
 ## `InfrastructureError`
 

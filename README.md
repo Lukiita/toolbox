@@ -128,6 +128,8 @@ The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 
 Skills here are **global**. A project that needs them at headless runtime (e.g. Archon worktrees, CI) carries a **copy** in the repo's `.agents/skills/`, imported from here — and inside the project, the pattern is `.claude/skills` and `.cursor/skills` as relative symlinks to `.agents/skills/` (as Project A does). The toolbox is the arbiter: an improvement made in a copy comes back here.
 
+A project that settles something differently from a skill's defaults writes it in **`.agents/skill-decisions/<skill>.md`** — its own versioned file, outside the skill's directory, so neither a linked skill nor a re-copied one ever overwrites it. A skill that honours the convention reads that file first and lets it win; `ddd-tactical` is the first ([ADR-0002](docs/adr/0002-project-decisions-over-a-skill.md)).
+
 Copies drift silently — `git status` only sees the symlinked half. **`./toolbox-diff.sh <project-root>`** shows the other half: per component (`.agents/skills/`, `tools/agent-hooks/`, `scripts/quality/`, `.archon/`), every file that differs from the source here, with `+added -deleted` counts and a label — *adaptation point* (the component README says that file is edited on import, so a small diff is expected and a large one is a stale copy wearing an excuse), *only in toolbox*, *only in project*. An unlabeled line is a copy that is simply behind. Run it before piloting a skill in a project and after improving a copy. Measured the day it was written (2026-08-28): Project A's `ddd-tactical` was 284 lines behind, its `code-review` a whole rewrite behind.
 
 ## archon/ — importing into a project
@@ -150,4 +152,4 @@ The flow is intrinsically per-project (worktrees, repo gate, AGENTS.md), so it i
 
 ## Next step
 
-Pilot `ddd-tactical` on Project A, modeling the Assinatura+Plano aggregate. (The skill itself is built and benchmarked — A/B eval pass rate 100% with skill vs 70% without, faster and cheaper with it.)
+Pilot `ddd-tactical` on Project A, modeling the Assinatura+Plano aggregate. The pilot is also the trial of the branded-id default (issue #4, 2026-10-05) — kept small on purpose, because going back from the brand to the class is the direction the compiler does not guide. If the brand disappoints there, the class recipe already written in `typed-ids.md` becomes the default before a second project adopts it. (The skill itself is built and benchmarked — A/B eval pass rate 100% with skill vs 70% without, faster and cheaper with it.)
