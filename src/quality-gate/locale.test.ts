@@ -29,4 +29,12 @@ describe('stringsFor', () => {
       '`src/a.ts` passou de 3 para 5 linhas descobertas',
     );
   });
+
+  it('tells how to tighten the baseline in both languages, with the same command', () => {
+    for (const language of ['en', 'pt']) {
+      const t = stringsFor(language);
+      expect(t.improvementsTitle.startsWith('### '), language).toBe(true);
+      expect(t.tightenAdvice.join(' '), language).toContain('`toolbox quality --update-baseline`');
+    }
+  });
 });

@@ -14,6 +14,10 @@
 function worsened(direction, limit, current) {
     return direction === 'lower-is-better' ? current > limit : current < limit;
 }
+/** Strictly better: a tie is not an improvement, so only a real gain leaves slack to report. */
+function improved(direction, limit, current) {
+    return direction === 'lower-is-better' ? current < limit : current > limit;
+}
 /**
  * Per-file ratchet. It exists because the global sum does NOT work: measured
  * on 2026-08-05 against `e6d4144`, `actions.ts` went from 208 to 213 uncovered
@@ -170,4 +174,51 @@ export function compareMetrics(baseline, current, t) {
         });
     }
     return failures;
+}
+/**
+ * Returns the `baseline`-mode metrics measured strictly better than their frozen value. The
+ * ratchet only fails on worsening, so a gain nobody freezes becomes slack: the next PR can give
+ * it back without failing and nothing in the report says so. Measured in project-d on
+ * 2026-09-30: pure rules outside the domain at 107 with the baseline still at 112 - five
+ * displaced rules would have passed. Pure and read-only: it never fails the gate, it feeds the
+ * report's "tighten the baseline" reminder.
+ *
+ * A `floor` stays out on purpose: it is a chosen target, and passing it is no reason to move
+ * it. So does an informative metric (`gate: false`), which never gates anyway, and a metric the
+ * baseline does not know - `compareMetrics` already fails that one.
+ *
+ * Provenance: born in project-d (2026-09-30), brought to the toolbox by issue #7. Feed it the
+ * branch's OWN baseline, not the result of `effectiveBaseline` - see `slackInOwnBaseline` in
+ * run-gate.mts for the two ways the compared baseline misled it.
+ *
+ * @example
+ *   improvedMetrics(baseline, { 'pure-rule-outside-domain': 107 })
+ *   // => [{ metric: 'pure-rule-outside-domain', label: '...', from: '112', to: '107' }]
+ */
+export function improvedMetrics(baseline, current) {
+    const improvements = [];
+    for (const [metric, value] of Object.entries(current)) {
+        const expected = baseline.metrics[metric];
+        // `!expected`, as in `compareMetrics`: a hand-edited `null` entry is that function's
+        // "not in the baseline" failure, not a TypeError here that loses the report.
+        if (!expected || !isTightenable(expected, value))
+            continue;
+        const suffix = expected.unit ?? '';
+        improvements.push({
+            metric,
+            label: expected.label,
+            from: `${expected.value}${suffix}`,
+            to: `${value}${suffix}`,
+        });
+    }
+    return improvements;
+}
+/**
+ * Frozen (not a floor), gating, and measured strictly better than frozen. Split out of
+ * `improvedMetrics` to keep each function under the project's cyclomatic-complexity limit.
+ */
+function isTightenable(expected, current) {
+    if (expected.mode !== 'baseline' || expected.gate === false)
+        return false;
+    return improved(expected.direction, expected.value, current);
 }

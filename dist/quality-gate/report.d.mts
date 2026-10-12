@@ -1,4 +1,4 @@
-import type { Baseline, Failure } from './compare.mts';
+import type { Baseline, Failure, Improvement } from './compare.mts';
 import type { GateStrings } from './locale.mts';
 export declare const MARKER = "<!-- quality-gate -->";
 export declare const REGRESSIONS_START = "<!-- regressions -->";
@@ -11,6 +11,11 @@ export interface ReportInput {
     baseline: Baseline;
     current: Record<string, number>;
     failures: readonly Failure[];
+    /**
+     * Metrics measured better than frozen. Printed as a reminder to tighten the baseline, on a
+     * passing report only; never counted as a failure (issue #7).
+     */
+    improvements?: readonly Improvement[];
     details?: readonly ReportDetail[];
     generatedAt: string;
     /** Where the baseline came from: `origin/main` in CI, the worktree locally. */

@@ -11,7 +11,7 @@
 // a caller decides what to print and how to exit. The report language is per
 // project: `"language": "en" | "pt"` in the baseline json (see locale.mts).
 import { baselineChangedSince, readComparisonBaseline, readOwnBaseline, refreezeBaseline, writeBaseline, } from "./baseline-store.mjs";
-import { compareFileCounts, compareMetrics } from "./compare.mjs";
+import { compareFileCounts, compareMetrics, improvedMetrics, } from "./compare.mjs";
 import { stringsFor } from "./locale.mjs";
 import { measureRepository } from "./measure.mjs";
 import { PLACE_RULE_HOMES } from "./place-rule.mjs";
@@ -64,6 +64,18 @@ function refreeze(env, m) {
     writeBaseline(env.root, refreezeBaseline(readOwnBaseline(env.root), m.current, m.byFile));
     return { status: 'refrozen', failures: [], current: m.current };
 }
+/**
+ * The slack worth a reminder is in the branch's OWN baseline - the file that becomes the
+ * base's when this merges - not in the baseline the failures are compared against. With
+ * `--baseline-from` that one holds the base commit's numbers and the engine's `mode` (every
+ * default is `baseline`), so judging improvements there told the pull request that had just
+ * tightened to "freeze it now", and listed a floor the project chose as if it were frozen
+ * (review 2026-10-03). Nothing here gates, so reading the branch's own file opens no
+ * self-approval route; the failures keep comparing against the base for exactly that reason.
+ */
+function slackInOwnBaseline(env, measurement) {
+    return improvedMetrics(readOwnBaseline(env.root), measurement.current);
+}
 function compareAndReport(env, measurement, baselineFrom) {
     const { base, origin, fromLocalFloor } = readComparisonBaseline(env.root, baselineFrom, env.warn);
     const t = stringsFor(base.language);
@@ -75,6 +87,7 @@ function compareAndReport(env, measurement, baselineFrom) {
         baseline: base,
         current: measurement.current,
         failures,
+        improvements: slackInOwnBaseline(env, measurement),
         details: reportDetails(measurement, env.config, t),
         generatedAt: new Date().toISOString(),
         baselineOrigin: origin,

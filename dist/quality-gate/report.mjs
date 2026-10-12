@@ -16,6 +16,20 @@ function delta(value, base, unit) {
         return '—';
     return `${d > 0 ? '+' : ''}${d}${unit ?? ''}`;
 }
+/**
+ * The "tighten the baseline" section, or nothing when no metric improved - and nothing on a
+ * failed report. `--update-baseline` re-freezes EVERY metric: printed beside a regression, the
+ * advice would freeze the regression along with the gain and contradict the ratchet advice
+ * right below it (review 2026-10-03). The slack is still there on the next green run, and so
+ * is the reminder.
+ */
+function improvementLines(input, t) {
+    const improvements = input.improvements ?? [];
+    if (improvements.length === 0 || input.failures.length > 0)
+        return [];
+    const items = improvements.map((i) => `- ${i.label}: ${i.from} → ${i.to}`);
+    return [t.improvementsTitle, '', ...items, '', ...t.tightenAdvice, ''];
+}
 export function buildReport(input, t) {
     const { baseline, current, failures, generatedAt } = input;
     const lines = [MARKER, '', t.reportTitle, ''];
@@ -47,6 +61,7 @@ export function buildReport(input, t) {
         }
         lines.push('');
     }
+    lines.push(...improvementLines(input, t));
     if (failures.length > 0) {
         lines.push(REGRESSIONS_START, t.regressionsTitle, '');
         for (const f of failures)

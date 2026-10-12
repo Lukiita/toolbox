@@ -5,7 +5,7 @@
 // test. And the HTML marker at the top is what lets CI **edit** the same
 // comment on every push instead of stacking one per commit.
 
-import type { Baseline, Failure } from './compare.mts';
+import type { Baseline, Failure, Improvement } from './compare.mts';
 import type { GateStrings } from './locale.mts';
 
 export const MARKER = '<!-- quality-gate -->';
@@ -24,6 +24,11 @@ export interface ReportInput {
   baseline: Baseline;
   current: Record<string, number>;
   failures: readonly Failure[];
+  /**
+   * Metrics measured better than frozen. Printed as a reminder to tighten the baseline, on a
+   * passing report only; never counted as a failure (issue #7).
+   */
+  improvements?: readonly Improvement[];
   details?: readonly ReportDetail[];
   generatedAt: string;
   /** Where the baseline came from: `origin/main` in CI, the worktree locally. */
@@ -42,6 +47,20 @@ function delta(value: number, base: number, unit?: string): string {
   const d = Math.round((value - base) * 100) / 100;
   if (d === 0) return '—';
   return `${d > 0 ? '+' : ''}${d}${unit ?? ''}`;
+}
+
+/**
+ * The "tighten the baseline" section, or nothing when no metric improved - and nothing on a
+ * failed report. `--update-baseline` re-freezes EVERY metric: printed beside a regression, the
+ * advice would freeze the regression along with the gain and contradict the ratchet advice
+ * right below it (review 2026-10-03). The slack is still there on the next green run, and so
+ * is the reminder.
+ */
+function improvementLines(input: ReportInput, t: GateStrings): string[] {
+  const improvements = input.improvements ?? [];
+  if (improvements.length === 0 || input.failures.length > 0) return [];
+  const items = improvements.map((i) => `- ${i.label}: ${i.from} → ${i.to}`);
+  return [t.improvementsTitle, '', ...items, '', ...t.tightenAdvice, ''];
 }
 
 export function buildReport(input: ReportInput, t: GateStrings): string {
@@ -77,6 +96,8 @@ export function buildReport(input: ReportInput, t: GateStrings): string {
     }
     lines.push('');
   }
+
+  lines.push(...improvementLines(input, t));
 
   if (failures.length > 0) {
     lines.push(REGRESSIONS_START, t.regressionsTitle, '');

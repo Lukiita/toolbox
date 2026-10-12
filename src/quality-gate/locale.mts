@@ -21,6 +21,9 @@ export interface GateStrings {
   tableHeader: string;
   regressionsTitle: string;
   ratchetAdvice: readonly string[];
+  /** Heading of the reminder for metrics measured better than frozen (issue #7). */
+  improvementsTitle: string;
+  tightenAdvice: readonly string[];
   baselineOriginSuffix: (origin: string) => string;
   footer: (generatedAt: string, originSuffix: string) => string;
   metricNotInBaseline: (metric: string) => string;
@@ -55,6 +58,12 @@ const EN: GateStrings = {
   ratchetAdvice: [
     'The ratchet only moves one way. If the regression is deliberate, re-freeze with',
     '`toolbox quality --update-baseline` and explain the reason in the commit body.',
+  ],
+  improvementsTitle: '### Improvements — tighten the baseline',
+  tightenAdvice: [
+    'A metric improved and the baseline did not follow: the slack lets the next PR give the gain',
+    'back without failing. Freeze it now with `toolbox quality --update-baseline`, in a commit of',
+    'its own that states before and after.',
   ],
   baselineOriginSuffix: (origin) => ` · baseline from \`${origin}\``,
   footer: (generatedAt, originSuffix) =>
@@ -92,6 +101,12 @@ const PT: GateStrings = {
   ratchetAdvice: [
     'A catraca só anda num sentido. Se a piora for deliberada, recongele com',
     '`toolbox quality --update-baseline` e explique o motivo no corpo do commit.',
+  ],
+  improvementsTitle: '### Melhorias — aperte o baseline',
+  tightenAdvice: [
+    'Uma métrica melhorou e o baseline não acompanhou: a folga deixa o próximo PR devolver o ganho',
+    'sem reprovar. Aperte agora com `toolbox quality --update-baseline`, num commit próprio que',
+    'diga o antes e o depois.',
   ],
   baselineOriginSuffix: (origin) => ` · baseline de \`${origin}\``,
   footer: (generatedAt, originSuffix) =>
