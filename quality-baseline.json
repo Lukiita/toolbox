@@ -8,7 +8,7 @@
       "label": "Line coverage",
       "mode": "baseline",
       "direction": "higher-is-better",
-      "value": 95.82,
+      "value": 96.11,
       "unit": "%",
       "note": "Covered lines / instrumented lines over the wide slice (vitest.quality.config.ts). Catches dilution; the per-file ratchet catches local regressions."
     },
@@ -75,7 +75,7 @@
       "label": "Functions over the CC limit",
       "mode": "baseline",
       "direction": "lower-is-better",
-      "value": 15,
+      "value": 14,
       "note": "Functions with cyclomatic complexity above quality.ccLimit (complexity.mts, default 5 per Richards & Ford). Every path is a test someone owes; generative AI accumulates accidental complexity - the ratchet watches the model's laziness."
     },
     "explicit-any": {
