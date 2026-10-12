@@ -32,7 +32,7 @@ jobs:
       contents: read
       pull-requests: write # publishes and edits the quality report comment
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The baseline that counts is the PR's BASE, not the branch's: without
           # the history, a PR that re-freezes the baseline approves itself.
@@ -43,11 +43,11 @@ jobs:
           # code. The `gh api` calls below receive GH_TOKEN explicitly.
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24 # engines: >=22.18 <23 || >=23.6; toolbox.config.ts needs Node's type stripping
           cache: pnpm
@@ -126,7 +126,7 @@ jobs:
       # loop) downloads to read the regressions without re-running the gate.
       - name: Upload report
         if: always() && hashFiles('quality-report.md') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-report
           path: quality-report.md
@@ -135,11 +135,11 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
