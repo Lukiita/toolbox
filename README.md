@@ -56,7 +56,7 @@ The same gates run in CI (`.github/workflows/ci.yml`) on every pull request and 
 ## Structure
 
 ```
-skills/       15 global skills (available in any session, any project)
+skills/       16 global skills (available in any session, any project)
 agents/       AGENTS.md — global instructions for every agent (single source)
               preferencias-conta.md — source for the text pasted into claude.ai's web settings
 claude/       CLAUDE.md pointer + shareable settings.json
@@ -79,6 +79,7 @@ system-mind-export.sh  flattens the study vault into one file for the claude.ai 
 | `grill-with-docs`    | grilling + domain-modeling (produces glossary and ADRs along the way)                                                                                                                                                                        |
 | `domain-modeling`    | ubiquitous language (`CONTEXT.md`) + ADRs (`docs/adr/`)                                                                                                                                                                                      |
 | `tlc-spec-driven`    | Specify → Design → Tasks → Execute with an independent Verifier (`.specs/`)                                                                                                                                                                  |
+| `tlc-spec-lean`      | Plan → Checks → Build → Verify: one human-reviewed plan, frozen proof-backed checks, an independent Verifier (`.specs/`) — tlc-spec-driven's leaner sibling, in pilot since 2026-11-07                                                       |
 | `ddd-tactical`       | the house tactical-DDD style as templates: aggregates, VOs, typed ids, repositories+mappers, lightweight CQRS (ships its own `evals/`)                                                                                                       |
 | `sql-quality`        | SQL cost proportional to output: query shape (fan-out, paginate-first), ORM/builder landmines, index+migration safety, EXPLAIN diagnosis (ships its own `evals/`)                                                                            |
 | `architecture-kata`  | socratic architecture coach: generated katas with a hidden gabarito + co-designing real greenfields — think-first, verdict only in the review (ships its own `evals/`)                                                                       |
@@ -95,7 +96,7 @@ Not carried here: `skill-creator` — it is Anthropic's official skill, unpatche
 
 Evaluated and deferred (2026-08-27, full sweep of mattpocock/skills): `prototype` (throwaway HTML to feel an aggregate's transitions before coding), `wizard` (a bash wizard for the steps only a human can take — secrets, dashboards, CI) and `to-questionnaire` (a questionnaire for the one person who knows the domain answer). Each is self-contained and one command away when its problem shows up: `npx skills@latest add mattpocock/skills --skill=<name>`. Everything else there is either already here (`grilling`, `grill-with-docs`, `domain-modeling`), covered better by tlc (`to-spec`, `to-tickets`, `implement`, `research`), or maintainer tooling for an issue queue a solo dev does not have (`triage`, `wayfinder`).
 
-**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees. Added 2026-08-18: `ddd-tactical`'s read side routes query shape into `sql-quality`, and `code-review`'s bug lens applies `sql-quality`'s review checklist when the diff touches SQL/builders/migrations. Also 2026-08-18: `architecture-kata` borrows `grilling`'s one-question-at-a-time mechanic (recommendation rule inverted — no answers until the review) and writes real-mode glossary/ADRs through `domain-modeling`; tlc-spec-driven's Design phase and Archon stay delivery-mode, never coached.
+**How they talk to each other** (harmonized 2026-08-17): tlc specs and designs use the `CONTEXT.md` terms; designs conform to accepted ADRs in `docs/adr/`; a `STATE.md` `AD-NNN` decision that passes the three-part ADR test becomes an ADR with the AD pointing at it; and script commands resolve through the skill's own directory (`<skill-dir>`), with cross-skill references on the canonical `~/.agents/skills/` prefix that install.sh guarantees. Added 2026-08-18: `ddd-tactical`'s read side routes query shape into `sql-quality`, and `code-review`'s bug lens applies `sql-quality`'s review checklist when the diff touches SQL/builders/migrations. Also 2026-08-18: `architecture-kata` borrows `grilling`'s one-question-at-a-time mechanic (recommendation rule inverted — no answers until the review) and writes real-mode glossary/ADRs through `domain-modeling`; tlc-spec-driven's Design phase and Archon stay delivery-mode, never coached. Added 2026-11-07: `tlc-spec-lean` speaks the same language — its Plan reads `CONTEXT.md`, accepted ADRs and `.specs/capabilities/`, its Verifier checks the capabilities the diff touches, and a green gate hands the verified criteria to `capability-sync`; `code-review`, `domain-modeling` and `architecture-kata` read its `plan.md` where they read tlc-spec-driven's spec and design. The two tlc skills share `.specs/` and its triggers, so a project names the one it runs in its own `AGENTS.md`; without that line it is tlc-spec-driven.
 
 **The interview method has three homes and one boundary** (mapped 2026-08-18): `grilling` stress-tests a raw idea or plan BEFORE any feature exists — and recommends answers; tlc's Discuss clarifies gray areas INSIDE an already-bounded feature (scope is sacred there); `architecture-kata` coaches greenfield architecture and recommends nothing until its review. The route for a raw idea: `/grill-with-docs` (grilling + glossary/ADRs as they crystallize) → tlc Specify consumes the sharpened plan. Specify itself suggests that route when clarification reveals the WHAT is still contested — a local tlc patch, documented in its `UPSTREAM.md`.
 
@@ -103,7 +104,7 @@ Evaluated and deferred (2026-08-27, full sweep of mattpocock/skills): `prototype
 
 ## Third-party skills — the upstream contract
 
-`tlc-spec-driven` has a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0); `grilling`, `grill-with-docs`, `domain-modeling`, `codebase-design`, `diagnosing-bugs` and `writing-for-agents` come from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). To avoid silent divergence without losing upstream improvements:
+`tlc-spec-driven` and `tlc-spec-lean` have a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0); `grilling`, `grill-with-docs`, `domain-modeling`, `codebase-design`, `diagnosing-bugs` and `writing-for-agents` come from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). To avoid silent divergence without losing upstream improvements:
 
 - the pristine upstream version lives on a **`vendor/<skill>`** branch (never edited);
 - the local delta is documented in the skill's **`UPSTREAM.md`** — every patch with its why;
@@ -111,6 +112,8 @@ Evaluated and deferred (2026-08-27, full sweep of mattpocock/skills): `prototype
 - a generic local patch becomes an upstream issue/PR — good delta is shrinking delta.
 
 One upstream repo, one vendor branch: the six mattpocock skills share **`vendor/mattpocock-skills`** (same source, same commit, synced together — six per-skill branches would mean six merges per sync). Their merge base was recorded on 2026-08-27 with `git merge -s ours` (main's tree untouched, the vendor commit recorded as a parent), so the next sync 3-way merges instead of arriving as unrelated history.
+
+The two tech-leads-club skills keep one branch each — `vendor/tlc-spec-driven` and `vendor/tlc-spec-lean` — although they share an upstream repo: they sync on their own clocks (tlc-spec-driven stays on 3.3.0 while lean is piloted), so one shared branch would force both to move together. `vendor/tlc-spec-lean` is an orphan branch holding only the skill, merged into main with `--allow-unrelated-histories` on 2026-11-07; its `UPSTREAM.md` records which tlc-spec-driven patches were ported and which lean already covers.
 
 The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 
