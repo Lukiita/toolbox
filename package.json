@@ -31,7 +31,7 @@
     "build:check": "node scripts/build-check.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:py": "python3 -m unittest discover -s skills/tlc-spec-driven/scripts -p 'test_*.py'",
+    "test:py": "python3 -m unittest discover -s skills/tlc-spec-driven/scripts -p 'test_*.py' && python3 skills/tlc-spec-lean/scripts/selftest.py",
     "quality": "node dist/cli/toolbox.mjs quality",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

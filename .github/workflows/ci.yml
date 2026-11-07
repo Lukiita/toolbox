@@ -4,7 +4,7 @@
 # a green check that reviewed nothing. This workflow is the quality half of
 # templates/quality-gate/ci.example.yml applied to the repo that ships it,
 # plus the gates only this repo has: dist/ in sync with src/ (ADR-0001 commits
-# dist/), the Python tests of tlc-spec-driven's scripts, and prettier.
+# dist/), the Python tests of the tlc skills' scripts, and prettier.
 name: CI
 
 on:
@@ -63,9 +63,11 @@ jobs:
       - name: Tests
         run: pnpm test
 
-      # tlc-spec-driven's validation scripts are Python with stdlib tests
-      # (unittest, no third-party imports) - the runner's python3 is enough.
-      - name: Tests (Python, tlc-spec-driven scripts)
+      # The tlc skills' validation scripts are Python, stdlib only - the
+      # runner's python3 is enough. tlc-spec-driven's have unittest files;
+      # tlc-spec-lean's selftest mutates its fixtures once per gate rule and
+      # must kill every mutant, local patches included (git for two cases).
+      - name: Tests (Python, tlc skills' scripts)
         run: pnpm test:py
 
       # dist/ is committed (ADR-0001: a git dependency is not built on install).
