@@ -1,0 +1,42 @@
+# Upstream - tlc-spec-lean
+
+- **Repo**: https://github.com/tech-leads-club/agent-skills (Tech Leads Club; CC-BY-4.0), published at https://agent-skills.techleads.club/skills/tlc-spec-lean/
+- **Path there**: `packages/skills-catalog/skills/(development)/tlc-spec-lean/`
+- **Vendored base here**: **2.2.0**, extracted at upstream commit `8658b6658c762b9e5efd3956ed35a51c41bdf6c3` (2026-11-05; the skill last changed in `f69e6154b3ac900ea661687479b407cc1be9d4a9`, 2026-10-31), on this repo's **`vendor/tlc-spec-lean`** branch (imported 2026-11-07)
+- **Its own vendor branch**, not shared with `vendor/tlc-spec-driven` although the upstream repo is the same: the two skills sync on their own clocks - tlc-spec-driven stays on 3.3.0 (upstream is at 4.1.0) while lean is piloted.
+
+Lean is upstream's leaner sibling of tlc-spec-driven, derived from tlc-spec-driven 3.3.0 - the same base this toolbox vendors. So the tlc-spec-driven local delta was walked item by item: what lean already solves stayed out, and the rest was ported in lean's own shape.
+
+## Local delta - why this copy differs from the base
+
+1. **Proofs survive a commit that touches only `.specs/`** (from tlc-spec-driven item 2, the verified-commit stamp). `validate_verification.py` compared `proofs.md`'s `**HEAD**` with raw HEAD, so committing the report itself - `proofs.md` and `verification.md`, which `build.md` tells the builder to commit - turned the gate red, and the resume table sent a new session back to `check_proofs.py` on a finished feature. Now only a change outside `.specs/` since the proofs ran makes them stale - the cut lean already applied to `screens.md` (`_code_changed_since`). Docs: `verify.md` "The gate", `memory.md` resume table. A new selftest case proves it (red before the fix). **PR candidate.**
+2. **`penalize` guard in lessons.py** (tlc-spec-driven item 4): only a `confirmed` lesson can be penalized - a candidate was never loaded as guidance, so it cannot have failed when applied. Sentence in `memory.md`; new selftest step (red before the fix). **PR candidate.**
+3. **`capability-sync` integration** (tlc-spec-driven item 1): `.specs/capabilities/` in SKILL.md's artifact tree and scripts table and in `memory.md`; Plan reads the capabilities a feature touches (`plan.md`); the Verifier receives them and a broken scenario is a finding (`verify.md` "Capabilities the diff touches" - tlc-spec-driven's regression check 2b); after the gate, "Sync capabilities" folds the verified criteria in and must pass `capabilities.py check` (tlc-spec-driven's Step 11). `capability-sync` is ours - it does not exist upstream. Cross-skill references use the global `~/.agents/skills/capability-sync/` prefix.
+4. **`domain-modeling` bridges** (tlc-spec-driven item 5): Plan reads accepted ADRs (`docs/adr/`) as binding like an active `AD-NNN`, and writes criteria and Shape in `CONTEXT.md`'s terms (`plan.md`). `memory.md` admits an `AD-NNN` by the ADR's three-part test (a convention that fails it goes to `AGENTS.md`), sends vocabulary to `CONTEXT.md`, and makes the `AD-NNN` row a pointer when the substance lives in an ADR or another log. Upstream said "append there instead and do not start a second one", which also fought its own `validate_plan.py`: the gate looks up the `AD-NNN` behind a `Differences from the source` row in `.specs/STATE.md` only. The pointer keeps both true. A departure from a binding source stays an entry whatever the test says, because the gate reads it there. PR candidate in conditional form.
+5. **Upstream router to grilling** (tlc-spec-driven item 7): `plan.md` suggests `/grill-with-docs` when the _what_ itself is contested, next to upstream's route for an open architectural bet. Depends on toolbox-local skills - PR candidate only in conditional form.
+6. **Expand-contract tip** (tlc-spec-driven item 10): lean has no task phase, so the tip lives in `build.md` "Commit" - a wide mechanical change lands as expand, migrate in batches, contract, every commit green. PR candidate.
+
+Script patches carry a `Local patch (toolbox UPSTREAM.md item N)` comment, so a 3-way merge shows what they are.
+
+## tlc-spec-driven delta not carried - lean already covers it
+
+| tlc-spec-driven item                                                      | Why it stays out                                                                                                                                                         |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3. Discuss trigger: an _unresolved_ dimension triggers, not a present one | lean's gray area is already "the user's decision, more than one defensible answer, not settled by the code", and the sweep lets a dimension land on `existing - <guard>` |
+| 6. `## Files Touched` in the design                                       | contradicts lean's bet: no component catalogue, file placement is the builder's call; the Shape path (modules marked exists / new / door) answers "how big is this?"     |
+| 8. Test seams named per component                                         | lean's Shape names the layer the repo's tests reach, and every check names its proof - the seam per claim, confirmed at the plan review                                  |
+| 9. No file paths or code in the spec                                      | the plan names modules, not files, and keeps columns and types out; captures are files by design                                                                         |
+| Test Coverage Matrix and Gate Check Commands even when Tasks is skipped   | `checks.md` always exists, with `Build:` and `Run` / `Proof:` lines - the gate is never undefined                                                                        |
+| The AC gate reads every criterion (toolbox issue #9)                      | lean's parser keeps a blank line and indented examples inside the block; a hand-wrapped criterion fails loud, never passes silently                                      |
+| The verdict in one literal `**Verdict**` line (toolbox issue #1)          | lean's gate reads no verdict prose: done comes from `proofs.md` rows, the `## Checks` table and closed findings                                                          |
+| Boundary test per component                                               | the global AGENTS.md carries it for every agent, and lean's build says a fifth module in a feature scoped to two means the boundary was wrong                            |
+
+## Known difference from tlc-spec-driven, not patched
+
+Lean 2.x dropped the discrimination sensor (mutation testing) on purpose - upstream `b9caf0c`, 2026-10-30, "run proofs with the project's own test commands and drop mutations". Its Verifier reads each check's test, judges whether it would fail if the claim were false, and tries examples nobody named. Re-adding mutations would be the largest delta here and the opposite of the variant's bet: decide after the pilot.
+
+## How to update
+
+Same procedure as `skills/tlc-spec-driven/UPSTREAM.md` ("How to update"), with this skill's path and branch: `git archive <commit> 'packages/skills-catalog/skills/(development)/tlc-spec-lean' | tar -x --strip-components=4 -C <tmp>`, commit on `vendor/tlc-spec-lean` as `vendor: tlc-spec-lean X.Y.Z (upstream <full-hash>)`, then `git merge vendor/tlc-spec-lean` on main. The smoke test is `python3 skills/tlc-spec-lean/scripts/selftest.py`: it must end in `0 survived` and `tooling ok`, the local cases included.
+
+**Hard rule:** never edit the skill on the vendor branch - it is pure upstream, always.

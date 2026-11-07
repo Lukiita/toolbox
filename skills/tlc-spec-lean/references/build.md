@@ -47,6 +47,11 @@ When a slice's proofs are green, mark its checks complete in `checks.md`, and co
 the slice when the repo tracks it. No Co-Authored-By, Made-with or other agent trailer unless the
 repo asks for one.
 
+A wide mechanical change - a renamed field, a retyped shared symbol - does not land green in one
+commit. Expand: add the new form beside the old. Migrate the callers in batches sized by blast
+radius, one commit each. Contract: delete the old form once nothing uses it. Every commit stays
+green because the old form exists until the last caller moves.
+
 ## How to write the code
 
 Surgical: do not improve adjacent code or formatting, and remove only what your change orphaned.

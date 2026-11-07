@@ -14,6 +14,14 @@ intent paragraph straight into `checks.md`.
   (add `--scope` or `--query` for the area). Confirmed only. No store yet: skip.
 - Read `.specs/STATE.md` `## Decisions`. Every `active` `AD-NNN` constrains the shape: conform, or
   append an entry that supersedes it and say why.
+- Read the accepted ADRs in `docs/adr/` (or the repo's ADR directory) the same way: each binds the
+  shape like an active `AD-NNN` - conform, or supersede it with a new ADR.
+- Read `CONTEXT.md` when the repo keeps that glossary (the `domain-modeling` skill): the criteria
+  and the Shape use its canonical terms, never a synonym it marks _Avoid_. A new term, or a clash
+  with one, is settled through `domain-modeling` before the plan is presented - a plan in
+  off-glossary words bakes the ambiguity into every check.
+- Read `.specs/capabilities/` for the areas this feature touches: what the system guarantees
+  today. A criterion that changes a guarantee is a change underneath - name it in `Shape`.
 - Open every binding source in full - every capture, frame and state - before the first
   criterion.
 
@@ -22,6 +30,11 @@ behaviour, a trade-off.
 
 An open architectural bet (job or request cycle, which of two architectures) is settled first in
 an ADR, RFC or spike and linked. This file records the shape that won.
+
+A contested *what* is not ready either - an unshaped idea, a bet that needs stress-testing, several
+features tangled together. Suggest a `/grill-with-docs` session (the user invokes it; it sharpens
+the idea and writes glossary terms and ADRs as they settle) and resume the plan from what it
+produced. A dispute written straight into the plan becomes a dispute in every check.
 
 # What must be true
 

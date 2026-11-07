@@ -91,6 +91,7 @@ These hold even if no reference file is read. Each one lives here; the reference
 ├── STATE.md                    # Decisions log (AD-NNN)
 ├── LESSONS.md                  # rendered by scripts/lessons.py - do not hand-edit
 ├── lessons.json                # machine-owned
+├── capabilities/               # what the system guarantees today - capability-sync skill, synced after the gate
 └── features/<feature>/
     ├── plan.md                 # problem, shape, surface, doors, criteria
     ├── checks.md               # claims + proofs, the coverage join, swept, handoff
@@ -112,7 +113,7 @@ For a change under roughly three files with no one-way door, write only `checks.
 | Build | tests from the checks, the code, commits, the screens walked and saved | [build.md](references/build.md) |
 | Verify | rule 5 | [verify.md](references/verify.md), [verify-screens.md](references/verify-screens.md) |
 
-Decisions and lessons: [memory.md](references/memory.md).
+Decisions, capabilities and lessons: [memory.md](references/memory.md).
 
 ## Scripts
 
@@ -128,6 +129,7 @@ Windows, where `python3` may be the Microsoft Store alias, run `python` or `py -
 | Before each commit | `check_commit.py --message "<msg>"` - it also prints what follows the last commit |
 | Before dispatching the Verifier, and after the fix | `check_proofs.py <feature>` |
 | Before declaring done | `validate_verification.py <feature>` |
+| After the gate exits 0, still before done | the `capability-sync` skill, then `python3 ~/.agents/skills/capability-sync/scripts/capabilities.py check` ([verify.md](references/verify.md)) |
 | At distillation | `lessons.py add ...` |
 | After editing a validator or template | `selftest.py` |
 

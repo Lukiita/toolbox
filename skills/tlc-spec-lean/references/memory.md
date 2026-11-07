@@ -1,8 +1,8 @@
 # Memory
 
-Two things outlive a session under `.specs/`: decisions that constrain future features, and
-lessons distilled from real verification failures. Where a feature stopped is in its `checks.md`
-`## Handoff` and in git.
+Three things outlive a session under `.specs/`: decisions that constrain future features, lessons
+distilled from real verification failures, and the capabilities - what the system guarantees today.
+Where a feature stopped is in its `checks.md` `## Handoff` and in git.
 
 ## `.specs/STATE.md`
 
@@ -17,14 +17,30 @@ lessons distilled from real verification failures. Where a feature stopped is in
 | AD-002 | Money is stored in integer cents | superseded by AD-007 | superseded by AD-007 | 2026-03-02 |
 ```
 
-Edit only the body of `## Decisions`; overwriting the file loses the log. Where the repo already
-keeps ADRs or a decision log, append there instead and do not start a second one.
+Edit only the body of `## Decisions`; overwriting the file loses the log.
 
-A decision belongs here when a future feature has to conform to it: a convention, a pattern, a
-constraint. Write it when the choice is made. An answer that departs from a binding source is one
-too: the Decision says what the product shows instead, the Rationale quotes the question and the
-option chosen, and the plan's `## Differences from the source` rows cite the id. A `Landing` door that reaches past the feature gets a
-row in each place: the shape in `Landing`, the constraint here.
+A decision belongs here when a future feature has to conform to it and it passes the same
+three-part test as an ADR: hard to reverse, surprising without context, a real trade-off. A
+convention that fails the test is a rule for the project's `AGENTS.md`, not an entry. Write it when
+the choice is made. An answer that departs from a binding source is an entry whatever the test
+says, because the gates read it here: the Decision says what the product shows instead, the
+Rationale quotes the question and the option chosen, and the plan's `## Differences from the
+source` rows cite the id. A `Landing` door that reaches past the feature gets a row in each place:
+the shape in `Landing`, the constraint here.
+
+Where the substance lives (the `domain-modeling` skill): what a domain word means is never an
+entry - it goes to the `CONTEXT.md` glossary. Where the repo keeps its decisions elsewhere - an ADR
+directory (`docs/adr/` or its own) or another log - a decision that passes the test is written
+there and its `AD-NNN` row is a one-line pointer (`see docs/adr/NNNN-slug.md`): the log keeps the
+sequence and the supersession chain the gates read, the record keeps the substance, and nothing is
+written twice.
+
+## `.specs/capabilities/`
+
+The living behavioural contract, one file per domain area, owned by the `capability-sync` skill.
+Plan reads the areas a feature touches, the Verifier checks the scenarios its diff touches, and a
+feature whose gate passes folds its verified criteria in ([verify.md](verify.md)). Edit it only
+through that skill: every file there must pass its `capabilities.py check`.
 
 Every `active` `AD-NNN` constrains the work. Conform, or append an entry that supersedes it (set the
 old row's status to `superseded by AD-NNN`) and say why.
@@ -50,7 +66,8 @@ Where the files put you - the first row that holds:
 | no `proofs.md`, or one followed by a commit that changes code outside `.specs/`, and nothing dispatched | `check_proofs.py` |
 | `**Dispatched:**` names a sub-agent whose report is not on disk (`verification.md`, `screens.md`) | wait for it; send it again only when it cannot return - a new session - and say so on the line |
 | an open finding, or `screens.md` `**Round**: 1` that diverges or names an older `HEAD` | the fix pass, then round 2 |
-| `screens.md` `**Round**: 2` | the script and the gate; what still fails goes to the user - there is no third round |
+| `screens.md` `**Round**: 2` | the script and the gate, then the capability sync; what still fails goes to the user - there is no third round |
+| `verification.md` with every finding closed | the gate, then the capability sync (verify.md) |
 
 ## Lessons
 

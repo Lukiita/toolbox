@@ -31,7 +31,8 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
 
 ## What the Verifier does
 
-It receives `plan.md`, `checks.md`, `proofs.md`, the diff range and this file. It does not rerun the
+It receives `plan.md`, `checks.md`, `proofs.md`, `.specs/capabilities/` when it exists, the diff
+range and this file. It does not rerun the
 proofs; `proofs.md` already says which tests ran and passed, with the output that shows it. It
 works over the real tree and fixes nothing; its writes are `verification.md` and throwaway examples
 it does not commit.
@@ -56,6 +57,14 @@ or that sit at another level than the repo's test docs name for that layer.
 it draws - a label spelled differently, a state turned into a screen of its own - is a finding, even
 with a green proof. Departures listed in `## Differences from the source` with `Confirmed: y` are
 approved.
+
+**Capabilities the diff touches.** `.specs/capabilities/` is what the system guarantees today, kept
+by the `capability-sync` skill - the regression net between features, without which only the
+newest plan is ever checked. List it with
+`python3 ~/.agents/skills/capability-sync/scripts/capabilities.py list`; for each scenario whose
+behaviour the diff touches, confirm it still holds: a test that still asserts the outcome, or a
+throwaway example at `HEAD`. A broken scenario is a finding, and one with no evidence either way is
+not a pass.
 
 ## Report
 
@@ -106,3 +115,17 @@ the feature is done.
 
 After the gate passes, turn each finding into one lesson with `scripts/lessons.py`
 ([memory.md](memory.md)). A feature with no finding records nothing.
+
+## Sync capabilities
+
+After the gate exits 0, invoke the `capability-sync` skill: fold the criteria this feature verified
+into `.specs/capabilities/`, then run its gate, which must exit 0:
+
+```bash
+python3 ~/.agents/skills/capability-sync/scripts/capabilities.py check
+```
+
+This is part of done, not a chore after it: a sync that cannot pass its check leaves the feature
+open. A red gate syncs nothing - unverified behaviour never enters the contract. With no Skill tool
+(a headless run), follow `~/.agents/skills/capability-sync/SKILL.md` directly; a project-local copy
+swaps the prefix.
