@@ -95,7 +95,8 @@ fixes each one and the check that now proves it; the gate refuses an empty `Clos
 python3 <skill-dir>/scripts/validate_verification.py <feature>
 ```
 
-It reads `proofs.md` at `HEAD` (every check and run has a passing row), the `## Checks` table (a
+It reads `proofs.md` (every check and run has a passing row, written at `HEAD` or before commits
+that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
 passed), the plan's `**Approved**:` line, and every finding closed. `0`

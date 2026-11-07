@@ -634,6 +634,39 @@ def run_tooling():
             ok = False
             print(f"  BROKEN  validate_verification.py: judged HEAD - kept: {kept.strip()[:200]} | stale: {stale.strip()[:200]}")
 
+    # Local patch (toolbox UPSTREAM.md item 1). The proofs vouch for the code they ran on, so the
+    # commit that carries proofs.md and verification.md themselves must keep them, and a code
+    # commit must not. With a raw-HEAD match the first half failed: the gate went red the moment
+    # the flow committed its own report.
+    if shipped("validate_verification") and shutil.which("git"):
+        root = scaffold()
+        fdir = os.path.join(root, ".specs", "features", FEATURE)
+
+        def git(*cmd):
+            return subprocess.run(["git", *cmd], cwd=root, capture_output=True, text=True).stdout.strip()
+
+        def commit(message):
+            git("add", "-A")
+            git("-c", "user.email=s@t", "-c", "user.name=selftest", "commit", "-qm", message)
+            return git("rev-parse", "--short", "HEAD")
+
+        git("init", "-q")
+        write_artifact(os.path.join(root, "app.ts"), "export const built = true\n")
+        proved = commit("feat: the build")
+        proofs = os.path.join(fdir, "proofs.md")
+        write_artifact(proofs, read_artifact(proofs).replace("e4f5a6b", proved))
+        commit("docs(specs): the proofs and the verification")
+        _, kept = run("validate_verification", root)
+        write_artifact(os.path.join(root, "app.ts"), "export const late = true\n")
+        commit("fix: a change after the proofs")
+        _, stale = run("validate_verification", root)
+        shutil.rmtree(root, ignore_errors=True)
+        if "proofs.md was written at" not in kept and f"proofs.md was written at {proved}" in stale and "app.ts" in stale:
+            print("  ok      validate_verification.py: proofs survive a .specs commit and not a code commit")
+        else:
+            ok = False
+            print(f"  BROKEN  validate_verification.py: proofs HEAD - kept: {kept.strip()[:200]} | stale: {stale.strip()[:200]}")
+
     # the lessons store has to survive a real round-trip on disk, not only its unit checks
     if not shipped("lessons"):
         return ok
@@ -662,6 +695,16 @@ def run_tooling():
                     break
             else:
                 print("  ok      lessons.py: init - add - status round-trip writes both artifacts")
+        # Local patch (toolbox UPSTREAM.md item 2): only a confirmed lesson is ever loaded as
+        # guidance, so only a confirmed one can have failed when applied - the fresh candidate
+        # the round-trip just added is refused.
+        code, out = run_script("lessons.py", "--root", root, "penalize", "--id", "L-001")
+        if code == 2 and "not confirmed" in out:
+            print("  ok      lessons.py: penalize refuses a candidate lesson")
+        else:
+            ok = False
+            print(f"  BROKEN  lessons.py: penalize on a candidate - expected exit=2 and 'not confirmed', "
+                  f"got exit={code}: {out.strip()[:200]}")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

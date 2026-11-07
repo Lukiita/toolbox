@@ -8,7 +8,8 @@ pass/fail run as the closing step. It reads the artifacts, never the target code
 
 What it checks:
   ERROR  - no verification.md, or no proofs.md (run check_proofs.py)
-  ERROR  - proofs.md written at another commit than HEAD, or over uncommitted changes
+  ERROR  - proofs.md written before a commit that changes code outside .specs/, or over uncommitted
+           changes
   ERROR  - a check in checks.md with no row in proofs.md, or a row that is not `pass`
   ERROR  - checks.md names `Build:` commands and proofs.md has no Build row, or one that failed
   ERROR  - no `## Checks` table in verification.md, a check with no row in it, or a row with no test
@@ -316,7 +317,17 @@ def _check_with_proofs(fdir, name, lines, checks_lines):
     if not m:
         errors.append(f"{name}: proofs.md names no `**HEAD**` - run check_proofs.py again")
     elif head and not (head.startswith(m.group(1)) or m.group(1).startswith(head)):
-        errors.append(f"{name}: proofs.md was written at {m.group(1)} and HEAD is {head} - run check_proofs.py again")
+        # Local patch (toolbox UPSTREAM.md item 1). The flow commits its own artifacts after the
+        # proofs ran - proofs.md and verification.md themselves - so a raw-HEAD match went stale the
+        # moment .specs/ was committed, and every later run of this gate read as drift. The proofs
+        # vouch for the code: only a change outside .specs/ makes them stale, the same cut
+        # _screens_verdicts applies to the screens verdict.
+        changed = _code_changed_since(root, m.group(1))
+        if changed is None:
+            errors.append(f"{name}: proofs.md was written at {m.group(1)} and HEAD is {head} - run check_proofs.py again")
+        elif changed:
+            errors.append(f"{name}: proofs.md was written at {m.group(1)} and {head} changes code outside .specs/ "
+                          f"({', '.join(changed[:4])}) - run check_proofs.py again")
 
     tree = re.search(r"\*\*Tree\*\*\s*:\s*(\S+)", pbody)
     if tree and tree.group(1).lower().startswith("dirty"):

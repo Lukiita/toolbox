@@ -325,6 +325,16 @@ def cmd_penalize(root, args):
     if not target:
         print(f"ERROR: no lesson with id {args.id}", file=sys.stderr)
         return 2
+    # Local patch (toolbox UPSTREAM.md item 2, ported from tlc-spec-driven): only confirmed
+    # lessons are ever loaded as guidance, so only they can fail when applied. Penalizing a
+    # candidate would quarantine advice that was never trusted in the first place.
+    if target["status"] != "confirmed":
+        print(
+            f"ERROR: lesson {target['id']} is {target['status']}, not confirmed - "
+            "only confirmed lessons can be penalized",
+            file=sys.stderr,
+        )
+        return 2
     target["harmful"] = target.get("harmful", 0) + 1
     target["last_seen"] = _now()
     if target["harmful"] >= data["quarantine_threshold"]:
