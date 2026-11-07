@@ -1,17 +1,17 @@
 ---
 name: capability-sync
-description: Maintains the project's living behavioral contract — durable capability files in `.specs/capabilities/` that accumulate verified behavior across features, in Requirement/Scenario (SHALL + WHEN/THEN) format. Use (1) as the closing step of tlc-spec-driven validation (Step 11) — after a feature's validation.md reaches PASS, fold its verified requirements into the capability files; (2) to migrate existing spec files (e.g. OpenSpec `openspec/specs/`) into `.specs/capabilities/`; (3) whenever a file under `.specs/capabilities/` is created or edited — every edit there must pass `~/.agents/skills/capability-sync/scripts/capabilities.py check`. Triggers: "sync capabilities", "atualiza capacidades", "capability sync", "migrate specs to capabilities", a Verifier PASS verdict, or any question about what the system's current behavioral contract guarantees.
+description: Maintains the project's living behavioral contract — durable capability files in `.specs/capabilities/` that accumulate verified behavior across features, in Requirement/Scenario (SHALL + WHEN/THEN) format. Use (1) as the closing step of a tlc feature — tlc-spec-driven's validation Step 11 after validation.md reaches PASS, or tlc-spec-lean's Verify after validate_verification.py exits 0 — fold its verified requirements into the capability files; (2) to migrate existing spec files (e.g. OpenSpec `openspec/specs/`) into `.specs/capabilities/`; (3) whenever a file under `.specs/capabilities/` is created or edited — every edit there must pass `~/.agents/skills/capability-sync/scripts/capabilities.py check`. Triggers: "sync capabilities", "atualiza capacidades", "capability sync", "migrate specs to capabilities", a Verifier PASS verdict or a green tlc-spec-lean gate, or any question about what the system's current behavioral contract guarantees.
 metadata:
   version: 0.1.0
 ---
 
 # Capability Sync
 
-Feature specs freeze: `.specs/features/X/spec.md` describes one change and never moves again. Nothing merges those deltas into a picture of what the system does **today**. Capabilities are that picture — one file per durable domain area, updated every time a feature's verified behavior lands. They are what lets a Verifier check that a new feature didn't break an old guarantee ("regression anchoring"), and what future Specify/Design phases read as ground truth.
+Feature specs freeze: `.specs/features/X/spec.md` (`plan.md` in tlc-spec-lean) describes one change and never moves again. Nothing merges those deltas into a picture of what the system does **today**. Capabilities are that picture — one file per durable domain area, updated every time a feature's verified behavior lands. They are what lets a Verifier check that a new feature didn't break an old guarantee ("regression anchoring"), and what future Specify/Design phases (Plan, in tlc-spec-lean) read as ground truth.
 
 Two rules follow from that purpose:
 
-- **Only verified behavior enters.** The input is a feature's `validation.md` evidence table, not its intentions. If a criterion didn't PASS, it doesn't sync.
+- **Only verified behavior enters.** The input is a feature's verification evidence — `validation.md`'s evidence table in tlc-spec-driven, a green `validate_verification.py` over `proofs.md` and `verification.md` in tlc-spec-lean — not its intentions. If a criterion didn't pass, it doesn't sync.
 - **The file is the current truth, not a changelog.** Changed behavior edits the requirement in place. Git history is the changelog.
 
 ## The format (owned by this skill)
@@ -39,9 +39,13 @@ Every capability has ≥1 requirement; every requirement has ≥1 scenario with 
 
 Capability names are **domain nouns** (`declaracao-asycuda`, `rateio-frete-seguro`), never feature slugs — a feature touches capabilities; it is not one.
 
-## Sync process (after a validation PASS)
+## Sync process (after the feature's verification passes)
 
-1. Read the feature's `spec.md` and `validation.md`. From the evidence table, collect the requirements/criteria that PASSed. Anything that failed, was skipped, or lacks evidence stays out.
+1. Collect what was verified.
+   - **tlc-spec-driven:** read the feature's `spec.md` and `validation.md`; from the evidence table, collect the requirements/criteria that PASSed.
+   - **tlc-spec-lean:** `validate_verification.py <feature>` must exit 0 first. Then read `plan.md`'s criteria and `checks.md` — each check names the criterion it proves (`(AC n)`) — and collect each criterion whose checks all read `pass` in `proofs.md`. A criterion becomes a requirement (its SHALL statement), and its examples become scenarios.
+
+   Either way, anything that failed, was skipped, or lacks evidence stays out — a lean criterion no check cites included.
 2. Run `python3 ~/.agents/skills/capability-sync/scripts/capabilities.py list` to see the existing capabilities. Map each verified requirement to one: an existing file when the behavior belongs to an area that already has one, a new file when a genuinely new domain area appeared. When in doubt, extend an existing capability — fragmentation is the failure mode.
 3. Merge, preserving the "current truth" rule:
    - **New behavior** → add a `### Requirement:` (or a new `#### Scenario:` under an existing requirement it refines).

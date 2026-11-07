@@ -1,6 +1,6 @@
 ---
 name: architecture-kata
-description: Socratic architecture coach — generates architecture katas (Richards & Ford style) with a hidden answer key and coaches through them, and co-designs real greenfield systems without handing over the answer. The user thinks first at every step; the coach asks, probes and complements; the full verdict arrives only in the end-of-round review. Use when the user asks for a kata ("cria um kata", "quero treinar arquitetura"), mentions studying software architecture, or — by default — whenever an INTERACTIVE conversation starts designing a new system ("vamos arquitetar X", "como seria a arquitetura de", "tô pensando em construir"). Do NOT coach when the user explicitly asks for a ready design ("desenha você", "me entrega o design", a stated deadline), nor in headless/pipeline runs, nor inside tlc-spec-driven's Design phase or Archon — those deliver.
+description: Socratic architecture coach — generates architecture katas (Richards & Ford style) with a hidden answer key and coaches through them, and co-designs real greenfield systems without handing over the answer. The user thinks first at every step; the coach asks, probes and complements; the full verdict arrives only in the end-of-round review. Use when the user asks for a kata ("cria um kata", "quero treinar arquitetura"), mentions studying software architecture, or — by default — whenever an INTERACTIVE conversation starts designing a new system ("vamos arquitetar X", "como seria a arquitetura de", "tô pensando em construir"). Do NOT coach when the user explicitly asks for a ready design ("desenha você", "me entrega o design", a stated deadline), nor in headless/pipeline runs, nor inside tlc-spec-driven's Design phase, tlc-spec-lean's Plan or Archon — those deliver.
 ---
 
 # Architecture kata — coach, don't answer
@@ -16,7 +16,7 @@ The premise is Ted Neward's question, kept alive by Richards & Ford: how does an
 | Artifacts | `~/.agents/katas/<slug>/` — kata.md, gabarito.md, decisoes.md, review.md | real ones: `CONTEXT.md` terms and `docs/adr/` via the domain-modeling skill |
 | Review | graded against the gabarito + "what a senior would do" | risk register + the coach's honest disagreements, stated at last |
 
-Escape hatch, honored without friction: an explicit "desenha você" / "me entrega pronto" / a deadline switches to delivery — say the mode changed in one line and deliver. Headless runs, tlc-spec-driven's Design phase and Archon never coach.
+Escape hatch, honored without friction: an explicit "desenha você" / "me entrega pronto" / a deadline switches to delivery — say the mode changed in one line and deliver. Headless runs, tlc-spec-driven's Design phase, tlc-spec-lean's Plan and Archon never coach.
 
 ## The discipline (never negotiable, both modes)
 
@@ -47,5 +47,5 @@ Real mode produces real artifacts through the domain-modeling skill (`~/.agents/
 
 - **grilling** — the interview mechanic (borrowed, recommendation rule inverted here); for stress-testing a plan the user already has, use grilling itself.
 - **domain-modeling** — owns the ADR format and the glossary; real mode routes through it.
-- **tlc-spec-driven / Archon** — explicitly out of scope: their Design phases deliver, and this skill never intercepts them.
+- **tlc-spec-driven / tlc-spec-lean / Archon** — explicitly out of scope: their Design phases (lean's Plan) deliver, and this skill never intercepts them.
 - The structural canon this skill's review checks against (package by feature, cross-feature imports via public API only, connascence rules, the cohesion ruler) lives in the user's global AGENTS.md — cite it, don't duplicate it.

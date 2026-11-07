@@ -141,13 +141,15 @@ separate lens, so it gets no agent of its own.
 5. A **new pattern** the codebase did not have? A design pattern, abstraction
    layer, base class, library or folder convention with no precedent in the
    neighbouring code and nothing recording the choice — an ADR (`docs/adr/`),
-   an AD-NNN (`.specs/STATE.md`), or the feature's `design.md`. Report it as
+   an AD-NNN (`.specs/STATE.md`), the feature's `design.md`, or a `Landing`
+   row in its `plan.md` (tlc-spec-lean). Report it as
    "new pattern: <name>" — a decision for a human, not a defect: the next agent
    will copy it as convention, so someone must choose to adopt it. Step 4 keeps
    these apart from the scored findings.
 6. A hunk **outside the change's purpose**? Read the purpose first: the full
    commit messages (`git log --format='%h %B' "$BASE"..HEAD`) and, when
-   `.specs/features/` exists, the spec of the feature the commits name. A
+   `.specs/features/` exists, the spec of the feature the commits name
+   (`spec.md`, or `plan.md` in tlc-spec-lean). A
    touched file nothing there explains — a deleted queue, a schema or config
    change, a rewritten neighbour function, a refactor hitching a ride — is
    drift: the agent passed through and altered what it was not asked to. Files
@@ -173,8 +175,9 @@ without tlc, since the Verifier checks the spec was met, not that nothing else
 changed.
 
 Quote the commit-message line in each finding. With `.specs/` present, this
-lens **does not run**: that is tlc's Verifier, with per-criterion tracing and a
-discrimination sensor — duplicating it creates contradictions between layers.
+lens **does not run**: that is tlc's Verifier, with per-criterion tracing (and,
+in tlc-spec-driven, a discrimination sensor) — duplicating it creates
+contradictions between layers.
 
 ### 4. Triage — yourself, no new agent
 
