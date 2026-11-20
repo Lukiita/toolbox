@@ -54,7 +54,7 @@ For each acceptance criterion in `spec.md`, the Verifier re-derives the **spec-d
 
 The spec-anchored check verifies the feature against its own frozen spec. This step anchors the other direction: the feature must not have broken a **durable capability** - the living behavioral contract in `.specs/capabilities/`, owned by the `capability-sync` skill. This is the regression net between features; without it, only the newest spec is ever verified.
 
-1. List the contract: `python3 ~/.agents/skills/capability-sync/scripts/capabilities.py list`. If `.specs/capabilities/` does not exist yet, mark the check as `- (no capabilities defined)` and move on.
+1. List the contract: `python3 <skill-dir>/../capability-sync/scripts/capabilities.py list`. If `.specs/capabilities/` does not exist yet, mark the check as `- (no capabilities defined)` and move on.
 2. Identify the capabilities whose scope overlaps the feature's git diff surface.
 3. For each overlapping requirement/scenario, confirm the guaranteed behavior still holds: trace it to current code/tests (`file:line`) or exercise it. Evidence-or-zero applies here too - an overlapping scenario with no evidence counts as NOT verified, never as an implicit pass.
 4. Record results in the report (Capability Regression section below). A broken capability scenario is a ranked gap with the same severity rules as a failed AC.
@@ -208,10 +208,10 @@ This is the closing action of validation - not a separate phase. Immediately aft
 Closure must not depend on anyone remembering to ask for it. When the verdict is PASS (including a PASS reached after the fix→re-verify cycle), invoke the **`capability-sync`** skill: fold the feature's verified requirements - per the evidence table in `validation.md` - into `.specs/capabilities/`, then run its mechanical gate:
 
 ```bash
-python3 ~/.agents/skills/capability-sync/scripts/capabilities.py check   # must exit 0
+python3 <skill-dir>/../capability-sync/scripts/capabilities.py check   # must exit 0
 ```
 
-If the Skill tool is unavailable (headless run), follow the `capability-sync` skill's `SKILL.md` directly (global install: `~/.agents/skills/capability-sync/`; project-local copies swap the prefix) - the process is the same. A FAIL verdict syncs nothing: unverified behavior never enters the contract.
+If the Skill tool is unavailable (headless run), follow the `capability-sync` skill's `SKILL.md` directly (`<skill-dir>/../capability-sync/SKILL.md`) - the process is the same. A FAIL verdict syncs nothing: unverified behavior never enters the contract.
 
 ---
 

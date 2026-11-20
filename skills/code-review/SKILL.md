@@ -112,10 +112,12 @@ Give them the step 2 result as context, if any.
 
 **Diff touching SQL, a query builder or a migration** (visible in `--stat` and
 in the file names): add to Reviewer A's prompt — "load
-`~/.agents/skills/sql-quality/references/review-checklist.md` and apply the
+`<skill-dir>/../sql-quality/references/review-checklist.md` and apply the
 checklist to the SQL part of the diff, in its order: injection and unbounded
-scans first". It goes into both Reviewer A prompts — SQL is bug hunting, not a
-separate lens, so it gets no agent of its own.
+scans first". `<skill-dir>` is the directory that contains this `SKILL.md`:
+write the path resolved, a reviewer does not know where this skill lives. It
+goes into both Reviewer A prompts — SQL is bug hunting, not a separate lens, so
+it gets no agent of its own.
 
 **Reviewer B — project rules.** Checks the diff against the repo's written rules
 — `CLAUDE.md` / `AGENTS.md`, at the root and in the touched directories — and
@@ -134,7 +136,7 @@ separate lens, so it gets no agent of its own.
    tolerate it: strong connascence close by is less of a smell than the same
    thing spread out.
 4. A Fowler smell the diff **introduces**? Load
-   `~/.agents/skills/code-review/references/smells.md` (twelve smells, each
+   `<skill-dir>/references/smells.md` (twelve smells, each
    "what it is → how to fix") and flag it naming the smell and quoting the
    hunk. A written repo rule overrides the baseline; it is always a judgement
    call, never a hard violation — and what lint already catches does not count.

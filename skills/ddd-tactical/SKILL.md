@@ -27,7 +27,7 @@ The global `AGENTS.md` (§ How I build software) fixes them — **what is the ag
 | Loading and saving aggregates without the domain knowing the database | Repository port | [repository.md](references/repository.md) |
 | The layers around the domain — write via commands, read via direct queries, controllers, infra | Lightweight CQRS | [application-cqrs.md](references/application-cqrs.md) |
 | Calling an external service (payment, mail, third-party API) without the SDK leaking inward | Gateway port | [gateway.md](references/gateway.md) |
-| A read-side query with JOIN/GROUP BY/pagination that must survive data growth | `sql-quality` skill | `~/.agents/skills/sql-quality/SKILL.md` |
+| A read-side query with JOIN/GROUP BY/pagination that must survive data growth | `sql-quality` skill | `<skill-dir>/../sql-quality/SKILL.md` — `<skill-dir>` is the directory that contains this `SKILL.md` |
 
 Read the reference for the block you are about to write — each carries the house template and the reasons behind it.
 

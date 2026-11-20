@@ -61,7 +61,7 @@ approved.
 **Capabilities the diff touches.** `.specs/capabilities/` is what the system guarantees today, kept
 by the `capability-sync` skill - the regression net between features, without which only the
 newest plan is ever checked. List it with
-`python3 ~/.agents/skills/capability-sync/scripts/capabilities.py list`; for each scenario whose
+`python3 <skill-dir>/../capability-sync/scripts/capabilities.py list`; for each scenario whose
 behaviour the diff touches, confirm it still holds: a test that still asserts the outcome, or a
 throwaway example at `HEAD`. A broken scenario is a finding, and one with no evidence either way is
 not a pass.
@@ -122,10 +122,9 @@ After the gate exits 0, invoke the `capability-sync` skill: fold the criteria th
 into `.specs/capabilities/`, then run its gate, which must exit 0:
 
 ```bash
-python3 ~/.agents/skills/capability-sync/scripts/capabilities.py check
+python3 <skill-dir>/../capability-sync/scripts/capabilities.py check
 ```
 
 This is part of done, not a chore after it: a sync that cannot pass its check leaves the feature
 open. A red gate syncs nothing - unverified behaviour never enters the contract. With no Skill tool
-(a headless run), follow `~/.agents/skills/capability-sync/SKILL.md` directly; a project-local copy
-swaps the prefix.
+(a headless run), follow `<skill-dir>/../capability-sync/SKILL.md` directly.

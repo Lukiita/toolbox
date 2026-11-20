@@ -34,7 +34,7 @@ Supabase: `count: 'exact'` on a list call is a real `COUNT(*)` over the filtered
 
 ## Unit of work — reads that manage entities pay for tracking
 
-In UoW ORMs (MikroORM; Hibernate-style), every loaded entity becomes managed: identity map, dirty-checking at flush. A listing that loads 5 000 entities pays memory and change-tracking for data that will never change. The read side returns **plain projections** (`qb.execute()`, raw results, a read model) — which is the same asymmetry ddd-tactical prescribes (`~/.agents/skills/ddd-tactical/references/application-cqrs.md`): aggregates for writes, projections for reads. Two rules, one mechanism.
+In UoW ORMs (MikroORM; Hibernate-style), every loaded entity becomes managed: identity map, dirty-checking at flush. A listing that loads 5 000 entities pays memory and change-tracking for data that will never change. The read side returns **plain projections** (`qb.execute()`, raw results, a read model) — which is the same asymmetry ddd-tactical prescribes (`<skill-dir>/../ddd-tactical/references/application-cqrs.md`): aggregates for writes, projections for reads. Two rules, one mechanism.
 
 ## Raw fragments inside builders are still injection surface
 

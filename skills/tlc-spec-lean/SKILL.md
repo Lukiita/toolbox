@@ -129,7 +129,7 @@ Windows, where `python3` may be the Microsoft Store alias, run `python` or `py -
 | Before each commit | `check_commit.py --message "<msg>"` - it also prints what follows the last commit |
 | Before dispatching the Verifier, and after the fix | `check_proofs.py <feature>` |
 | Before declaring done | `validate_verification.py <feature>` |
-| After the gate exits 0, still before done | the `capability-sync` skill, then `python3 ~/.agents/skills/capability-sync/scripts/capabilities.py check` ([verify.md](references/verify.md)) |
+| After the gate exits 0, still before done | the `capability-sync` skill, then `python3 <skill-dir>/../capability-sync/scripts/capabilities.py check` ([verify.md](references/verify.md)) |
 | At distillation | `lessons.py add ...` |
 | After editing a validator or template | `selftest.py` |
 

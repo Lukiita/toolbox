@@ -40,7 +40,7 @@ No `typecheck` script? Omit the line and say so. Do not invent the script.
 python3 "$(git rev-parse --show-toplevel)/.agents/skills/tlc-spec-driven/scripts/check_commit.py" "$1"
 ```
 
-Prefer the in-repo copy of the script (it travels with the clone). Fall back to `~/.agents/skills/tlc-spec-driven/scripts/check_commit.py` when the project does not carry the skill, and say which one was used.
+The hook calls the in-repo copy of the script: it travels with the clone, so the hook works on every machine. When the project does not carry the `tlc-spec-driven` skill, say so and leave this hook out — a path into one machine's home directory breaks for everyone else.
 
 ### 6. Prove each hook bites
 
