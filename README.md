@@ -29,7 +29,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 Projects used to copy `skills/`, `hooks/` and `quality-gate/` and adapt them by hand; the copies drifted (issues #1 and #2 were fixes born in a copy). Now a project depends on the package and configures it:
 
 ```bash
-pnpm add -D github:Lukiita/toolbox#v1.1.0     # a tag is a version; no registry, no build step
+pnpm add -D github:Lukiita/toolbox#v1.2.0     # a tag is a version; no registry, no build step
 pnpm exec toolbox install                      # links every shipped skill into .agents/skills/
 cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 ```
