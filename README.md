@@ -34,7 +34,7 @@ pnpm exec toolbox install                      # copies every shipped skill into
 cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 ```
 
-- **Skills** arrive as files in `.agents/skills/` (Claude, Codex and Cursor all read it), versioned in the project and the project's to edit ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)). Commit them together with `.agents/toolbox/`: the manifest there records, per skill, the toolbox version and the hash of the original, and `base/` keeps the originals. The project's own skills in `.agents/skills/` are never touched.
+- **Skills** arrive as files in `.agents/skills/` (Claude, Codex and Cursor all read it), versioned in the project and the project's to edit ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)). Commit them together with `.agents/toolbox-skills.json`: the manifest records, per skill, the toolbox version and the hash of the original — that is how the next install tells an edited skill from an intact one. The project's own skills in `.agents/skills/` are never touched.
 - **Quality ratchet**: `"quality": "toolbox quality"` in the scripts; the rest of the setup (baseline, CI, pre-push hook) is in `templates/quality-gate/README.md`.
 - **Hooks**: wired from `node_modules/@lukiita/toolbox/hooks/` — see `hooks/README.md`.
 - **Config**: one file, `toolbox.config.ts`, holds every value a project used to edit inside a copied file (source window, feature slot, limits, alias prefixes, base branch, protected branches). Empty config = canonical setup. The code is never edited in a project.
@@ -48,7 +48,9 @@ cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 | edited             | a new version     | three-way merge: `merged` when every file settles; otherwise `conflict`, and **nothing is written** in that skill |
 | deleted            | anything          | leaves it deleted (`removed`)                                                                                     |
 
-`toolbox install --write-conflicts` writes a conflicting merge with git's conflict markers, to resolve by hand. `toolbox skills` lists which skills the project edited and which are behind the package, file by file; `toolbox skills --diff` prints the diffs. An edit that is a fix, not an adaptation, comes back here as a pull request. A choice a skill leaves open goes in `.agents/skill-decisions/<skill>.md` instead of an edit (ADR-0002): an unedited skill updates with no merge. Optional: `.agents/toolbox/base/** linguist-generated=true` in `.gitattributes` keeps the originals out of GitHub's diffs.
+The merge needs the original the project copied, and the project does not keep it: `install` fetches the tag of the recorded release (`git clone` of `v<version>`, into a temp folder), so merging an edited skill needs the network. When the release cannot be fetched the skill is left as it is and reported `no-original` with the reason; run `install` again when it can.
+
+`toolbox install --write-conflicts` writes a conflicting merge with git's conflict markers, to resolve by hand. `toolbox skills` lists, offline, which skills the project edited and which are behind the package, file by file; `toolbox skills --diff` prints the diffs. An edit that is a fix, not an adaptation, comes back here as a pull request. A choice a skill leaves open goes in `.agents/skill-decisions/<skill>.md` instead of an edit (ADR-0002): an unedited skill updates with no merge and no fetch.
 
 **A repository with no `package.json`** (a Java or Python project that only wants the skills) runs the same command from a cache, and commits the result: `pnpm dlx github:Lukiita/toolbox#v2.0.0 install`. Node is needed where the update is run, not on every clone.
 
@@ -57,9 +59,9 @@ cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 1. Remove the ignore rule for `.agents/skills/` from `.gitignore`, where there is one — the copies are meant to be committed.
 2. Move the dependency to the 2.x tag and run `pnpm exec toolbox install`: each link `install` wrote becomes a copy (`copied`); a link the project made to somewhere else is kept (`pinned`), and so is the project's own folder with a shipped skill's name (`unmanaged`).
 3. Drop `"postinstall": "toolbox install"` from the scripts: a clone already has the files, and `install` is now the step after an update.
-4. Commit `.agents/skills/` and `.agents/toolbox/`.
+4. Commit `.agents/skills/` and `.agents/toolbox-skills.json`.
 
-Publishing is a build and a tag: `pnpm build:check && git tag vX.Y.Z && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move.
+Publishing is a build and a tag: `pnpm build:check && git tag vX.Y.Z && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move. A published tag is never moved or deleted: a project's manifest names it, and `install` fetches it to merge.
 
 Migration of an existing copy, one project at a time: `./toolbox-diff.sh <project>` lists the adaptations — each one becomes a config field — then delete `scripts/quality/` and `tools/agent-hooks/`, let `toolbox install` take the toolbox-owned skills (a copy equal to the package's is `adopted`; one that differs is reported `unmanaged` and stays the project's until it is deleted and installed again), and run `pnpm quality --update-baseline` once: the numbers must not move (a moved number means the config is wrong, not the baseline). Two known exceptions: `duplication-*` moves either way when the project's jscpd version differs from the package's pinned 5.0.14 (5.2.1 counts more clones on the same tree), and `cc-over-limit`/`files-over-limit`/`explicit-any` measure more for a copy older than project-a's 2026-09-02 collectors, which the package now carries.
 

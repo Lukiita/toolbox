@@ -34,14 +34,16 @@ treated here as a requirement, not as a note.
 the project versions and may edit, and records where each copy came from:
 
 ```
-.agents/skills/<name>/                  the project's copy - its to edit
-.agents/toolbox/base/<name>/            the original of that copy, unedited
-.agents/toolbox/skills-manifest.json    per skill: toolbox version + hash of the original
+.agents/skills/<name>/        the project's copy - its to edit
+.agents/toolbox-skills.json   the manifest - per skill: toolbox version + hash of the original
 ```
 
 This is vendoring with a manifest (the model shadcn uses for components: the code enters
-the repository and becomes the project's), plus a stored base so an update is a three-way
-merge instead of a choice between "mine" and "theirs".
+the repository and becomes the project's). An update of a skill the project edited is a
+three-way merge, not a choice between "mine" and "theirs" - and the third side, the
+original the project copied, is **not kept in the project**: the manifest names the
+release it came from, and `install` fetches that release's tag when a merge needs it (how
+Copier updates a project from its template).
 
 ### Invariants
 
@@ -64,34 +66,55 @@ merge instead of a choice between "mine" and "theirs".
 "Intact" means the folder's hash equals the recorded one; "new version" means the package
 ships content whose hash differs from it.
 
-| The manifest | The project's folder                             | The package   | Install                                                                | Reported          |
-| ------------ | ------------------------------------------------ | ------------- | ---------------------------------------------------------------------- | ----------------- |
-| no record    | absent                                           | —             | copies; records                                                        | `copied`          |
-| no record    | a link the link-era install wrote, or a dangling | —             | replaces the link with a copy; records                                 | `copied`          |
-| no record    | the project's own link to elsewhere              | —             | nothing                                                                | `pinned`          |
-| no record    | a folder equal to the package's                  | —             | records it, writes no file in it                                       | `adopted`         |
-| no record    | any other folder                                 | —             | nothing: it is the project's own skill                                 | `unmanaged`       |
-| a record     | absent                                           | any           | nothing                                                                | `removed`         |
-| a record     | intact                                           | same          | nothing (the record moves to the running version)                      | `unchanged`       |
-| a record     | intact                                           | new version   | replaces the folder and the base                                       | `updated`         |
-| a record     | edited                                           | same          | nothing                                                                | `altered`         |
-| a record     | edited                                           | new version   | three-way merge; every file settled: writes it, moves the base         | `merged`          |
-| a record     | edited                                           | new version   | a file both sides changed in the same place: **writes nothing**        | `conflict`        |
-| a record     | edited                                           | new version   | the same, with `--write-conflicts`: writes the markers, moves the base | `conflict-marked` |
-| a record     | edited                                           | new version   | the base is gone or was edited: nothing                                | `base-lost`       |
-| a record     | any                                              | not shipped   | nothing                                                                | `retired`         |
-| newer record | any                                              | older toolbox | nothing                                                                | `ahead`           |
+| The manifest | The project's folder                             | The package   | Install                                                              | Reported          |
+| ------------ | ------------------------------------------------ | ------------- | -------------------------------------------------------------------- | ----------------- |
+| no record    | absent                                           | —             | copies; records                                                      | `copied`          |
+| no record    | a link the link-era install wrote, or a dangling | —             | replaces the link with a copy; records                               | `copied`          |
+| no record    | the project's own link to elsewhere              | —             | nothing                                                              | `pinned`          |
+| no record    | a folder equal to the package's                  | —             | records it, writes no file in it                                     | `adopted`         |
+| no record    | any other folder                                 | —             | nothing: it is the project's own skill                               | `unmanaged`       |
+| a record     | absent                                           | any           | nothing                                                              | `removed`         |
+| a record     | intact                                           | same          | nothing (the record moves to the running version)                    | `unchanged`       |
+| a record     | intact                                           | new version   | replaces the folder                                                  | `updated`         |
+| a record     | edited                                           | same          | nothing                                                              | `altered`         |
+| a record     | edited                                           | new version   | fetches the original; three-way merge; every file settled: writes it | `merged`          |
+| a record     | edited                                           | new version   | a file both sides changed in the same place: **writes nothing**      | `conflict`        |
+| a record     | edited                                           | new version   | the same, with `--write-conflicts`: writes the markers               | `conflict-marked` |
+| a record     | edited                                           | new version   | the original cannot be fetched, or is not the recorded one: nothing  | `no-original`     |
+| a record     | any                                              | not shipped   | nothing                                                              | `retired`         |
+| newer record | any                                              | older toolbox | nothing                                                              | `ahead`           |
 
 A conflict holds back the **whole skill**, not only the conflicting file: half an update is
-a version of the skill nobody wrote.
+a version of the skill nobody wrote. In every row that writes, the record moves to the
+running version and to the hash of what the package ships.
 
 ### The merge
 
-File by file, the base says who moved. One side moved (an edit, a new file, a deletion):
+The original is the skill as the recorded release shipped it. File by file, it says who
+moved. One side moved (an edit, a new file, a deletion):
 that side wins. Both moved the same way: nothing to do. Both moved differently: the line
 merge decides (`git merge-file --diff3`), and what it cannot settle is a conflict. A file
 edited on one side and deleted on the other, or binary on both, is a conflict that keeps
 the project's side.
+
+### The original comes from the release's tag
+
+`install` clones the tag `v<recorded version>` of the package's own repository
+(`repository` in its `package.json`), without history, into a temp folder it removes at
+the end. It happens only when an edited skill meets a new version, once per release per
+run. The fetched skill must hash to what the manifest recorded, or it is not merged
+against: a moved tag, or a release packed differently, would make edits out of what the
+project never touched.
+
+This is the one step that leaves the machine, and it never fails the install. No network,
+a deleted tag, a remote that hangs (cut at 60 s) or one that asks for credentials (git is
+told not to prompt): the skill is left exactly as it is and reported `no-original` with
+git's own reason; every other skill is still installed. There is no retry: the command is
+re-run by a person, and ten edited skills with no network must cost one failed fetch.
+
+When a release can never be fetched again, the way out is by hand: delete the skill's
+folder and its entry in the manifest, run `install` (it is `copied` anew) and re-apply the
+edits from git.
 
 ### What is hashed
 
@@ -99,8 +122,20 @@ A skill's hash is sha256 over `<path>\0<sha256 of the file>\n` for each file, pa
 code-unit order. Left out on purpose, because each would make an unedited skill read as
 edited: the exec bit, CRLF vs LF in text files (`core.autocrlf` rewrites them on checkout),
 and what running a skill's script leaves behind (`__pycache__/`, `*.pyc`, `.DS_Store`).
-The format is a contract with every manifest already written; a test pins it to values
-computed with `sha256sum`.
+A shipped skill is read the same from the installed package, from a checkout and from a
+fetched tag: what `package.json`'s `files` keeps out of the package (`test_*.py`) is left
+out of all three, or a fetched original would never match its record. The format is a
+contract with every manifest already written; a test pins it to values computed with
+`sha256sum`.
+
+### `toolbox skills` stays offline
+
+It reads the manifest, the project's folders and the running package, nothing else. With
+no copy of the original at hand, whose change a file carries is known only while one side
+still equals the original: an edited skill is compared with the package when the package
+did not move, a waiting version with the project's folder when that is unedited. When
+both moved, the differing files are listed as one set, unattributed; `install` is what
+fetches the original and settles them.
 
 ### The source is the running package
 
@@ -117,9 +152,10 @@ not on every clone.
 - **Copy and keep; warn, never merge.** The simplest. Every update of an edited skill
   becomes a merge by hand, so an edited skill in practice stops being updated: the drift
   again, only reported this time.
-- **Fetch the base from the old tag when a merge is needed** (how Copier updates a
-  template). Nothing stored twice in the project, but it puts the network, GitHub and tag
-  naming inside `install`, and this repository's history was rewritten once already.
+- **Keep the original in the project** (`.agents/toolbox/base/<name>/`). The first cut of
+  this change: the merge and `toolbox skills` work offline and name every file's side. It
+  puts every skill in the repository twice, about a hundred files a reviewer scrolls past
+  on every update; rejected for that.
 - **Conflict markers written by default** (what `git merge` does). A `SKILL.md` with
   markers is a broken skill an agent reads without noticing, and a project that runs
   `toolbox install` from `postinstall` would get them written unattended.
@@ -148,14 +184,17 @@ what a decisions file cannot express.
 ## Consequences
 
 - **Gained:** the skills are in git and in the pull request; a clone needs nothing
-  installed to have them; a project adapts a skill and still receives its updates.
-- **Paid:** every skill is in the repository twice (97 files, about 1.2 MB today; a line
-  `.agents/toolbox/base/** linguist-generated=true` in `.gitattributes` keeps the base
-  out of GitHub's diffs); an update is a commit to review in each project, not a lockfile
-  line; a conflict waits for a person; a fix made in a project does not travel back by
-  itself.
-- **Risk:** somebody edits the base instead of the skill. Its hash no longer matches the
-  record, so it is reported (`base-lost`) and never merged against.
+  installed to have them; a project adapts a skill and still receives its updates; the
+  project carries one extra file, the manifest.
+- **Paid:** merging an edited skill needs the network and the tag of the release it was
+  copied from, so `install` now depends on where the package is hosted and on tags named
+  `vX.Y.Z` that are never moved or deleted; an update is a commit to review in each
+  project, not a lockfile line; a conflict waits for a person; a fix made in a project
+  does not travel back by itself; `toolbox skills` cannot attribute the changes of a
+  skill both sides moved.
+- **Risk:** a release that can no longer be fetched (this repository's history was
+  rewritten once, in 2026-09) leaves an edited skill unmergeable; it is reported, never
+  guessed at, and re-applied by hand.
 - **SemVer:** major. `install` changed what it writes and who owns the result.
 
 ## Migration of a link-era consumer
@@ -164,4 +203,4 @@ what a decisions file cannot express.
 2. Move to the new version and run `toolbox install`: each link becomes a copy.
 3. Drop `"postinstall": "toolbox install"`: a clone already has the files. From here
    `toolbox install` is the step after an update of the package.
-4. Commit `.agents/skills/` and `.agents/toolbox/`.
+4. Commit `.agents/skills/` and `.agents/toolbox-skills.json`.
