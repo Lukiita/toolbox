@@ -1,6 +1,6 @@
 # toolbox
 
-My agent toolbox, versioned. This repo is the **single source** for skills, agent hooks and the quality ratchet: the machine consumes it through symlinks, and projects consume it as a **versioned package** (`@lukiita/toolbox`, ADR-0001) — any drift shows up in `git status` or in a version number, never hidden in copies.
+My agent toolbox, versioned. This repo is the **single source** for skills, agent hooks and the quality ratchet: the machine consumes it through symlinks, and projects consume it as a **versioned package** (`@lukiita/toolbox`, ADR-0001) whose skills are copied into the project with a manifest (ADR-0003) — any drift shows up in `git status`, in a version number or in `toolbox skills`, never hidden in copies.
 
 The pattern came from Project A's `.agents/skills/`, which learned the hard way that copy-per-provider drifts — when the skills were rescued into this repo, the only difference between the `tlc-spec-driven` copies in project-b and Project A was the script path prefix.
 
@@ -16,7 +16,7 @@ Idempotent: running it again only confirms the state. What it links:
 | target                    | source           | how                                                                                                                                                   |
 | ------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `~/.claude/skills`        | `skills/`        | symlink                                                                                                                                               |
-| `~/.agents/skills`        | `skills/`        | symlink (the canonical path skills reference)                                                                                                         |
+| `~/.agents/skills`        | `skills/`        | symlink (the multi-agent path; a skill reaches a sibling through its own folder, `<skill-dir>/../<name>/`)                                            |
 | `~/.codex/skills/<skill>` | `skills/<skill>` | one symlink **per skill** — Codex keeps its own `.system/` inside that directory, so the directory itself cannot be a link; dangling links are pruned |
 | `~/.agents/hooks`         | `hooks/`         | symlink (the global secrets guard is wired from here)                                                                                                 |
 
@@ -30,18 +30,38 @@ Projects used to copy `skills/`, `hooks/` and `quality-gate/` and adapt them by 
 
 ```bash
 pnpm add -D github:Lukiita/toolbox#v1.2.0     # a tag is a version; no registry, no build step
-pnpm exec toolbox install                      # links every shipped skill into .agents/skills/
+pnpm exec toolbox install                      # copies every shipped skill into .agents/skills/
 cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 ```
 
-- **Skills** arrive as symlinks in `.agents/skills/` (Claude, Codex and Cursor all read it); the project's own skills in that folder are never touched. Add `"postinstall": "toolbox install"` to the project's scripts: `pnpm install` on a fresh clone links them (verified with pnpm 12); `pnpm add` does not run the project's own postinstall, hence the explicit `pnpm exec toolbox install` once after adding.
+- **Skills** arrive as files in `.agents/skills/` (Claude, Codex and Cursor all read it), versioned in the project and the project's to edit ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)). Commit them together with `.agents/toolbox/`: the manifest there records, per skill, the toolbox version and the hash of the original, and `base/` keeps the originals. The project's own skills in `.agents/skills/` are never touched.
 - **Quality ratchet**: `"quality": "toolbox quality"` in the scripts; the rest of the setup (baseline, CI, pre-push hook) is in `templates/quality-gate/README.md`.
 - **Hooks**: wired from `node_modules/@lukiita/toolbox/hooks/` — see `hooks/README.md`.
 - **Config**: one file, `toolbox.config.ts`, holds every value a project used to edit inside a copied file (source window, feature slot, limits, alias prefixes, base branch, protected branches). Empty config = canonical setup. The code is never edited in a project.
 
-Updating a project is `pnpm update @lukiita/toolbox`. Publishing is a build and a tag: `pnpm build:check && git tag vX.Y.Z && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move.
+**Updating a project** is `pnpm update @lukiita/toolbox && pnpm exec toolbox install`, then a commit of what changed. Per skill, `install` does one of:
 
-Migration of an existing copy, one project at a time: `./toolbox-diff.sh <project>` lists the adaptations — each one becomes a config field — then delete `scripts/quality/`, `tools/agent-hooks/` and the toolbox-owned skills, and run `pnpm quality --update-baseline` once: the numbers must not move (a moved number means the config is wrong, not the baseline). Two known exceptions: `duplication-*` moves either way when the project's jscpd version differs from the package's pinned 5.0.14 (5.2.1 counts more clones on the same tree), and `cc-over-limit`/`files-over-limit`/`explicit-any` measure more for a copy older than project-a's 2026-09-02 collectors, which the package now carries.
+| The project's copy | The package ships | `install`                                                                                                         |
+| ------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| not edited         | a new version     | replaces it (`updated`)                                                                                           |
+| edited             | the same          | keeps it (`altered`)                                                                                              |
+| edited             | a new version     | three-way merge: `merged` when every file settles; otherwise `conflict`, and **nothing is written** in that skill |
+| deleted            | anything          | leaves it deleted (`removed`)                                                                                     |
+
+`toolbox install --write-conflicts` writes a conflicting merge with git's conflict markers, to resolve by hand. `toolbox skills` lists which skills the project edited and which are behind the package, file by file; `toolbox skills --diff` prints the diffs. An edit that is a fix, not an adaptation, comes back here as a pull request. A choice a skill leaves open goes in `.agents/skill-decisions/<skill>.md` instead of an edit (ADR-0002): an unedited skill updates with no merge. Optional: `.agents/toolbox/base/** linguist-generated=true` in `.gitattributes` keeps the originals out of GitHub's diffs.
+
+**A repository with no `package.json`** (a Java or Python project that only wants the skills) runs the same command from a cache, and commits the result: `pnpm dlx github:Lukiita/toolbox#v2.0.0 install`. Node is needed where the update is run, not on every clone.
+
+**Migrating from 1.x**, where `install` linked the skills ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)):
+
+1. Remove the ignore rule for `.agents/skills/` from `.gitignore`, where there is one — the copies are meant to be committed.
+2. Move the dependency to the 2.x tag and run `pnpm exec toolbox install`: each link `install` wrote becomes a copy (`copied`); a link the project made to somewhere else is kept (`pinned`), and so is the project's own folder with a shipped skill's name (`unmanaged`).
+3. Drop `"postinstall": "toolbox install"` from the scripts: a clone already has the files, and `install` is now the step after an update.
+4. Commit `.agents/skills/` and `.agents/toolbox/`.
+
+Publishing is a build and a tag: `pnpm build:check && git tag vX.Y.Z && git push && git push --tags` (the pre-commit already keeps `dist/` in sync when `src/` changes). Breaking changes bump the major; a project chooses when to move.
+
+Migration of an existing copy, one project at a time: `./toolbox-diff.sh <project>` lists the adaptations — each one becomes a config field — then delete `scripts/quality/` and `tools/agent-hooks/`, let `toolbox install` take the toolbox-owned skills (a copy equal to the package's is `adopted`; one that differs is reported `unmanaged` and stays the project's until it is deleted and installed again), and run `pnpm quality --update-baseline` once: the numbers must not move (a moved number means the config is wrong, not the baseline). Two known exceptions: `duplication-*` moves either way when the project's jscpd version differs from the package's pinned 5.0.14 (5.2.1 counts more clones on the same tree), and `cc-over-limit`/`files-over-limit`/`explicit-any` measure more for a copy older than project-a's 2026-09-02 collectors, which the package now carries.
 
 ## Developing the toolbox itself
 
@@ -131,11 +151,11 @@ The step-by-step procedure lives in `skills/tlc-spec-driven/UPSTREAM.md`.
 
 ## Global vs per-project
 
-Skills here are **global**. A project that needs them at headless runtime (e.g. Archon worktrees, CI) carries a **copy** in the repo's `.agents/skills/`, imported from here — and inside the project, the pattern is `.claude/skills` and `.cursor/skills` as relative symlinks to `.agents/skills/` (as Project A does). The toolbox is the arbiter: an improvement made in a copy comes back here.
+Skills here are **global** on this machine. A project carries its own **copy** in `.agents/skills/`, written by `toolbox install` and recorded in a manifest (ADR-0003) — and inside the project, the pattern is `.claude/skills` and `.cursor/skills` as relative symlinks to `.agents/skills/` (as Project A does). The toolbox is the arbiter: an improvement made in a copy comes back here, and `toolbox skills --diff` shows it waiting.
 
-A project that settles something differently from a skill's defaults writes it in **`.agents/skill-decisions/<skill>.md`** — its own versioned file, outside the skill's directory, so neither a linked skill nor a re-copied one ever overwrites it. A skill that honours the convention reads that file first and lets it win; `ddd-tactical` is the first ([ADR-0002](docs/adr/0002-project-decisions-over-a-skill.md)).
+A project that settles something differently from a skill's defaults writes it in **`.agents/skill-decisions/<skill>.md`** — its own versioned file, outside the skill's directory, so the skill itself stays unedited and updates with no merge. A skill that honours the convention reads that file first and lets it win; `ddd-tactical` is the first ([ADR-0002](docs/adr/0002-project-decisions-over-a-skill.md)).
 
-Copies drift silently — `git status` only sees the symlinked half. **`./toolbox-diff.sh <project-root>`** shows the other half: per component (`.agents/skills/`, `tools/agent-hooks/`, `scripts/quality/`, `.archon/`), every file that differs from the source here, with `+added -deleted` counts and a label — _adaptation point_ (the component README says that file is edited on import, so a small diff is expected and a large one is a stale copy wearing an excuse), _only in toolbox_, _only in project_. An unlabeled line is a copy that is simply behind. Run it before piloting a skill in a project and after improving a copy. Measured the day it was written (2026-08-28): Project A's `ddd-tactical` was 284 lines behind, its `code-review` a whole rewrite behind.
+A copy made by hand, before the package, drifts silently — it has no manifest. **`./toolbox-diff.sh <project-root>`** shows that half: per component (`.agents/skills/`, `tools/agent-hooks/`, `scripts/quality/`, `.archon/`), every file that differs from the source here, with `+added -deleted` counts and a label — _adaptation point_ (the component README says that file is edited on import, so a small diff is expected and a large one is a stale copy wearing an excuse), _only in toolbox_, _only in project_. An unlabeled line is a copy that is simply behind. Run it before piloting a skill in a project and after improving a copy. Measured the day it was written (2026-08-28): Project A's `ddd-tactical` was 284 lines behind, its `code-review` a whole rewrite behind.
 
 ## archon/ — importing into a project
 
