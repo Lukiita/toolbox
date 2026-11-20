@@ -1,7 +1,15 @@
-// `toolbox skills`: what differs between the project's skills, their
-// originals and what the running package ships (ADR-0003). ADR-0001 was
-// written because copies drifted where nobody looked; this is the look.
-// Read-only: it never writes.
+// `toolbox skills`: what differs between the project's skills, the manifest
+// and what the running package ships (ADR-0003). ADR-0001 was written
+// because copies drifted where nobody looked; this is the look.
+//
+// Read-only and offline on purpose: a status command that waits on the
+// network gets skipped. The price is one case. With no copy of the original
+// in the project, a file's changes can be told apart only while one side
+// still IS the original: an edited skill is compared with the package when
+// the package is unchanged, and a waiting version with the project's folder
+// when that is unedited. When both moved, the files that differ are listed
+// without saying whose change each is - `toolbox install` fetches the
+// original and settles it.
 
 import { join } from 'node:path';
 
@@ -9,6 +17,7 @@ import type { SkillManifest, SkillRecord } from '../domain/skill-manifest.aggreg
 import type { SkillTree } from '../domain/skill-tree.vo.mts';
 import { isOlderVersion } from '../domain/toolbox-version.mts';
 import {
+  readShippedSkillTree,
   readSkillTree,
   shippedSkills,
   skillLinkKind,
@@ -41,12 +50,12 @@ export interface SkillInspection {
   version: string | undefined;
   local: LocalState;
   upstream: UpstreamState;
-  /** Files that differ between the original and the project's folder. */
+  /** Files the project changed, for an edited skill the package did not move. */
   alteredFiles: string[];
-  /** Files that differ between the original and what the package ships. */
+  /** Files the package changed, for an unedited skill with a new version waiting. */
   behindFiles: string[];
-  /** The stored original is gone or was edited: a merge is not possible until it is restored. */
-  baseLost: boolean;
+  /** Files that differ between project and package when both moved: whose change is not known here. */
+  divergedFiles: string[];
   paths: SkillPaths;
 }
 
@@ -61,7 +70,6 @@ export type FileDiff = (from: string, to: string) => string;
 interface Sides {
   record: SkillRecord | undefined;
   local: SkillTree | undefined;
-  base: SkillTree | undefined;
   shipped: SkillTree | undefined;
 }
 
@@ -84,24 +92,25 @@ function upstreamState({ record, shipped }: Sides, version: string): UpstreamSta
   return shipped.hash === record.hash ? 'current' : 'behind';
 }
 
-// The files are named against the original. Without a sound one there is
-// nothing to name them against, and a guess would blame the wrong side.
-function differing(original: SkillTree | undefined, other: SkillTree | undefined): string[] {
-  return original && other ? original.differingPaths(other) : [];
+interface DifferingFiles {
+  alteredFiles: string[];
+  behindFiles: string[];
+  divergedFiles: string[];
 }
 
-// The stored original, when it still is the one the manifest recorded.
-function soundBase({ record, base }: Sides): SkillTree | undefined {
-  return base?.hash === record?.hash ? base : undefined;
-}
+// Each list is the same comparison, project against package; which list it
+// goes in is which side still equals the original.
+const LIST_OF = new Map<string, keyof DifferingFiles>([
+  ['altered/current', 'alteredFiles'],
+  ['intact/behind', 'behindFiles'],
+  ['altered/behind', 'divergedFiles'],
+]);
 
-function readSides(paths: SkillPaths, record: SkillRecord | undefined): Sides {
-  return {
-    record,
-    local: readSkillTree(paths.local),
-    base: readSkillTree(paths.base),
-    shipped: readSkillTree(paths.shipped),
-  };
+function differingFiles(sides: Sides, local: LocalState, upstream: UpstreamState): DifferingFiles {
+  const lists: DifferingFiles = { alteredFiles: [], behindFiles: [], divergedFiles: [] };
+  const list = LIST_OF.get(`${local}/${upstream}`);
+  if (!list || !sides.local || !sides.shipped) return lists;
+  return { ...lists, [list]: sides.local.differingPaths(sides.shipped) };
 }
 
 function inspectOne(
@@ -110,18 +119,19 @@ function inspectOne(
   options: InspectSkillsOptions,
 ): SkillInspection {
   const paths = skillPaths(options, name);
-  const sides = readSides(paths, manifest.find(name));
+  const sides: Sides = {
+    record: manifest.find(name),
+    local: readSkillTree(paths.local),
+    shipped: readShippedSkillTree(paths.shipped),
+  };
   const local = localState(sides, skillLinkKind(paths.local, options.packageDir));
   const upstream = upstreamState(sides, options.version);
-  const original = soundBase(sides);
   return {
     name,
     version: sides.record?.version,
     local,
     upstream,
-    alteredFiles: local === 'altered' ? differing(original, sides.local) : [],
-    behindFiles: upstream === 'behind' ? differing(original, sides.shipped) : [],
-    baseLost: sides.record !== undefined && original === undefined,
+    ...differingFiles(sides, local, upstream),
     paths,
   };
 }
@@ -131,7 +141,7 @@ function inspectOne(
  *
  * @example
  *   inspectSkills({ packageDir, projectRoot: '/p', version: '2.1.0' })
- *   // => [{ name: 'ddd-tactical', local: 'altered', upstream: 'behind', alteredFiles: ['SKILL.md'], ... }]
+ *   // => [{ name: 'ddd-tactical', local: 'altered', upstream: 'current', alteredFiles: ['SKILL.md'], ... }]
  */
 export function inspectSkills(options: InspectSkillsOptions): SkillInspection[] {
   const manifest = readSkillManifest(options.projectRoot);
@@ -140,16 +150,18 @@ export function inspectSkills(options: InspectSkillsOptions): SkillInspection[] 
 }
 
 /**
- * The diffs behind one inspection: what the project changed, then what the
- * package changed, each against the original.
+ * The diffs behind one inspection. An edit reads from the package (the
+ * original) to the project; a waiting version, and files where both moved,
+ * read from the project to the package.
  *
  * @example
  *   skillDiffs(inspection, gitFileDiff).join('\n')
  */
 export function skillDiffs(inspection: SkillInspection, diffFiles: FileDiff): string[] {
-  const { base, local, shipped } = inspection.paths;
+  const { local, shipped } = inspection.paths;
+  const toPackage = [...inspection.behindFiles, ...inspection.divergedFiles];
   return [
-    ...inspection.alteredFiles.map((file) => diffFiles(join(base, file), join(local, file))),
-    ...inspection.behindFiles.map((file) => diffFiles(join(base, file), join(shipped, file))),
+    ...inspection.alteredFiles.map((file) => diffFiles(join(shipped, file), join(local, file))),
+    ...toPackage.map((file) => diffFiles(join(local, file), join(shipped, file))),
   ];
 }

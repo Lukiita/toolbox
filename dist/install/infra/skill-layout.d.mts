@@ -1,9 +1,7 @@
 export declare const SKILLS_DIR: string;
-export declare const BASE_DIR: string;
 export declare const MANIFEST_FILE: string;
 export interface SkillPaths {
     local: string;
-    base: string;
     shipped: string;
 }
 export interface SkillRoots {
@@ -12,7 +10,7 @@ export interface SkillRoots {
     projectRoot: string;
 }
 /**
- * The three folders of one skill.
+ * The two folders of one skill.
  *
  * @example
  *   skillPaths({ packageDir, projectRoot: '/p' }, 'retro').local // => '/p/.agents/skills/retro'

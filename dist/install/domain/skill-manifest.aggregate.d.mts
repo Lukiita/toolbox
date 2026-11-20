@@ -15,7 +15,7 @@ export declare class SkillManifest {
      * field and the value when the shape is wrong.
      *
      * @example
-     *   SkillManifest.parse(readFileSync('.agents/toolbox/skills-manifest.json', 'utf8'))
+     *   SkillManifest.parse(readFileSync('.agents/toolbox-skills.json', 'utf8'))
      */
     static parse(json: string): SkillManifest;
     find(name: string): SkillRecord | undefined;

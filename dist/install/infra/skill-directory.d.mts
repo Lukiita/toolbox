@@ -7,12 +7,20 @@ import { SkillTree } from '../domain/skill-tree.vo.mts';
  */
 export declare function shippedSkills(packageDir: string): string[];
 /**
- * Reads a skill's folder; undefined when there is no folder there.
+ * Reads a skill's folder in the project; undefined when there is no folder there.
  *
  * @example
  *   readSkillTree('/p/.agents/skills/retro')?.hash // => 'sha256:…'
  */
 export declare function readSkillTree(dir: string): SkillTree | undefined;
+/**
+ * Reads a skill as a release ships it - from the installed package, a
+ * checkout or a fetched tag, always the same files.
+ *
+ * @example
+ *   readShippedSkillTree('/p/node_modules/@lukiita/toolbox/skills/retro')?.hash
+ */
+export declare function readShippedSkillTree(dir: string): SkillTree | undefined;
 /**
  * Makes the folder hold exactly the tree. Written beside it first and swapped
  * in, so a run that dies half-way leaves the old folder whole, not a mix.

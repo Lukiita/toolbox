@@ -4,7 +4,7 @@ import type { SkillTree } from './skill-tree.vo.mts';
 /** The base now equals what the package ships; the record moves to the running version. */
 export type SyncedStatus = 'copied' | 'adopted' | 'updated' | 'merged' | 'conflict-marked' | 'unchanged' | 'altered';
 /** Nothing is written and the record stays where it was. */
-export type KeptStatus = 'unmanaged' | 'removed' | 'conflict' | 'base-lost' | 'ahead';
+export type KeptStatus = 'unmanaged' | 'removed' | 'conflict' | 'no-original' | 'ahead';
 export type SkillStatus = SyncedStatus | KeptStatus;
 export type Reconciliation = {
     synced: true;
@@ -17,14 +17,26 @@ export type Reconciliation = {
     synced: false;
     status: KeptStatus;
     files: string[];
+    /** Why, when the status alone does not say. */ reason?: string;
+};
+/** The skill as a past release shipped it, or why it could not be read. */
+export type OriginalLookup = {
+    found: true;
+    tree: SkillTree;
+} | {
+    found: false;
+    reason: string;
 };
 export interface SkillSides {
     record: SkillRecord | undefined;
     /** The project's folder; undefined when there is none. */
     local: SkillTree | undefined;
-    /** The stored original; undefined when there is none. */
-    base: SkillTree | undefined;
     shipped: SkillTree;
+    /**
+     * Reads the skill as the given release shipped it. Called only when a merge
+     * needs the original: it costs a download.
+     */
+    original: (version: string) => OriginalLookup;
 }
 export interface ReconcileOptions {
     /** The version of the running toolbox. */
@@ -34,11 +46,11 @@ export interface ReconcileOptions {
     mergeText: TextMerge;
 }
 /**
- * Decides what an install does with one skill. Pure: it reads the four sides
- * and returns what must be written.
+ * Decides what an install does with one skill. It reads the sides and returns
+ * what must be written; the one effect it may cause is `sides.original`.
  *
  * @example
- *   reconcileSkill({ record, local, base, shipped }, { version: '2.0.0', writeConflicts: false, mergeText })
+ *   reconcileSkill({ record, local, shipped, original }, { version: '2.0.0', writeConflicts: false, mergeText })
  *   // => { synced: true, status: 'updated', local: shipped, files: [] }
  */
 export declare function reconcileSkill(sides: SkillSides, options: ReconcileOptions): Reconciliation;

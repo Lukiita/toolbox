@@ -2,7 +2,7 @@
 // person (or an agent) reading a terminal. One place for the wording, so the
 // two commands name a state the same way.
 import { join } from 'node:path';
-import { BASE_DIR, SKILLS_DIR } from "../infra/skill-layout.mjs";
+import { SKILLS_DIR } from "../infra/skill-layout.mjs";
 // Empty = the status says it all. A line that asks something of the reader
 // says what, in the line itself: nobody opens the docs for an install log.
 const INSTALL_NOTES = {
@@ -16,7 +16,7 @@ const INSTALL_NOTES = {
     unmanaged: "the project's own folder; not managed by the toolbox",
     removed: 'deleted by the project; not restored',
     conflict: "the new version conflicts with the project's edits; nothing was written (`toolbox install --write-conflicts` writes the conflict markers)",
-    'base-lost': `edited by the project, and its original under ${BASE_DIR}/ is missing or was edited; restore it from git to merge the new version`,
+    'no-original': 'edited by the project; the new version was not merged and nothing was written, because the original could not be read',
     ahead: 'recorded by a newer toolbox than the one running; update the package',
     pinned: "the project's own link; not replaced",
     retired: 'no longer shipped by the toolbox; delete it if unused',
@@ -33,8 +33,8 @@ function inBrackets(files) {
  *   installLine({ name: 'retro', status: 'copied', files: [] })
  *   // => 'copied:          .agents/skills/retro'
  */
-export function installLine({ name, status, files }) {
-    const note = INSTALL_NOTES[status];
+export function installLine({ name, status, files, reason }) {
+    const note = [INSTALL_NOTES[status], reason].filter(Boolean).join(': ');
     const subject = `${join(SKILLS_DIR, name)}${inBrackets(files)}`;
     return `${`${status}:`.padEnd(STATUS_WIDTH)}${subject}${note ? ` - ${note}` : ''}`;
 }
@@ -47,21 +47,19 @@ function fileLine(label, files) {
     return files.length === 0 ? [] : [`    ${label}: ${files.join(', ')}`];
 }
 /**
- * The lines of `toolbox skills` for one skill: its state, then the files on
- * each side that differ from the original.
+ * The lines of `toolbox skills` for one skill: its state, then the files that differ.
  *
  * @example
  *   inspectionLines(inspection)
- *   // => ['altered, behind   ddd-tactical (1.2.0)', '    edited by the project: SKILL.md', ...]
+ *   // => ['altered           ddd-tactical (1.2.0)', '    edited by the project: SKILL.md']
  */
 export function inspectionLines(inspection) {
-    const { name, version, alteredFiles, behindFiles, baseLost } = inspection;
+    const { name, version, alteredFiles, behindFiles, divergedFiles } = inspection;
     const head = `${stateLabel(inspection).padEnd(STATE_WIDTH)}${name}${version ? ` (${version})` : ''}`;
-    const lost = `    original missing or edited: restore ${join(BASE_DIR, name)} from git`;
     return [
         head,
         ...fileLine('edited by the project', alteredFiles),
         ...fileLine('changed in the toolbox', behindFiles),
-        ...(baseLost ? [lost] : []),
+        ...fileLine('differs from the toolbox (edits and new version together)', divergedFiles),
     ];
 }

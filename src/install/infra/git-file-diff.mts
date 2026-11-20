@@ -16,7 +16,7 @@ function orNothing(path: string): string {
  * A unified diff of two files; empty when they are equal.
  *
  * @example
- *   gitFileDiff('.agents/toolbox/base/retro/SKILL.md', '.agents/skills/retro/SKILL.md')
+ *   gitFileDiff('node_modules/@lukiita/toolbox/skills/retro/SKILL.md', '.agents/skills/retro/SKILL.md')
  */
 export const gitFileDiff: FileDiff = (from: string, to: string): string => {
   // Exit 1 means "they differ", which is the answer, not a failure.

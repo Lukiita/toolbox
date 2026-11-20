@@ -7,13 +7,12 @@ import type { SkillInstallReport } from '../application/install-skills.mts';
  *   installLine({ name: 'retro', status: 'copied', files: [] })
  *   // => 'copied:          .agents/skills/retro'
  */
-export declare function installLine({ name, status, files }: SkillInstallReport): string;
+export declare function installLine({ name, status, files, reason }: SkillInstallReport): string;
 /**
- * The lines of `toolbox skills` for one skill: its state, then the files on
- * each side that differ from the original.
+ * The lines of `toolbox skills` for one skill: its state, then the files that differ.
  *
  * @example
  *   inspectionLines(inspection)
- *   // => ['altered, behind   ddd-tactical (1.2.0)', '    edited by the project: SKILL.md', ...]
+ *   // => ['altered           ddd-tactical (1.2.0)', '    edited by the project: SKILL.md']
  */
 export declare function inspectionLines(inspection: SkillInspection): string[];

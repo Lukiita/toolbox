@@ -10,14 +10,14 @@ import { readSkillManifest, writeSkillManifest } from './skill-manifest-file.mts
 const HASH = `sha256:${'a'.repeat(64)}`;
 const scratch = scratchDirs('toolbox-manifest-');
 
-const file = (root: string): string => join(root, '.agents', 'toolbox', 'skills-manifest.json');
+const file = (root: string): string => join(root, '.agents', 'toolbox-skills.json');
 
 describe('the skills manifest on disk', () => {
   it('reads as empty when the project has none', () => {
     expect(readSkillManifest(scratch()).names()).toEqual([]);
   });
 
-  it('is written at .agents/toolbox/skills-manifest.json and read back', () => {
+  it('is written at .agents/toolbox-skills.json and read back', () => {
     const root = scratch();
     const manifest = SkillManifest.empty();
     manifest.record('retro', { version: '1.2.0', hash: HASH });
@@ -45,11 +45,11 @@ describe('the skills manifest on disk', () => {
 
   it('fails naming the file when its content is broken', () => {
     const root = scratch();
-    mkdirSync(join(root, '.agents', 'toolbox'), { recursive: true });
+    mkdirSync(join(root, '.agents'), { recursive: true });
     writeFileSync(file(root), '{ nope');
     expect(() => readSkillManifest(root)).toThrow(SkillManifestError);
     expect(() => readSkillManifest(root)).toThrow(
-      /^\.agents\/toolbox\/skills-manifest\.json: skills manifest is not valid JSON: /,
+      /^\.agents\/toolbox-skills\.json: skills manifest is not valid JSON: /,
     );
   });
 });

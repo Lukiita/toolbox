@@ -34,6 +34,19 @@ describe('installLine', () => {
     );
   });
 
+  it('adds the reason a merge could not be tried', () => {
+    expect(
+      installLine({
+        name: 'ddd-tactical',
+        status: 'no-original',
+        files: [],
+        reason: 'could not fetch v1.2.0 from https://example.com/t.git: no route to host',
+      }),
+    ).toBe(
+      'no-original:     .agents/skills/ddd-tactical - edited by the project; the new version was not merged and nothing was written, because the original could not be read: could not fetch v1.2.0 from https://example.com/t.git: no route to host',
+    );
+  });
+
   it('has a line for every status', () => {
     const statuses: InstallStatus[] = [
       'copied',
@@ -46,7 +59,7 @@ describe('installLine', () => {
       'unmanaged',
       'removed',
       'conflict',
-      'base-lost',
+      'no-original',
       'ahead',
       'pinned',
       'retired',
@@ -67,8 +80,8 @@ function inspection(overrides: Partial<SkillInspection>): SkillInspection {
     upstream: 'current',
     alteredFiles: [],
     behindFiles: [],
-    baseLost: false,
-    paths: { local: '/p/l', base: '/p/b', shipped: '/p/s' },
+    divergedFiles: [],
+    paths: { local: '/p/l', shipped: '/p/s' },
     ...overrides,
   };
 }
@@ -78,19 +91,30 @@ describe('inspectionLines', () => {
     expect(inspectionLines(inspection({}))).toEqual(['intact            ddd-tactical (1.2.0)']);
   });
 
-  it('names both sides of a skill that is altered and behind, with the files of each', () => {
+  it('names the files the project edited, and the files a waiting version changes', () => {
+    expect(
+      inspectionLines(
+        inspection({ local: 'altered', alteredFiles: ['SKILL.md', 'references/java.md'] }),
+      ),
+    ).toEqual([
+      'altered           ddd-tactical (1.2.0)',
+      '    edited by the project: SKILL.md, references/java.md',
+    ]);
+    expect(
+      inspectionLines(inspection({ upstream: 'behind', behindFiles: ['references/aggregate.md'] })),
+    ).toEqual([
+      'intact, behind    ddd-tactical (1.2.0)',
+      '    changed in the toolbox: references/aggregate.md',
+    ]);
+  });
+
+  it('does not say whose change it is when both sides moved', () => {
     const lines = inspectionLines(
-      inspection({
-        local: 'altered',
-        upstream: 'behind',
-        alteredFiles: ['SKILL.md', 'references/java.md'],
-        behindFiles: ['references/aggregate.md'],
-      }),
+      inspection({ local: 'altered', upstream: 'behind', divergedFiles: ['SKILL.md'] }),
     );
     expect(lines).toEqual([
       'altered, behind   ddd-tactical (1.2.0)',
-      '    edited by the project: SKILL.md, references/java.md',
-      '    changed in the toolbox: references/aggregate.md',
+      '    differs from the toolbox (edits and new version together): SKILL.md',
     ]);
   });
 
@@ -109,12 +133,5 @@ describe('inspectionLines', () => {
         inspection({ version: undefined, local: 'unmanaged', upstream: 'untracked' }),
       ),
     ).toEqual(['unmanaged         ddd-tactical']);
-  });
-
-  it('warns about a stored original that is gone or edited', () => {
-    expect(inspectionLines(inspection({ local: 'altered', baseLost: true }))).toEqual([
-      'altered           ddd-tactical (1.2.0)',
-      '    original missing or edited: restore .agents/toolbox/base/ddd-tactical from git',
-    ]);
   });
 });

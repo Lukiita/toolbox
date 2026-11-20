@@ -20,6 +20,7 @@ import { loadToolboxConfig } from "../config/load-config.mjs";
 import { inspectSkills, skillDiffs } from "../install/application/inspect-skills.mjs";
 import { installSkills } from "../install/application/install-skills.mjs";
 import { gitFileDiff } from "../install/infra/git-file-diff.mjs";
+import { GitPastReleases, repositoryCloneUrl } from "../install/infra/git-past-releases.mjs";
 import { gitTextMerge } from "../install/infra/git-text-merge.mjs";
 import { inspectionLines, installLine } from "../install/presentation/skill-report-lines.mjs";
 import { decidePrePush, parsePushedRefs } from "../pre-push/pre-push.mjs";
@@ -91,9 +92,8 @@ function prePush(root, config) {
 // node_modules or from a `pnpm dlx` / `npx` cache, in a repository with no
 // package.json of its own (ADR-0003).
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-function packageVersion() {
-    const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'));
-    return manifest.version;
+function packageManifest() {
+    return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'));
 }
 // A mistyped flag fails instead of being ignored: `--write-conflict` read as
 // "no flag" would leave the conflict unwritten and say nothing.
@@ -104,12 +104,16 @@ function assertKnownFlags(args, known) {
 }
 function install(root, args) {
     assertKnownFlags(args, ['--write-conflicts']);
+    const { version, repository } = packageManifest();
     const reports = installSkills({
         packageDir: PACKAGE_DIR,
         projectRoot: root,
-        version: packageVersion(),
+        version,
         writeConflicts: args.includes('--write-conflicts'),
         mergeText: gitTextMerge,
+        // The original of an edited skill comes from the tag of the release it
+        // was copied from, in the package's own repository (ADR-0003).
+        pastReleases: new GitPastReleases(repositoryCloneUrl(repository)),
     });
     for (const report of reports)
         console.log(installLine(report));
@@ -120,7 +124,7 @@ function skills(root, args) {
     const inspections = inspectSkills({
         packageDir: PACKAGE_DIR,
         projectRoot: root,
-        version: packageVersion(),
+        version: packageManifest().version,
     });
     for (const inspection of inspections) {
         for (const line of inspectionLines(inspection))

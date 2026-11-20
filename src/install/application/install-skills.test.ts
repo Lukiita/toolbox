@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  readdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -51,11 +52,15 @@ describe('installSkills - first install', () => {
     expect(Object.keys(project.records())).toEqual(['code-review', 'retro']);
   });
 
-  it('keeps the original of each skill beside the manifest, for later merges', () => {
+  // No second copy of the skills in the project: the manifest is one file.
+  it('adds to .agents nothing but the skills and one manifest file', () => {
     const project = scratchProject(scratch());
     project.install();
-    expect(read(project.base('code-review/SKILL.md'))).toBe(SKILL_V1);
-    expect(read(project.base('retro/SKILL.md'))).toBe('hello\n');
+    expect(readdirSync(join(project.projectRoot, '.agents')).sort()).toEqual([
+      'skills',
+      'toolbox-skills.json',
+    ]);
+    expect(project.releases.asked).toEqual([]);
   });
 
   it('keeps the exec bit of a shipped script', () => {
@@ -90,8 +95,8 @@ describe('installSkills - installing again, same version', () => {
   it('changes nothing: no file and no manifest is rewritten', () => {
     const project = scratchProject(scratch());
     project.install();
-    const manifest = join(project.projectRoot, '.agents', 'toolbox', 'skills-manifest.json');
-    const watched = [project.local('retro/SKILL.md'), project.base('retro/SKILL.md'), manifest];
+    const manifest = join(project.projectRoot, '.agents', 'toolbox-skills.json');
+    const watched = [project.local('retro/SKILL.md'), manifest];
     const before = watched.map(read);
     for (const path of watched) utimesSync(path, LONG_AGO, LONG_AGO);
 
@@ -99,7 +104,7 @@ describe('installSkills - installing again, same version', () => {
 
     expect(statuses(reports)).toEqual({ 'code-review': 'unchanged', retro: 'unchanged' });
     expect(watched.map(read)).toEqual(before);
-    expect(watched.map((path) => statSync(path).mtime)).toEqual([LONG_AGO, LONG_AGO, LONG_AGO]);
+    expect(watched.map((path) => statSync(path).mtime)).toEqual([LONG_AGO, LONG_AGO]);
   });
 
   it('keeps a skill the project edited, and reports it as altered', () => {
@@ -111,7 +116,7 @@ describe('installSkills - installing again, same version', () => {
 
     expect(statuses(reports)).toEqual({ 'code-review': 'altered', retro: 'unchanged' });
     expect(read(project.local('code-review/SKILL.md'))).toBe(IN_JAVA);
-    expect(read(project.base('code-review/SKILL.md'))).toBe(SKILL_V1);
+    expect(project.releases.asked).toEqual([]);
   });
 
   it('does not read what a script run left in the folder as an edit', () => {
@@ -131,14 +136,6 @@ describe('installSkills - installing again, same version', () => {
     expect(statuses(reports).retro).toBe('removed');
     expect(existsSync(project.local('retro'))).toBe(false);
   });
-
-  it('puts back the original of an unedited skill when it went missing', () => {
-    const project = scratchProject(scratch());
-    project.install();
-    rmSync(project.base('retro'), { recursive: true });
-    project.install();
-    expect(read(project.base('retro/SKILL.md'))).toBe('hello\n');
-  });
 });
 
 describe('installSkills - the package moved to a new version', () => {
@@ -152,8 +149,9 @@ describe('installSkills - the package moved to a new version', () => {
     expect(reports[0]).toEqual({ name: 'code-review', status: 'updated', files: [] });
     expect(read(project.local('code-review/SKILL.md'))).toBe(REVISED);
     expect(existsSync(project.local('code-review/references/smells.md'))).toBe(false);
-    expect(read(project.base('code-review/SKILL.md'))).toBe(REVISED);
     expect(project.records()['code-review'].version).toBe('1.3.0');
+    // An unedited skill is replaced: there is nothing to merge, so nothing to fetch.
+    expect(project.releases.asked).toEqual([]);
   });
 
   it('moves the record of a skill whose content did not change to the new version', () => {
@@ -177,8 +175,9 @@ describe('installSkills - the package moved to a new version', () => {
       ['# Skill', '', 'first rule, in Java', '', 'middle', '', 'last rule, revised', ''].join('\n'),
     );
     expect(read(project.local('code-review/references/smells.md'))).toBe('smells v2\n');
-    expect(read(project.base('code-review/SKILL.md'))).toBe(REVISED);
     expect(project.records()['code-review'].version).toBe('1.3.0');
+    // The original came from the release the manifest named, and only that one.
+    expect(project.releases.asked).toEqual(['1.2.0']);
     // The edit is still an edit against the new original.
     expect(statuses(project.install('1.3.0'))['code-review']).toBe('altered');
   });
@@ -201,7 +200,6 @@ describe('installSkills - the package moved to a new version', () => {
     // The whole skill waits, not only the conflicting file: half an update
     // is a version of the skill nobody wrote.
     expect(read(project.local('code-review/references/smells.md'))).toBe('smells v1\n');
-    expect(read(project.base('code-review/SKILL.md'))).toBe(SKILL_V1);
     expect(project.records()['code-review']).toEqual(recordedBefore);
   });
 
@@ -234,22 +232,90 @@ describe('installSkills - the package moved to a new version', () => {
       ].join('\n'),
     );
     expect(read(project.local('code-review/references/smells.md'))).toBe('smells v2\n');
-    expect(read(project.base('code-review/SKILL.md'))).toBe(revised);
     expect(project.records()['code-review'].version).toBe('1.3.0');
   });
 
-  it('does not merge without the original: the edited skill is kept and reported', () => {
+  it('does not merge when the release cannot be fetched: the edited skill is kept, with the reason', () => {
     const project = scratchProject(scratch());
     project.install('1.2.0');
     writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
-    rmSync(project.base('code-review'), { recursive: true });
+    project.ship('code-review', { 'SKILL.md': REVISED });
+    project.releases.lose('1.2.0');
+
+    const reports = project.install('1.3.0');
+
+    expect(reports[0]).toEqual({
+      name: 'code-review',
+      status: 'no-original',
+      files: [],
+      reason: 'could not fetch v1.2.0: no network',
+    });
+    expect(read(project.local('code-review/SKILL.md'))).toBe(IN_JAVA);
+    expect(project.records()['code-review'].version).toBe('1.2.0');
+    // The skills that needed no merge are not held back by the failed fetch.
+    expect(statuses(reports).retro).toBe('unchanged');
+    expect(project.records().retro.version).toBe('1.3.0');
+  });
+
+  // A tag fetched by git still has the test files package.json keeps out of
+  // the package the project copied from.
+  it('reads the fetched release as the package shipped it, test files aside', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    writeFiles(join(project.projectRoot, '..', 'releases', '1.2.0', 'skills', 'code-review'), {
+      'scripts/test_validate.py': 'in the tag, never in the package',
+    });
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+    project.ship('code-review', { 'SKILL.md': REVISED, 'references/smells.md': 'smells v1\n' });
+
+    expect(statuses(project.install('1.3.0'))['code-review']).toBe('merged');
+    expect(existsSync(project.local('code-review/scripts/test_validate.py'))).toBe(false);
+  });
+
+  it('does not merge against a release that is not the one the manifest recorded', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    writeFiles(join(project.projectRoot, '..', 'releases', '1.2.0', 'skills', 'code-review'), {
+      'SKILL.md': 'the tag was moved',
+    });
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
     project.ship('code-review', { 'SKILL.md': REVISED });
 
     const reports = project.install('1.3.0');
 
-    expect(statuses(reports)['code-review']).toBe('base-lost');
+    expect(reports[0]).toEqual({
+      name: 'code-review',
+      status: 'no-original',
+      files: [],
+      reason: 'the 1.2.0 release holds other content for this skill than the manifest recorded',
+    });
     expect(read(project.local('code-review/SKILL.md'))).toBe(IN_JAVA);
-    expect(project.records()['code-review'].version).toBe('1.2.0');
+  });
+
+  it('does not merge when the release has no such skill', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    rmSync(join(project.projectRoot, '..', 'releases', '1.2.0', 'skills', 'code-review'), {
+      recursive: true,
+    });
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+    project.ship('code-review', { 'SKILL.md': REVISED });
+
+    expect(project.install('1.3.0')[0]).toEqual({
+      name: 'code-review',
+      status: 'no-original',
+      files: [],
+      reason: 'the 1.2.0 release has no skill named code-review',
+    });
+  });
+
+  it('disposes of what it fetched at the end of every run, a failed one included', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    expect(project.releases.disposals).toBe(1);
+    writeFileSync(join(project.projectRoot, '.agents', 'toolbox-skills.json'), '{ broken');
+    expect(() => project.install('1.2.0')).toThrow(/toolbox-skills\.json/);
+    expect(project.releases.disposals).toBe(2);
   });
 
   it('reports a recorded skill the package no longer ships, and leaves it in place', () => {
@@ -332,7 +398,6 @@ describe('installSkills - what was already in .agents/skills', () => {
     expect(statuses(reports).retro).toBe('pinned');
     expect(readlinkSync(project.local('retro'))).toBe('../../my-skills/retro');
     expect(project.records()).not.toHaveProperty('retro');
-    expect(existsSync(project.base('retro'))).toBe(false);
   });
 
   it("keeps the project's own folder with a shipped skill's name, and does not manage it", () => {
@@ -344,7 +409,6 @@ describe('installSkills - what was already in .agents/skills', () => {
     expect(statuses(reports).retro).toBe('unmanaged');
     expect(read(project.local('retro/SKILL.md'))).toBe('mine');
     expect(project.records()).not.toHaveProperty('retro');
-    expect(existsSync(project.base('retro'))).toBe(false);
   });
 
   it('adopts a folder that already equals the package, without rewriting it', () => {
@@ -357,6 +421,5 @@ describe('installSkills - what was already in .agents/skills', () => {
     expect(statuses(reports).retro).toBe('adopted');
     expect(statSync(project.local('retro/SKILL.md')).mtime).toEqual(LONG_AGO);
     expect(project.records().retro).toEqual({ version: '1.2.0', hash: RETRO_HASH });
-    expect(read(project.base('retro/SKILL.md'))).toBe('hello\n');
   });
 });

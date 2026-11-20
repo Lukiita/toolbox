@@ -41,6 +41,13 @@ export function shippedSkills(packageDir: string): string[] {
 // read as edited by the project the first time the script ran.
 const LEFTOVER = /(^|\/)__pycache__\/|\.pyc$|(^|\/)\.DS_Store$/;
 
+// What package.json's `files` keeps out of the package (`!skills/**/test_*.py`).
+// A release fetched by git still has them, and so does a checkout of this
+// repo: left in, the same skill would hash differently depending on where it
+// was read from, and a fetched original would never match its record. A test
+// holds this list to package.json's.
+const NOT_PACKAGED = /(^|\/)test_[^/]*\.py$/;
+
 function isDirectory(path: string): boolean {
   return existsSync(path) && statSync(path).isDirectory();
 }
@@ -54,19 +61,34 @@ function treeEntry(dir: string, entry: Dirent): [string, SkillFile] {
   return [relative(dir, path).split(sep).join('/'), readSkillFile(path)];
 }
 
+function readTree(dir: string, leftOut: readonly RegExp[]): SkillTree | undefined {
+  if (!isDirectory(dir)) return undefined;
+  const entries = readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => treeEntry(dir, entry))
+    .filter(([path]) => !leftOut.some((pattern) => pattern.test(path)));
+  return SkillTree.of(entries);
+}
+
 /**
- * Reads a skill's folder; undefined when there is no folder there.
+ * Reads a skill's folder in the project; undefined when there is no folder there.
  *
  * @example
  *   readSkillTree('/p/.agents/skills/retro')?.hash // => 'sha256:…'
  */
 export function readSkillTree(dir: string): SkillTree | undefined {
-  if (!isDirectory(dir)) return undefined;
-  const entries = readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => treeEntry(dir, entry))
-    .filter(([path]) => !LEFTOVER.test(path));
-  return SkillTree.of(entries);
+  return readTree(dir, [LEFTOVER]);
+}
+
+/**
+ * Reads a skill as a release ships it - from the installed package, a
+ * checkout or a fetched tag, always the same files.
+ *
+ * @example
+ *   readShippedSkillTree('/p/node_modules/@lukiita/toolbox/skills/retro')?.hash
+ */
+export function readShippedSkillTree(dir: string): SkillTree | undefined {
+  return readTree(dir, [LEFTOVER, NOT_PACKAGED]);
 }
 
 function writeSkillFile(path: string, file: SkillFile): void {

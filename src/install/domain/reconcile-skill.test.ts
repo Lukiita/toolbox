@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TextMerge } from './merge-skill-trees.mts';
-import { type ReconcileOptions, reconcileSkill, type SkillSides } from './reconcile-skill.mts';
+import {
+  type OriginalLookup,
+  type ReconcileOptions,
+  reconcileSkill,
+  type SkillSides,
+} from './reconcile-skill.mts';
 import { treeOf } from './skill-tree.fixtures.ts';
 
 const V1 = treeOf({ 'SKILL.md': 'v1' });
@@ -17,48 +22,59 @@ const cleanMerge: TextMerge = ({ ours, theirs }) => ({
 });
 const conflictingMerge: TextMerge = () => ({ text: '<<<<<<< marked', conflicted: true });
 
+/** The original costs a download: every case that settles without a merge must not ask for it. */
+const neverFetched = (version: string): OriginalLookup => {
+  throw new Error(`unexpected fetch of the ${version} original`);
+};
+const fetchedV1 = (): OriginalLookup => ({ found: true, tree: V1 });
+
 function options(overrides: Partial<ReconcileOptions> = {}): ReconcileOptions {
   return { version: '1.3.0', writeConflicts: false, mergeText: neverMerges, ...overrides };
 }
 
-/** A skill installed at 1.2.0 from V1, with the base on disk, unless a field says otherwise. */
+/** A skill installed at 1.2.0 from V1, unless a field says otherwise. */
 function recorded(overrides: Partial<SkillSides>): SkillSides {
   return {
     record: { version: '1.2.0', hash: V1.hash },
-    base: V1,
     local: V1,
     shipped: V1,
+    original: neverFetched,
     ...overrides,
   };
 }
 
+function unrecorded(local: SkillSides['local']): SkillSides {
+  return { record: undefined, local, shipped: V1, original: neverFetched };
+}
+
 describe('reconcileSkill - a skill the manifest does not know', () => {
   it('copies it when the project has no folder with its name', () => {
-    const outcome = reconcileSkill(
-      { record: undefined, local: undefined, base: undefined, shipped: V1 },
-      options(),
-    );
-    expect(outcome).toEqual({ synced: true, status: 'copied', local: V1, files: [] });
+    expect(reconcileSkill(unrecorded(undefined), options())).toEqual({
+      synced: true,
+      status: 'copied',
+      local: V1,
+      files: [],
+    });
   });
 
   it('adopts a folder that already equals what the package ships, writing nothing into it', () => {
-    const outcome = reconcileSkill(
-      { record: undefined, local: V1, base: undefined, shipped: V1 },
-      options(),
-    );
-    expect(outcome).toEqual({ synced: true, status: 'adopted', files: [] });
+    expect(reconcileSkill(unrecorded(V1), options())).toEqual({
+      synced: true,
+      status: 'adopted',
+      files: [],
+    });
   });
 
   it("leaves alone the project's own folder with a shipped skill's name", () => {
-    const outcome = reconcileSkill(
-      { record: undefined, local: EDITED, base: undefined, shipped: V1 },
-      options(),
-    );
-    expect(outcome).toEqual({ synced: false, status: 'unmanaged', files: [] });
+    expect(reconcileSkill(unrecorded(EDITED), options())).toEqual({
+      synced: false,
+      status: 'unmanaged',
+      files: [],
+    });
   });
 });
 
-describe('reconcileSkill - the package ships what the project already has as base', () => {
+describe('reconcileSkill - the package ships what the manifest recorded', () => {
   it('is unchanged when the project did not edit it', () => {
     expect(reconcileSkill(recorded({}), options())).toEqual({
       synced: true,
@@ -77,7 +93,7 @@ describe('reconcileSkill - the package ships what the project already has as bas
 });
 
 describe('reconcileSkill - the package ships a new version of the skill', () => {
-  it('updates a skill the project did not edit', () => {
+  it('updates a skill the project did not edit, without fetching anything', () => {
     expect(reconcileSkill(recorded({ shipped: V2 }), options())).toEqual({
       synced: true,
       status: 'updated',
@@ -86,9 +102,30 @@ describe('reconcileSkill - the package ships a new version of the skill', () => 
     });
   });
 
-  it('merges the new version into a skill the project edited, when the merge is clean', () => {
+  it('is unchanged when the project already holds exactly the new version', () => {
+    expect(reconcileSkill(recorded({ local: V2, shipped: V2 }), options())).toEqual({
+      synced: true,
+      status: 'unchanged',
+      files: [],
+    });
+  });
+
+  it('fetches the original of the recorded version to merge into a skill the project edited', () => {
+    const asked: string[] = [];
+    const original = (version: string): OriginalLookup => {
+      asked.push(version);
+      return { found: true, tree: V1 };
+    };
+    reconcileSkill(
+      recorded({ local: EDITED, shipped: V2, original }),
+      options({ mergeText: cleanMerge }),
+    );
+    expect(asked).toEqual(['1.2.0']);
+  });
+
+  it('merges the new version into the edited skill when the merge is clean', () => {
     const outcome = reconcileSkill(
-      recorded({ local: EDITED, shipped: V2 }),
+      recorded({ local: EDITED, shipped: V2, original: fetchedV1 }),
       options({ mergeText: cleanMerge }),
     );
     expect(outcome.status).toBe('merged');
@@ -101,7 +138,7 @@ describe('reconcileSkill - the package ships a new version of the skill', () => 
 
   it('writes nothing when the merge conflicts: the edit stays, the conflict is named', () => {
     const outcome = reconcileSkill(
-      recorded({ local: EDITED, shipped: V2 }),
+      recorded({ local: EDITED, shipped: V2, original: fetchedV1 }),
       options({ mergeText: conflictingMerge }),
     );
     expect(outcome).toEqual({ synced: false, status: 'conflict', files: ['SKILL.md'] });
@@ -109,7 +146,7 @@ describe('reconcileSkill - the package ships a new version of the skill', () => 
 
   it('writes the conflict markers only when asked to', () => {
     const outcome = reconcileSkill(
-      recorded({ local: EDITED, shipped: V2 }),
+      recorded({ local: EDITED, shipped: V2, original: fetchedV1 }),
       options({ mergeText: conflictingMerge, writeConflicts: true }),
     );
     expect(outcome.status).toBe('conflict-marked');
@@ -120,27 +157,42 @@ describe('reconcileSkill - the package ships a new version of the skill', () => 
     );
   });
 
-  it('is unchanged when the project already holds exactly the new version', () => {
-    expect(reconcileSkill(recorded({ local: V2, shipped: V2 }), options())).toEqual({
-      synced: true,
-      status: 'unchanged',
+  // Without the original there is no third side: a two-way "merge" would
+  // read the project's edits as deletions to undo.
+  it('does not merge when the original cannot be had, and says why', () => {
+    const outcome = reconcileSkill(
+      recorded({
+        local: EDITED,
+        shipped: V2,
+        original: () => ({ found: false, reason: 'could not reach the repository' }),
+      }),
+      options(),
+    );
+    expect(outcome).toEqual({
+      synced: false,
+      status: 'no-original',
       files: [],
+      reason: 'could not reach the repository',
     });
   });
 
-  // Without the original there is no third side: a two-way "merge" would
-  // read the project's edits as deletions to undo.
-  it.each([
-    ['is gone', undefined],
-    ['was edited', treeOf({ 'SKILL.md': 'not the original' })],
-  ])('does not merge when the stored base %s', (_, base) => {
-    const outcome = reconcileSkill(recorded({ local: EDITED, shipped: V2, base }), options());
-    expect(outcome).toEqual({ synced: false, status: 'base-lost', files: [] });
-  });
-
-  it('updates an unedited skill even with the base gone: the skill itself is the original', () => {
-    const outcome = reconcileSkill(recorded({ shipped: V2, base: undefined }), options());
-    expect(outcome.status).toBe('updated');
+  // A tag that was moved, or a release packed differently: merging against
+  // content the project never copied would invent edits.
+  it('does not merge against a fetched release that is not what the manifest recorded', () => {
+    const outcome = reconcileSkill(
+      recorded({
+        local: EDITED,
+        shipped: V2,
+        original: () => ({ found: true, tree: treeOf({ 'SKILL.md': 'not what was copied' }) }),
+      }),
+      options(),
+    );
+    expect(outcome).toEqual({
+      synced: false,
+      status: 'no-original',
+      files: [],
+      reason: 'the 1.2.0 release holds other content for this skill than the manifest recorded',
+    });
   });
 });
 
@@ -157,7 +209,12 @@ describe('reconcileSkill - what the project decided stays decided', () => {
   // back to the version they still have installed.
   it('does not touch a skill recorded by a newer toolbox than the one running', () => {
     const outcome = reconcileSkill(
-      { record: { version: '1.4.0', hash: V2.hash }, base: V2, local: V2, shipped: V1 },
+      {
+        record: { version: '1.4.0', hash: V2.hash },
+        local: V2,
+        shipped: V1,
+        original: neverFetched,
+      },
       options({ version: '1.3.0' }),
     );
     expect(outcome).toEqual({ synced: false, status: 'ahead', files: [] });

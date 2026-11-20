@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -38,7 +38,7 @@ describe('inspectSkills', () => {
       upstream: 'current',
       alteredFiles: [],
       behindFiles: [],
-      baseLost: false,
+      divergedFiles: [],
     });
   });
 
@@ -81,14 +81,17 @@ describe('inspectSkills', () => {
     });
   });
 
-  it('reads an edited skill with a new version waiting as both altered and behind', () => {
+  // With no copy of the original in the project, whose change each file
+  // carries cannot be told here: the files that differ are listed as one set.
+  it('reads an edited skill with a new version waiting as altered and behind, files not told apart', () => {
     const project = editedAndBehind();
 
     expect(inspect(project, '1.3.0')['code-review']).toMatchObject({
       local: 'altered',
       upstream: 'behind',
-      alteredFiles: ['SKILL.md'],
-      behindFiles: ['references/smells.md'],
+      alteredFiles: [],
+      behindFiles: [],
+      divergedFiles: ['SKILL.md', 'references/smells.md'],
     });
   });
 
@@ -115,6 +118,7 @@ describe('inspectSkills', () => {
       local: 'intact',
       upstream: 'ahead',
       behindFiles: [],
+      divergedFiles: [],
     });
   });
 
@@ -147,42 +151,58 @@ describe('inspectSkills', () => {
     expect(inspections['code-review'].upstream).toBe('untracked');
   });
 
-  it('flags a stored original that is gone, and names no files it cannot know', () => {
-    const project = scratchProject(scratch());
-    project.install();
-    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
-    rmSync(project.base('code-review'), { recursive: true });
-    expect(inspect(project)['code-review']).toMatchObject({
-      local: 'altered',
-      baseLost: true,
-      alteredFiles: [],
-    });
-  });
-
-  it('flags a stored original somebody edited', () => {
-    const project = scratchProject(scratch());
-    project.install();
-    writeFileSync(project.base('retro/SKILL.md'), 'edited the wrong copy');
-    expect(inspect(project).retro).toMatchObject({ local: 'intact', baseLost: true });
+  it('never fetches a release: it reads only what is on the machine', () => {
+    const project = editedAndBehind();
+    inspect(project, '1.3.0');
+    expect(project.releases.asked).toEqual([]);
   });
 });
 
 describe('skillDiffs', () => {
-  it('diffs each edited file from the original to the project, then each waiting file from the original to the package', () => {
-    const project = editedAndBehind();
+  function asking(inspection: SkillInspection): [string, string][] {
     const asked: [string, string][] = [];
-
-    const diffs = skillDiffs(inspect(project, '1.3.0')['code-review'], (from, to) => {
+    const diffs = skillDiffs(inspection, (from, to) => {
       asked.push([from, to]);
-      return `diff ${asked.length}`;
+      return 'a diff';
     });
+    expect(diffs).toEqual(asked.map(() => 'a diff'));
+    return asked;
+  }
 
-    expect(diffs).toEqual(['diff 1', 'diff 2']);
-    expect(asked).toEqual([
-      [project.base('code-review/SKILL.md'), project.local('code-review/SKILL.md')],
+  const shipped = (project: ScratchProject, path: string): string =>
+    join(project.packageDir, 'skills', path);
+
+  it("diffs an edited file from the package's, which is the original, to the project's", () => {
+    const project = scratchProject(scratch());
+    project.install();
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+
+    expect(asking(inspect(project)['code-review'])).toEqual([
+      [shipped(project, 'code-review/SKILL.md'), project.local('code-review/SKILL.md')],
+    ]);
+  });
+
+  it("diffs a waiting file from the project's, which is the original, to the package's", () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    project.ship('code-review', { 'SKILL.md': SKILL_V1, 'references/smells.md': 'smells v2\n' });
+
+    expect(asking(inspect(project, '1.3.0')['code-review'])).toEqual([
       [
-        project.base('code-review/references/smells.md'),
-        join(project.packageDir, 'skills', 'code-review', 'references', 'smells.md'),
+        project.local('code-review/references/smells.md'),
+        shipped(project, 'code-review/references/smells.md'),
+      ],
+    ]);
+  });
+
+  it('diffs every file from the project to the package when both moved', () => {
+    const project = editedAndBehind();
+
+    expect(asking(inspect(project, '1.3.0')['code-review'])).toEqual([
+      [project.local('code-review/SKILL.md'), shipped(project, 'code-review/SKILL.md')],
+      [
+        project.local('code-review/references/smells.md'),
+        shipped(project, 'code-review/references/smells.md'),
       ],
     ]);
   });
@@ -190,7 +210,6 @@ describe('skillDiffs', () => {
   it('has nothing to diff for an intact, current skill', () => {
     const project = scratchProject(scratch());
     project.install();
-    mkdirSync(project.local('.'), { recursive: true });
-    expect(skillDiffs(inspect(project).retro, () => 'never')).toEqual([]);
+    expect(asking(inspect(project).retro)).toEqual([]);
   });
 });

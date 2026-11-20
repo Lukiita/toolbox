@@ -1,17 +1,16 @@
 // Where the installer reads and writes, in one place (ADR-0003).
 //
-//   <package>/skills/<name>/                 what the running toolbox ships
-//   .agents/skills/<name>/                   the project's copy - its to edit
-//   .agents/toolbox/base/<name>/             the original of that copy, unedited
-//   .agents/toolbox/skills-manifest.json     version + hash of each original
+//   <package>/skills/<name>/      what the running toolbox ships
+//   .agents/skills/<name>/        the project's copy - its to edit
+//   .agents/toolbox-skills.json   the manifest: version + hash of each original
 //
-// The base lives outside `.agents/skills/` so no agent lists it as a skill.
+// The originals themselves are not kept in the project: a merge reads them
+// from the release the manifest names (`git-past-releases.mts`).
 import { join } from 'node:path';
 export const SKILLS_DIR = join('.agents', 'skills');
-export const BASE_DIR = join('.agents', 'toolbox', 'base');
-export const MANIFEST_FILE = join('.agents', 'toolbox', 'skills-manifest.json');
+export const MANIFEST_FILE = join('.agents', 'toolbox-skills.json');
 /**
- * The three folders of one skill.
+ * The two folders of one skill.
  *
  * @example
  *   skillPaths({ packageDir, projectRoot: '/p' }, 'retro').local // => '/p/.agents/skills/retro'
@@ -19,7 +18,6 @@ export const MANIFEST_FILE = join('.agents', 'toolbox', 'skills-manifest.json');
 export function skillPaths({ packageDir, projectRoot }, name) {
     return {
         local: join(projectRoot, SKILLS_DIR, name),
-        base: join(projectRoot, BASE_DIR, name),
         shipped: join(packageDir, 'skills', name),
     };
 }

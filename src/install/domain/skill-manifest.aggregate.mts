@@ -25,9 +25,10 @@ const FOLDER_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 
 const README =
   'Written by `toolbox install` (ADR-0003 of @lukiita/toolbox). For each skill copied into ' +
-  '.agents/skills/: the toolbox version it came from and the hash of the original. base/ beside ' +
-  'this file holds those originals, for the three-way merge on update. Edit a skill in ' +
-  '.agents/skills/<name>; never edit this file or base/. `toolbox skills` lists what differs.';
+  '.agents/skills/: the toolbox version it came from and the hash of the original. That is how ' +
+  'an install tells a skill the project edited from one it did not, and which release to fetch ' +
+  'the original from for a three-way merge. Edit a skill in .agents/skills/<name>, never this ' +
+  'file. `toolbox skills` lists what differs.';
 
 function assertFolderName(name: string): void {
   if (FOLDER_NAME.test(name)) return;
@@ -91,7 +92,7 @@ export class SkillManifest {
    * field and the value when the shape is wrong.
    *
    * @example
-   *   SkillManifest.parse(readFileSync('.agents/toolbox/skills-manifest.json', 'utf8'))
+   *   SkillManifest.parse(readFileSync('.agents/toolbox-skills.json', 'utf8'))
    */
   public static parse(json: string): SkillManifest {
     const manifest = new SkillManifest();

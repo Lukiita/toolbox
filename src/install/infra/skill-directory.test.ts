@@ -14,7 +14,13 @@ import { describe, expect, it } from 'vitest';
 
 import { treeOf } from '../domain/skill-tree.fixtures.ts';
 import { scratchDirs } from './scratch-dirs.fixtures.ts';
-import { readSkillTree, shippedSkills, skillLinkKind, writeSkillTree } from './skill-directory.mts';
+import {
+  readShippedSkillTree,
+  readSkillTree,
+  shippedSkills,
+  skillLinkKind,
+  writeSkillTree,
+} from './skill-directory.mts';
 
 const scratch = scratchDirs('toolbox-skill-dir-');
 
@@ -74,6 +80,49 @@ describe('readSkillTree', () => {
     put(root, 'retro/scripts/stray.pyc', 'bytecode');
     put(root, 'retro/.DS_Store', 'finder');
     expect(readSkillTree(join(root, 'retro'))?.paths()).toEqual(['SKILL.md']);
+  });
+});
+
+describe('readShippedSkillTree', () => {
+  // The installed package has no test_*.py (package.json's `files`); a tag
+  // fetched by git and a checkout of this repo do. Read alike, the three
+  // give one hash - or a fetched original would never match its record.
+  it('reads a skill the same from a package and from a git tree that still has its test files', () => {
+    const root = scratch();
+    put(root, 'packed/SKILL.md', 'x');
+    put(root, 'packed/scripts/validate.py', 'v');
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/scripts/validate.py', 'v');
+    put(root, 'tree/scripts/test_validate.py', 't');
+    put(root, 'tree/scripts/__pycache__/validate.cpython-312.pyc', 'bytecode');
+    const tree = readShippedSkillTree(join(root, 'tree'));
+    expect(tree?.paths()).toEqual(['SKILL.md', 'scripts/validate.py']);
+    expect(tree?.hash).toBe(readShippedSkillTree(join(root, 'packed'))?.hash);
+  });
+
+  it('leaves out exactly what package.json keeps out of the package', () => {
+    const manifest = JSON.parse(
+      readFileSync(join(import.meta.dirname, '..', '..', '..', 'package.json'), 'utf8'),
+    ) as { files: string[] };
+    // A new exclusion here needs the same exclusion in NOT_PACKAGED or LEFTOVER.
+    expect(manifest.files.filter((entry) => entry.startsWith('!skills/'))).toEqual([
+      '!skills/**/test_*.py',
+      '!skills/**/__pycache__',
+    ]);
+  });
+
+  it("keeps a test file in the project's own copy: there it is the project's file", () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'x');
+    put(root, 'retro/scripts/test_mine.py', 't');
+    expect(readSkillTree(join(root, 'retro'))?.paths()).toEqual([
+      'SKILL.md',
+      'scripts/test_mine.py',
+    ]);
+  });
+
+  it('is undefined when there is no folder', () => {
+    expect(readShippedSkillTree(join(scratch(), 'absent'))).toBeUndefined();
   });
 });
 

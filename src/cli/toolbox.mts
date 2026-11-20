@@ -23,6 +23,7 @@ import type { ResolvedToolboxConfig } from '../config/toolbox-config.mts';
 import { inspectSkills, skillDiffs } from '../install/application/inspect-skills.mts';
 import { installSkills } from '../install/application/install-skills.mts';
 import { gitFileDiff } from '../install/infra/git-file-diff.mts';
+import { GitPastReleases, repositoryCloneUrl } from '../install/infra/git-past-releases.mts';
 import { gitTextMerge } from '../install/infra/git-text-merge.mts';
 import { inspectionLines, installLine } from '../install/presentation/skill-report-lines.mts';
 import { decidePrePush, parsePushedRefs, type PrePushPorts } from '../pre-push/pre-push.mts';
@@ -105,11 +106,13 @@ function prePush(root: string, config: ResolvedToolboxConfig): number {
 // package.json of its own (ADR-0003).
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-function packageVersion(): string {
-  const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
-    version: string;
-  };
-  return manifest.version;
+interface PackageManifest {
+  version: string;
+  repository: unknown;
+}
+
+function packageManifest(): PackageManifest {
+  return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')) as PackageManifest;
 }
 
 // A mistyped flag fails instead of being ignored: `--write-conflict` read as
@@ -121,12 +124,16 @@ function assertKnownFlags(args: readonly string[], known: readonly string[]): vo
 
 function install(root: string, args: string[]): number {
   assertKnownFlags(args, ['--write-conflicts']);
+  const { version, repository } = packageManifest();
   const reports = installSkills({
     packageDir: PACKAGE_DIR,
     projectRoot: root,
-    version: packageVersion(),
+    version,
     writeConflicts: args.includes('--write-conflicts'),
     mergeText: gitTextMerge,
+    // The original of an edited skill comes from the tag of the release it
+    // was copied from, in the package's own repository (ADR-0003).
+    pastReleases: new GitPastReleases(repositoryCloneUrl(repository)),
   });
   for (const report of reports) console.log(installLine(report));
   return 0;
@@ -137,7 +144,7 @@ function skills(root: string, args: string[]): number {
   const inspections = inspectSkills({
     packageDir: PACKAGE_DIR,
     projectRoot: root,
-    version: packageVersion(),
+    version: packageManifest().version,
   });
   for (const inspection of inspections) {
     for (const line of inspectionLines(inspection)) console.log(line);
