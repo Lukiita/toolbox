@@ -1,0 +1,196 @@
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { scratchDirs } from '../infra/scratch-dirs.fixtures.ts';
+
+import { inspectSkills, type SkillInspection, skillDiffs } from './inspect-skills.mts';
+import { scratchProject, type ScratchProject, SKILL_V1, writeFiles } from './install.fixtures.ts';
+
+const scratch = scratchDirs('toolbox-install-');
+
+function inspect(project: ScratchProject, version = '1.2.0'): Record<string, SkillInspection> {
+  const { packageDir, projectRoot } = project;
+  const inspections = inspectSkills({ packageDir, projectRoot, version });
+  return Object.fromEntries(inspections.map((inspection) => [inspection.name, inspection]));
+}
+
+const IN_JAVA = SKILL_V1.replace('first rule', 'first rule, in Java');
+
+/** `code-review` installed at 1.2.0, its SKILL.md edited, and a package that now ships a new smells.md. */
+function editedAndBehind(): ScratchProject {
+  const project = scratchProject(scratch());
+  project.install('1.2.0');
+  writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+  project.ship('code-review', { 'SKILL.md': SKILL_V1, 'references/smells.md': 'smells v2\n' });
+  return project;
+}
+
+describe('inspectSkills', () => {
+  it('reads a freshly installed skill as intact and current, at its recorded version', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    expect(inspect(project).retro).toMatchObject({
+      name: 'retro',
+      version: '1.2.0',
+      local: 'intact',
+      upstream: 'current',
+      alteredFiles: [],
+      behindFiles: [],
+      baseLost: false,
+    });
+  });
+
+  it('lists the skills by name, shipped and recorded alike', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    rmSync(join(project.packageDir, 'skills', 'retro'), { recursive: true });
+    project.ship('zeta', { 'SKILL.md': 'z' });
+    const { packageDir, projectRoot } = project;
+    const names = inspectSkills({ packageDir, projectRoot, version: '1.2.0' }).map((i) => i.name);
+    expect(names).toEqual(['code-review', 'retro', 'zeta']);
+  });
+
+  it('names the files the project edited, added and deleted', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+    writeFiles(project.local('code-review'), { 'references/java.md': 'j' });
+    rmSync(project.local('code-review/references/smells.md'));
+
+    expect(inspect(project)['code-review']).toMatchObject({
+      local: 'altered',
+      upstream: 'current',
+      alteredFiles: ['SKILL.md', 'references/java.md', 'references/smells.md'],
+      behindFiles: [],
+    });
+  });
+
+  it('reads as behind a skill the package ships with other content, naming the files', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    project.ship('code-review', { 'SKILL.md': SKILL_V1, 'references/smells.md': 'smells v2\n' });
+
+    expect(inspect(project, '1.3.0')['code-review']).toMatchObject({
+      version: '1.2.0',
+      local: 'intact',
+      upstream: 'behind',
+      alteredFiles: [],
+      behindFiles: ['references/smells.md'],
+    });
+  });
+
+  it('reads an edited skill with a new version waiting as both altered and behind', () => {
+    const project = editedAndBehind();
+
+    expect(inspect(project, '1.3.0')['code-review']).toMatchObject({
+      local: 'altered',
+      upstream: 'behind',
+      alteredFiles: ['SKILL.md'],
+      behindFiles: ['references/smells.md'],
+    });
+  });
+
+  it('reads a deleted skill as removed', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    rmSync(project.local('retro'), { recursive: true });
+    expect(inspect(project).retro).toMatchObject({ local: 'removed', upstream: 'current' });
+  });
+
+  it('reads a recorded skill the package no longer ships as retired', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    rmSync(join(project.packageDir, 'skills', 'retro'), { recursive: true });
+    expect(inspect(project).retro).toMatchObject({ local: 'intact', upstream: 'retired' });
+  });
+
+  it('reads a skill recorded by a newer toolbox as ahead, not behind', () => {
+    const project = scratchProject(scratch());
+    project.ship('retro', { 'SKILL.md': 'new\n' });
+    project.install('1.3.0');
+    project.ship('retro', { 'SKILL.md': 'hello\n' });
+    expect(inspect(project, '1.2.0').retro).toMatchObject({
+      local: 'intact',
+      upstream: 'ahead',
+      behindFiles: [],
+    });
+  });
+
+  it('reads a shipped skill the project never installed as not installed', () => {
+    const project = scratchProject(scratch());
+    expect(inspect(project).retro).toMatchObject({
+      version: undefined,
+      local: 'not-installed',
+      upstream: 'untracked',
+    });
+  });
+
+  it("reads the project's own folder, link and a link-era link each as what it is", () => {
+    const project = scratchProject(scratch());
+    project.ship('pinned-one', { 'SKILL.md': 'p' });
+    writeFiles(project.local('retro'), { 'SKILL.md': 'mine' });
+    writeFiles(join(project.projectRoot, 'my-skills', 'pinned-one'), { 'SKILL.md': 'pin' });
+    symlinkSync('../../my-skills/pinned-one', project.local('pinned-one'), 'dir');
+    symlinkSync(
+      '../../node_modules/@lukiita/toolbox/skills/code-review',
+      project.local('code-review'),
+      'dir',
+    );
+
+    const inspections = inspect(project);
+
+    expect(inspections.retro.local).toBe('unmanaged');
+    expect(inspections['pinned-one'].local).toBe('pinned');
+    expect(inspections['code-review'].local).toBe('linked');
+    expect(inspections['code-review'].upstream).toBe('untracked');
+  });
+
+  it('flags a stored original that is gone, and names no files it cannot know', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+    rmSync(project.base('code-review'), { recursive: true });
+    expect(inspect(project)['code-review']).toMatchObject({
+      local: 'altered',
+      baseLost: true,
+      alteredFiles: [],
+    });
+  });
+
+  it('flags a stored original somebody edited', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    writeFileSync(project.base('retro/SKILL.md'), 'edited the wrong copy');
+    expect(inspect(project).retro).toMatchObject({ local: 'intact', baseLost: true });
+  });
+});
+
+describe('skillDiffs', () => {
+  it('diffs each edited file from the original to the project, then each waiting file from the original to the package', () => {
+    const project = editedAndBehind();
+    const asked: [string, string][] = [];
+
+    const diffs = skillDiffs(inspect(project, '1.3.0')['code-review'], (from, to) => {
+      asked.push([from, to]);
+      return `diff ${asked.length}`;
+    });
+
+    expect(diffs).toEqual(['diff 1', 'diff 2']);
+    expect(asked).toEqual([
+      [project.base('code-review/SKILL.md'), project.local('code-review/SKILL.md')],
+      [
+        project.base('code-review/references/smells.md'),
+        join(project.packageDir, 'skills', 'code-review', 'references', 'smells.md'),
+      ],
+    ]);
+  });
+
+  it('has nothing to diff for an intact, current skill', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    mkdirSync(project.local('.'), { recursive: true });
+    expect(skillDiffs(inspect(project).retro, () => 'never')).toEqual([]);
+  });
+});

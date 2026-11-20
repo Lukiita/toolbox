@@ -3,7 +3,9 @@
 //
 //   toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]
 //   toolbox pre-push        (git's pre-push stdin; install as .husky/pre-push)
-//   toolbox install         (links the shipped skills into .agents/skills/)
+//   toolbox install [--write-conflicts]
+//                           (copies the shipped skills into .agents/skills/, ADR-0003)
+//   toolbox skills [--diff] (which skills the project edited, which are behind the package)
 //
 // Exit codes: 0 ok, 1 the ratchet failed, 2 usage error - whoever reads a CI
 // log needs to tell the last two apart.
@@ -11,11 +13,15 @@
 // Ships built (`dist/`, committed): Node refuses to strip types under
 // node_modules, and pnpm 12 refuses a git dependency's build script unless the
 // consumer allowlists it per commit - so nothing runs on install (ADR-0001).
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadToolboxConfig } from "../config/load-config.mjs";
-import { linkSkills } from "../install/link-skills.mjs";
+import { inspectSkills, skillDiffs } from "../install/application/inspect-skills.mjs";
+import { installSkills } from "../install/application/install-skills.mjs";
+import { gitFileDiff } from "../install/infra/git-file-diff.mjs";
+import { gitTextMerge } from "../install/infra/git-text-merge.mjs";
+import { inspectionLines, installLine } from "../install/presentation/skill-report-lines.mjs";
 import { decidePrePush, parsePushedRefs } from "../pre-push/pre-push.mjs";
 import { parseArgs, UsageError } from "../quality-gate/args.mjs";
 import { runQualityGate } from "../quality-gate/run-gate.mjs";
@@ -23,7 +29,8 @@ import * as git from "./git-ports.mjs";
 const USAGE = 'Usage: toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]\n' +
     '       (--update-baseline re-freezes and exits; --baseline-from and --out are ignored with it)\n' +
     '       toolbox pre-push\n' +
-    '       toolbox install';
+    '       toolbox install [--write-conflicts]\n' +
+    '       toolbox skills [--diff]';
 function quality(root, config, args) {
     let options;
     try {
@@ -79,39 +86,67 @@ function prePush(root, config) {
         console.log(line);
     return decision.exitCode;
 }
-// The package as the project sees it (`node_modules/@lukiita/toolbox`), so the
-// links stay relative to the project and survive a moved pnpm store. Only a
-// checkout of the toolbox itself, run from inside it, falls back to its own path.
-function installedPackageDir(root) {
-    const inProject = resolve(root, 'node_modules', '@lukiita', 'toolbox');
-    if (existsSync(inProject))
-        return inProject;
-    return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+// The package that is running: its `skills/` is what gets copied and its
+// version is what gets recorded - whether it runs from the project's
+// node_modules or from a `pnpm dlx` / `npx` cache, in a repository with no
+// package.json of its own (ADR-0003).
+const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+function packageVersion() {
+    const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'));
+    return manifest.version;
 }
-function install(root) {
-    const summary = linkSkills({ packageDir: installedPackageDir(root), projectRoot: root });
-    for (const name of summary.linked)
-        console.log(`link:   .agents/skills/${name}`);
-    for (const name of summary.unchanged)
-        console.log(`ok:     .agents/skills/${name}`);
-    for (const name of summary.kept) {
-        console.log(`kept:   .agents/skills/${name} (the project's own directory; not replaced)`);
+// A mistyped flag fails instead of being ignored: `--write-conflict` read as
+// "no flag" would leave the conflict unwritten and say nothing.
+function assertKnownFlags(args, known) {
+    const unknown = args.find((arg) => !known.includes(arg));
+    if (unknown !== undefined)
+        throw new UsageError(`unknown argument: ${unknown}`);
+}
+function install(root, args) {
+    assertKnownFlags(args, ['--write-conflicts']);
+    const reports = installSkills({
+        packageDir: PACKAGE_DIR,
+        projectRoot: root,
+        version: packageVersion(),
+        writeConflicts: args.includes('--write-conflicts'),
+        mergeText: gitTextMerge,
+    });
+    for (const report of reports)
+        console.log(installLine(report));
+    return 0;
+}
+function skills(root, args) {
+    assertKnownFlags(args, ['--diff']);
+    const inspections = inspectSkills({
+        packageDir: PACKAGE_DIR,
+        projectRoot: root,
+        version: packageVersion(),
+    });
+    for (const inspection of inspections) {
+        for (const line of inspectionLines(inspection))
+            console.log(line);
+        if (args.includes('--diff'))
+            for (const diff of skillDiffs(inspection, gitFileDiff))
+                console.log(diff);
     }
     return 0;
 }
+// `install` and `skills` never read the config: a project with no
+// toolbox.config.ts (or a typo in it) still gets its skills (found in review).
+const COMMANDS = new Map([
+    ['install', install],
+    ['skills', skills],
+    ['quality', async (root, args) => quality(root, await loadToolboxConfig(root), args)],
+    ['pre-push', async (root) => prePush(root, await loadToolboxConfig(root))],
+]);
 async function main(argv) {
     const [command, ...rest] = argv;
-    const root = git.repoRoot(process.cwd());
-    // `install` is the project's postinstall: it must not depend on a config it
-    // never reads, or a config typo breaks `pnpm install` (found in review).
-    if (command === 'install')
-        return install(root);
-    if (command === 'quality')
-        return quality(root, await loadToolboxConfig(root), rest);
-    if (command === 'pre-push')
-        return prePush(root, await loadToolboxConfig(root));
-    console.error(`unknown command: ${command ?? '(none)'}\n${USAGE}`);
-    return 2;
+    const run = COMMANDS.get(command ?? '');
+    if (!run) {
+        console.error(`unknown command: ${command ?? '(none)'}\n${USAGE}`);
+        return 2;
+    }
+    return run(git.repoRoot(process.cwd()), rest);
 }
 // A setup error (bad config, missing baseline or coverage json, jscpd not
 // found) is not "the ratchet failed": it exits 2 with its own message, so a
@@ -120,6 +155,7 @@ try {
     process.exitCode = await main(process.argv.slice(2));
 }
 catch (e) {
-    console.error(`toolbox: ${e instanceof Error ? e.message : String(e)}`);
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(e instanceof UsageError ? `${message}\n${USAGE}` : `toolbox: ${message}`);
     process.exitCode = 2;
 }
