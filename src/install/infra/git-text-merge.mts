@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { TextMerge, TextMergeResult, TextSides } from '../domain/merge-skill-trees.mts';
+import { GIT_OUTPUT_LIMIT } from './git-output-limit.mts';
 
 // `--diff3` writes the base between the two sides of a conflict: whoever
 // resolves it sees what each side changed, not only where they ended up.
@@ -26,7 +27,7 @@ function runMergeFile(dir: string): TextMergeResult {
   const run = spawnSync('git', [...MERGE_FILE, 'ours', 'base', 'theirs'], {
     cwd: dir,
     encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
+    maxBuffer: GIT_OUTPUT_LIMIT,
   });
   if (!isMergeAnswer(run.status)) {
     // No stderr means git never started; the spawn error says why.

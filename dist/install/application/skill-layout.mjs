@@ -8,5 +8,7 @@
 // The originals themselves are not kept in the project: a merge reads them
 // from the release the manifest names (`infra/git-past-releases.mts`).
 import { join } from 'node:path';
+/** The folder of the package that holds the skills it ships: `<package>/skills/<name>/`. */
+export const PACKAGE_SKILLS_DIR = 'skills';
 export const SKILLS_DIR = join('.agents', 'skills');
 export const MANIFEST_FILE = join('.agents', 'toolbox-skills.json');

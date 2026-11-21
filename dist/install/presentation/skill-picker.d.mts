@@ -43,6 +43,15 @@ export declare function keyOf(name: string | undefined, ctrl: boolean): PickerKe
  */
 export declare function pickedSelection({ entries, picked }: PickerState): SkillSelection;
 /**
+ * The skills the package ships, one per line with a line about each: what a
+ * script or an agent is shown when a project has no skill yet and named
+ * none. A person at a terminal gets the picker instead.
+ *
+ * @example
+ *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
+ */
+export declare function catalogLines(catalog: readonly CatalogEntry[], version: string): string[];
+/**
  * What the picker shows: the list while it is open, one line once it closed.
  *
  * @example

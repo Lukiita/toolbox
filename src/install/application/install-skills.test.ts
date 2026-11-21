@@ -204,6 +204,19 @@ describe('installSkills - the project picks its skills', () => {
     expect(statuses(reports)).toEqual({ 'code-review': 'failed', retro: 'available' });
   });
 
+  // The line a deleted skill prints says `toolbox install <name>` brings it back.
+  it('brings a deleted skill back in the same run it is asked for by name', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    rmSync(project.local('retro'), { recursive: true });
+
+    const reports = project.install('1.2.0', only('retro'));
+
+    expect(statuses(reports).retro).toBe('copied');
+    expect(read(project.local('retro/SKILL.md'))).toBe('hello\n');
+    expect(project.records().retro.version).toBe('1.2.0');
+  });
+
   it('refuses a name the package does not ship, before touching anything', () => {
     const project = scratchProject(scratch());
     expect(() => project.install('1.2.0', only('retro', 'no-such-skill'))).toThrow(
@@ -306,7 +319,10 @@ describe('installSkills - a run that does not finish', () => {
   it('does not read a folder a dead run left swapped out as deleted by the project', () => {
     const project = scratchProject(scratch());
     project.install();
+    // What the swap leaves when it dies after its first rename: the folder
+    // aside, the marker naming it, and the new folder still in staging.
     renameSync(project.local('retro'), project.local('retro.toolbox-old'));
+    writeFileSync(project.local('retro.toolbox-swap'), 'retro.toolbox-old');
     writeFiles(project.local('retro.toolbox-staging'), { 'SKILL.md': 'never moved in' });
 
     const reports = project.install();
@@ -552,6 +568,29 @@ describe('installSkills - the package moved to a new version', () => {
     expect(project.releases.disposals).toBe(2);
   });
 
+  // The project added a file `notes`; the new version adds `notes/x.md`. No
+  // disk holds both: the skill fails with the two names, and nothing is left
+  // half-written beside it.
+  it('fails, with the reason, a merge that would need a file and a folder under one name', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    writeFiles(project.local('code-review'), { notes: 'mine' });
+    project.ship('code-review', {
+      'SKILL.md': SKILL_V1,
+      'references/smells.md': 'smells v1\n',
+      'notes/x.md': 'theirs',
+    });
+
+    const report = project.install('1.3.0')[0];
+
+    expect(report).toMatchObject({ name: 'code-review', status: 'failed' });
+    expect(report.reason).toBe(
+      'skill file path: "notes" is a file and also the folder of "notes/x.md"; a skill cannot hold both',
+    );
+    expect(read(project.local('code-review/notes'))).toBe('mine');
+    expect(readdirSync(project.local('.')).sort()).toEqual(['code-review', 'retro']);
+  });
+
   // Saved in Windows-1252: 0xE7 0xE3 for "çã", which is not valid UTF-8.
   it('merges a text file that is not UTF-8 without rewriting a byte of it', () => {
     const project = scratchProject(scratch());
@@ -684,6 +723,20 @@ describe('installSkills - what was already in .agents/skills', () => {
 
     expectACopyOfRetro(project, reports);
     expect(project.records().retro.version).toBe('1.2.0');
+  });
+
+  // The copy fails (a file of the shipped skill cannot be read): the link
+  // must still be there, or the next run reads the skill as deleted.
+  it('keeps the link of a 1.x project when its copy cannot be made, and copies it once it can', () => {
+    const project = scratchProject(scratch());
+    linkAsV1(project, 'retro');
+    project.ship('retro', { 'SKILL.md': 'hello\n', 'bad\\name.md': 'x' });
+
+    expect(statuses(project.install()).retro).toBe('failed');
+    expect(lstatSync(project.local('retro')).isSymbolicLink()).toBe(true);
+
+    project.ship('retro', { 'SKILL.md': 'hello\n' });
+    expectACopyOfRetro(project, project.install());
   });
 
   // The links are the selection of a 1.x project: only they become copies.

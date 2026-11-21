@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 import type { FileDiff } from '../application/ports.mts';
+import { GIT_OUTPUT_LIMIT } from './git-output-limit.mts';
 
 // A file present on one side only (added or deleted by the project, or by the
 // new version) is diffed against nothing - git's own spelling of "no file".
@@ -23,7 +24,7 @@ export const gitFileDiff: FileDiff = (from: string, to: string): string => {
   const run = spawnSync(
     'git',
     ['diff', '--no-index', '--no-color', '--', orNothing(from), orNothing(to)],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    { encoding: 'utf8', maxBuffer: GIT_OUTPUT_LIMIT },
   );
   return run.stdout;
 };

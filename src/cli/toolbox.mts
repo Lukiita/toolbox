@@ -34,10 +34,11 @@ import {
   inspectSkills,
   installLine,
   installSkills,
-  InstallUsageError,
   parseInstallArguments,
+  parseSkillsArguments,
   repositoryCloneUrl,
   skillCatalog,
+  SkillCommandUsageError,
   skillDiffs,
   type SkillSelection,
 } from '../install/index.mts';
@@ -131,13 +132,6 @@ function packageManifest(): PackageManifest {
   return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')) as PackageManifest;
 }
 
-// A mistyped flag fails instead of being ignored: `--write-conflict` read as
-// "no flag" would leave the conflict unwritten and say nothing.
-function assertKnownFlags(args: readonly string[], known: readonly string[]): void {
-  const unknown = args.find((arg) => !known.includes(arg));
-  if (unknown !== undefined) throw new UsageError(`unknown argument: ${unknown}`);
-}
-
 function skillFolders(root: string): DiskSkillFolders {
   return new DiskSkillFolders({ packageDir: PACKAGE_DIR, projectRoot: root });
 }
@@ -196,14 +190,14 @@ async function install(root: string, args: string[]): Promise<number> {
 }
 
 function skills(root: string, args: string[]): number {
-  assertKnownFlags(args, ['--diff']);
+  const { diff } = parseSkillsArguments(args);
   const inspections = inspectSkills({
     folders: skillFolders(root),
     version: packageManifest().version,
   });
   for (const inspection of inspections) {
     for (const line of inspectionLines(inspection)) console.log(line);
-    if (args.includes('--diff')) {
+    if (diff) {
       for (const diff of skillDiffs(inspection, gitFileDiff)) console.log(diff);
     }
   }
@@ -239,7 +233,7 @@ function failure(e: unknown): { message: string; exitCode: number } {
   // Closed without confirming: the picker already said so on its last line.
   if (e instanceof Cancelled) return { message: '', exitCode: 130 };
   const message = e instanceof Error ? e.message : String(e);
-  const usage = e instanceof UsageError || e instanceof InstallUsageError;
+  const usage = e instanceof UsageError || e instanceof SkillCommandUsageError;
   return { message: usage ? `${message}\n${USAGE}` : `toolbox: ${message}`, exitCode: 2 };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  catalogLines,
   keyOf,
   pickedSelection,
   pickerLines,
@@ -124,5 +125,16 @@ describe('the skill picker - what is drawn', () => {
     ]);
     expect(pickerLines(after('confirm'), frame)).toEqual(['No skill picked.']);
     expect(pickerLines(after('toggle', 'cancel'), frame)).toEqual(['Cancelled: nothing picked.']);
+  });
+});
+
+describe('catalogLines', () => {
+  it('lists the skills for whoever cannot use the picker, in the same columns', () => {
+    expect(catalogLines(CATALOG, '2.0.0')).toEqual([
+      'Skills in @lukiita/toolbox 2.0.0:',
+      '  code-review    Reviews the branch diff.',
+      '  ddd-tactical',
+      '  retro          Looks back at a feature.',
+    ]);
   });
 });

@@ -7,6 +7,7 @@
 import { emitKeypressEvents } from 'node:readline';
 
 import {
+  type CatalogEntry,
   keyOf,
   pickedSelection,
   pickerLines,
@@ -15,8 +16,6 @@ import {
   type SkillSelection,
   startPicker,
 } from '../install/index.mts';
-
-type CatalogEntries = Parameters<typeof startPicker>[0];
 
 interface Keypress {
   name?: string;
@@ -32,6 +31,82 @@ function eraseLines(count: number): string {
   return count > 0 ? `\x1b[${count}A\x1b[0J` : '';
 }
 
+/** One picker on the process's terminal, from the first frame to the answer. */
+class TerminalPicker {
+  private state: PickerState;
+  private readonly version: string;
+  private drawn = 0;
+
+  public constructor(catalog: readonly CatalogEntry[], version: string) {
+    this.state = startPicker(catalog);
+    this.version = version;
+  }
+
+  /** Resolves with what was picked, or with undefined when the picker was closed without confirming. */
+  public run(): Promise<SkillSelection | undefined> {
+    return new Promise((resolve, reject) => {
+      const onKey = (_text: string | undefined, key: Keypress = {}): void => {
+        try {
+          if (this.press(key)) this.close(onKey, resolve);
+        } catch (e) {
+          this.restore(onKey);
+          reject(e);
+        }
+      };
+      this.open(onKey);
+    });
+  }
+
+  private open(onKey: (text: string | undefined, key?: Keypress) => void): void {
+    emitKeypressEvents(process.stdin);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on('keypress', onKey);
+    // Whatever ends the process while the list is open, the cursor comes back.
+    process.once('exit', this.showCursor);
+    process.stdout.write(HIDE_CURSOR);
+    this.draw();
+  }
+
+  // Applies one key and redraws; true once the picker is closed.
+  private press(key: Keypress): boolean {
+    const pressed = keyOf(key.name, key.ctrl === true);
+    if (!pressed) return false;
+    this.state = pressKey(this.state, pressed);
+    this.draw();
+    return this.state.done !== 'no';
+  }
+
+  private draw(): void {
+    const width = process.stdout.columns ?? 80;
+    const lines = pickerLines(this.state, { version: this.version, width });
+    process.stdout.write(`${eraseLines(this.drawn)}${lines.join('\n')}\n`);
+    this.drawn = lines.length;
+  }
+
+  private close(
+    onKey: (text: string | undefined, key?: Keypress) => void,
+    resolve: (picked: SkillSelection | undefined) => void,
+  ): void {
+    this.restore(onKey);
+    resolve(this.state.done === 'confirmed' ? pickedSelection(this.state) : undefined);
+  }
+
+  // The terminal goes back as it was, whatever the answer: raw mode left on
+  // swallows the shell's own keys after the command exits.
+  private restore(onKey: (text: string | undefined, key?: Keypress) => void): void {
+    process.stdin.off('keypress', onKey);
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+    process.off('exit', this.showCursor);
+    this.showCursor();
+  }
+
+  private readonly showCursor = (): void => {
+    process.stdout.write(SHOW_CURSOR);
+  };
+}
+
 /**
  * Shows the picker and resolves with what the person picked, or with
  * undefined when they closed it without confirming. Only call with a terminal
@@ -41,37 +116,8 @@ function eraseLines(count: number): string {
  *   const picked = await pickSkills(skillCatalog(folders), '2.0.0');
  */
 export function pickSkills(
-  catalog: CatalogEntries,
+  catalog: readonly CatalogEntry[],
   version: string,
 ): Promise<SkillSelection | undefined> {
-  const { stdin, stdout } = process;
-  let state: PickerState = startPicker(catalog);
-  let drawn = 0;
-  const draw = (): void => {
-    const lines = pickerLines(state, { version, width: stdout.columns ?? 80 });
-    stdout.write(`${eraseLines(drawn)}${lines.join('\n')}\n`);
-    drawn = lines.length;
-  };
-  return new Promise((resolve) => {
-    const onKey = (_text: string | undefined, key: Keypress = {}): void => {
-      const pressed = keyOf(key.name, key.ctrl === true);
-      if (!pressed) return;
-      state = pressKey(state, pressed);
-      draw();
-      if (state.done === 'no') return;
-      // The terminal goes back as it was, whatever the answer: raw mode left
-      // on swallows the shell's own keys after the command exits.
-      stdin.off('keypress', onKey);
-      stdin.setRawMode(false);
-      stdin.pause();
-      stdout.write(SHOW_CURSOR);
-      resolve(state.done === 'confirmed' ? pickedSelection(state) : undefined);
-    };
-    emitKeypressEvents(stdin);
-    stdin.setRawMode(true);
-    stdin.resume();
-    stdin.on('keypress', onKey);
-    stdout.write(HIDE_CURSOR);
-    draw();
-  });
+  return new TerminalPicker(catalog, version).run();
 }

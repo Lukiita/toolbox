@@ -78,6 +78,26 @@ function assertInsideSkill(path: string): void {
   );
 }
 
+function foldersOf(path: string): string[] {
+  const segments = path.split('/');
+  return segments.slice(1).map((_, depth) => segments.slice(0, depth + 1).join('/'));
+}
+
+// No disk holds a file and a folder under one name. A merge can ask for it
+// (the project adds a file `notes`, the new version adds `notes/x.md`);
+// refused here, the skill fails with these two names instead of an EEXIST
+// from the middle of a write (found in review).
+function assertNoFileIsAFolder(paths: readonly string[]): void {
+  const files = new Set(paths);
+  for (const path of paths) {
+    const clash = foldersOf(path).find((folder) => files.has(folder));
+    if (clash === undefined) continue;
+    throw new Error(
+      `skill file path: ${JSON.stringify(clash)} is a file and also the folder of ${JSON.stringify(path)}; a skill cannot hold both`,
+    );
+  }
+}
+
 function byCodeUnit(
   [one]: readonly [string, SkillFile],
   [other]: readonly [string, SkillFile],
@@ -110,6 +130,7 @@ export class SkillTree {
   public static of(entries: Iterable<readonly [string, SkillFile]>): SkillTree {
     const sorted = [...entries].sort(byCodeUnit);
     for (const [path] of sorted) assertInsideSkill(path);
+    assertNoFileIsAFolder(sorted.map(([path]) => path));
     return new SkillTree(new Map(sorted));
   }
 

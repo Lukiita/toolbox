@@ -16,6 +16,7 @@ export {
   type SkillInspection,
 } from './application/inspect-skills.mts';
 export {
+  type CatalogEntry,
   hasInstalledSkills,
   installSkills,
   type InstallSkillsOptions,
@@ -28,11 +29,12 @@ export { gitFileDiff } from './infra/git-file-diff.mts';
 export { GitPastReleases, repositoryCloneUrl } from './infra/git-past-releases.mts';
 export { gitTextMerge } from './infra/git-text-merge.mts';
 export {
-  catalogLines,
-  InstallUsageError,
   parseInstallArguments,
-} from './presentation/install-arguments.mts';
+  parseSkillsArguments,
+  SkillCommandUsageError,
+} from './presentation/command-arguments.mts';
 export {
+  catalogLines,
   keyOf,
   pickedSelection,
   pickerLines,

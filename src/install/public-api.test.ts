@@ -9,7 +9,7 @@ describe('the public API of src/install', () => {
     expect(Object.keys(install).sort()).toEqual([
       'DiskSkillFolders',
       'GitPastReleases',
-      'InstallUsageError',
+      'SkillCommandUsageError',
       'availableLine',
       'catalogLines',
       'gitFileDiff',
@@ -21,6 +21,7 @@ describe('the public API of src/install', () => {
       'installSkills',
       'keyOf',
       'parseInstallArguments',
+      'parseSkillsArguments',
       'pickedSelection',
       'pickerLines',
       'pressKey',

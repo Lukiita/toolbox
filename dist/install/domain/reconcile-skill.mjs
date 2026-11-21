@@ -23,6 +23,12 @@ function kept(status, files = [], reason) {
 // too: kept as a marker, it outlived skills the toolbox later retired and
 // printed "delete it if unused" about a folder that was gone (found in review).
 const REMOVED = { synced: false, status: 'removed', files: [], dropsRecord: true };
+// A deleted skill named again is wanted again. Answered `removed` first, the
+// command that asked for it only dropped the record, and the line it printed
+// said "`toolbox install <name>` brings it back" (found in review).
+function reconcileDeleted({ shipped, requested }) {
+    return requested ? synced('copied', shipped) : REMOVED;
+}
 function reconcileUnrecorded({ local, shipped, requested }) {
     if (local)
         return local.equals(shipped) ? synced('adopted') : kept('unmanaged');
@@ -78,7 +84,7 @@ export function reconcileSkill(sides, options) {
     if (state.upstream === 'ahead')
         return kept('ahead');
     if (!local)
-        return REMOVED;
+        return reconcileDeleted(sides);
     return reconcileRecorded(state, { ...sides, record, local }, options);
 }
 /**

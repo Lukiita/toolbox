@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -32,20 +32,19 @@ function release(repo: string, version: string): void {
   git(repo, 'tag', `v${version}`);
 }
 
-describe('GitPastReleases', () => {
-  it('fetches the package as a release tagged it', () => {
-    const releases = new GitPastReleases(`file://${repository(['1.2.0', '1.3.0'])}`);
-    const fetched = releases.fetch('1.2.0');
-    expect(fetched.fetched).toBe(true);
-    const dir = fetched.fetched ? fetched.packageDir : '';
-    expect(readFileSync(join(dir, 'skills', 'retro', 'SKILL.md'), 'utf8')).toBe('retro 1.2.0\n');
-    releases.dispose();
-  });
+const retroOf = (releases: GitPastReleases, version: string): string | undefined => {
+  const lookup = releases.skill(version, 'retro');
+  return lookup.found ? lookup.tree.file('SKILL.md')?.content.toString() : undefined;
+};
+const reasonOf = (releases: GitPastReleases, version: string): string => {
+  const lookup = releases.skill(version, 'retro');
+  return lookup.found ? '' : lookup.reason;
+};
 
-  it('reads a skill as that release shipped it', () => {
+describe('GitPastReleases', () => {
+  it('reads a skill as the release tagged it, not as the repository is now', () => {
     const releases = new GitPastReleases(`file://${repository(['1.2.0', '1.3.0'])}`);
-    const lookup = releases.skill('1.2.0', 'retro');
-    expect(lookup.found && lookup.tree.file('SKILL.md')?.content.toString()).toBe('retro 1.2.0\n');
+    expect(retroOf(releases, '1.2.0')).toBe('retro 1.2.0\n');
     releases.dispose();
   });
 
@@ -58,18 +57,9 @@ describe('GitPastReleases', () => {
     releases.dispose();
   });
 
-  it('says why a skill cannot be read when its release cannot be fetched', () => {
-    const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
-    const lookup = releases.skill('9.9.9', 'retro');
-    expect(lookup.found ? '' : lookup.reason).toMatch(/^could not fetch v9\.9\.9 from file:/);
-    releases.dispose();
-  });
-
   it('says why when the release has no tag', () => {
     const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
-    const fetched = releases.fetch('9.9.9');
-    expect(fetched.fetched).toBe(false);
-    expect(fetched.fetched ? '' : fetched.reason).toMatch(
+    expect(reasonOf(releases, '9.9.9')).toMatch(
       /^could not fetch v9\.9\.9 from file:\/\/.*: fatal: .*v9\.9\.9/,
     );
     releases.dispose();
@@ -77,9 +67,8 @@ describe('GitPastReleases', () => {
 
   it('says why when the repository cannot be reached', () => {
     const releases = new GitPastReleases(`file://${join(scratch(), 'no-such-repository')}`);
-    const fetched = releases.fetch('1.2.0');
     // git's own "fatal: …" line, not the advice it prints after it.
-    expect(fetched.fetched ? '' : fetched.reason).toMatch(
+    expect(reasonOf(releases, '1.2.0')).toMatch(
       /^could not fetch v1\.2\.0 from file:\/\/.*no-such-repository: fatal: /,
     );
     releases.dispose();
@@ -88,31 +77,32 @@ describe('GitPastReleases', () => {
   it('fetches a release once: the second request is answered from the first', () => {
     const repo = repository(['1.2.0']);
     const releases = new GitPastReleases(`file://${repo}`);
-    const first = releases.fetch('1.2.0');
+    expect(retroOf(releases, '1.2.0')).toBe('retro 1.2.0\n');
     rmSync(repo, { recursive: true });
-    expect(releases.fetch('1.2.0')).toEqual(first);
+    expect(retroOf(releases, '1.2.0')).toBe('retro 1.2.0\n');
     releases.dispose();
   });
 
-  // Ten edited skills on a machine with no network must cost one failed
-  // fetch, not ten timeouts in a row.
+  // The edited skills copied from one release must cost one failed fetch,
+  // not one timeout each.
   it('does not try a failed release again in the same run', () => {
     const repo = repository(['1.2.0']);
     const releases = new GitPastReleases(`file://${repo}`);
-    const first = releases.fetch('1.3.0');
+    const first = reasonOf(releases, '1.3.0');
     release(repo, '1.3.0');
-    expect(releases.fetch('1.3.0')).toEqual(first);
-    expect(first.fetched).toBe(false);
+    expect(reasonOf(releases, '1.3.0')).toBe(first);
+    expect(first).toMatch(/^could not fetch v1\.3\.0/);
     releases.dispose();
   });
 
-  it('removes what it downloaded when disposed of', () => {
-    const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
-    const fetched = releases.fetch('1.2.0');
-    const dir = fetched.fetched ? fetched.packageDir : '';
-    expect(existsSync(dir)).toBe(true);
+  it('downloads into the folder it was given, and removes it all when disposed of', () => {
+    const downloads = scratch();
+    const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`, downloads);
+    releases.skill('1.2.0', 'retro');
+    releases.skill('9.9.9', 'retro');
+    expect(readdirSync(downloads).length).toBeGreaterThan(0);
     releases.dispose();
-    expect(existsSync(dir)).toBe(false);
+    expect(readdirSync(downloads)).toEqual([]);
   });
 });
 

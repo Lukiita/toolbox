@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { catalogLines, InstallUsageError, parseInstallArguments } from './install-arguments.mts';
+import {
+  parseInstallArguments,
+  parseSkillsArguments,
+  SkillCommandUsageError,
+} from './command-arguments.mts';
 
 describe('parseInstallArguments', () => {
   it('asks for nothing new with no arguments', () => {
@@ -23,23 +27,26 @@ describe('parseInstallArguments', () => {
   // `--write-conflict` read as "no flag" would leave the conflict unwritten and say nothing.
   it('refuses a flag it does not know instead of ignoring it', () => {
     expect(() => parseInstallArguments(['--write-conflict'])).toThrow(
-      new InstallUsageError('unknown argument: --write-conflict'),
+      new SkillCommandUsageError('unknown argument: --write-conflict'),
+    );
+  });
+
+  it("refuses the other command's flag", () => {
+    expect(() => parseInstallArguments(['--diff'])).toThrow(
+      new SkillCommandUsageError('unknown argument: --diff'),
     );
   });
 });
 
-describe('catalogLines', () => {
-  it('lists the skills, their lines starting in one column', () => {
-    const catalog = [
-      { name: 'code-review', summary: 'Reviews the branch diff.' },
-      { name: 'ddd-tactical', summary: '' },
-      { name: 'retro', summary: 'Looks back at a feature.' },
-    ];
-    expect(catalogLines(catalog, '2.0.0')).toEqual([
-      'Skills in @lukiita/toolbox 2.0.0:',
-      '  code-review    Reviews the branch diff.',
-      '  ddd-tactical',
-      '  retro          Looks back at a feature.',
-    ]);
+describe('parseSkillsArguments', () => {
+  it('prints no diff unless asked to', () => {
+    expect(parseSkillsArguments([])).toEqual({ diff: false });
+    expect(parseSkillsArguments(['--diff'])).toEqual({ diff: true });
+  });
+
+  it.each(['--dif', '--all', 'code-review'])('refuses %j: the command takes only --diff', (arg) => {
+    expect(() => parseSkillsArguments([arg])).toThrow(
+      new SkillCommandUsageError(`unknown argument: ${arg}`),
+    );
   });
 });

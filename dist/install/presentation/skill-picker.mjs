@@ -93,15 +93,34 @@ function closedLine(state) {
     const { names } = pickedSelection(state);
     return names.length === 0 ? 'No skill picked.' : `Skills picked: ${names.join(', ')}`;
 }
+// One layout for the list, wherever it is shown: the names in a column, the
+// line about each skill after it.
+function listed(entries, before) {
+    const nameWidth = Math.max(...entries.map((entry) => entry.name.length));
+    return entries.map(({ name, summary }, index) => `${before(index)}${name.padEnd(nameWidth)}   ${summary}`.trimEnd());
+}
+function titleOf(version) {
+    return `Skills in @lukiita/toolbox ${version}`;
+}
+/**
+ * The skills the package ships, one per line with a line about each: what a
+ * script or an agent is shown when a project has no skill yet and named
+ * none. A person at a terminal gets the picker instead.
+ *
+ * @example
+ *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
+ */
+export function catalogLines(catalog, version) {
+    return [`${titleOf(version)}:`, ...listed(catalog, () => '  ')];
+}
 function openLines(state, version) {
-    const nameWidth = Math.max(...state.entries.map((entry) => entry.name.length));
-    const rows = state.entries.map(({ name, summary }, index) => {
+    const rows = listed(state.entries, (index) => {
         const cursor = index === state.cursor ? '❯' : ' ';
-        const mark = state.picked.has(name) ? '◉' : '◯';
-        return `${cursor} ${mark} ${name.padEnd(nameWidth)}   ${summary}`.trimEnd();
+        const mark = state.picked.has(state.entries[index].name) ? '◉' : '◯';
+        return `${cursor} ${mark} `;
     });
     return [
-        `Skills in @lukiita/toolbox ${version} - which ones does this project get?`,
+        `${titleOf(version)} - which ones does this project get?`,
         ...rows,
         `↑↓ move · space pick · a all · enter confirm (${state.picked.size} picked) · esc cancel`,
     ];

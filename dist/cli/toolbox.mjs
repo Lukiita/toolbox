@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadToolboxConfig } from "../config/load-config.mjs";
-import { availableLine, catalogLines, DiskSkillFolders, gitFileDiff, GitPastReleases, gitTextMerge, hasInstalledSkills, inspectionLines, inspectSkills, installLine, installSkills, InstallUsageError, parseInstallArguments, repositoryCloneUrl, skillCatalog, skillDiffs, } from "../install/index.mjs";
+import { availableLine, catalogLines, DiskSkillFolders, gitFileDiff, GitPastReleases, gitTextMerge, hasInstalledSkills, inspectionLines, inspectSkills, installLine, installSkills, parseInstallArguments, parseSkillsArguments, repositoryCloneUrl, skillCatalog, SkillCommandUsageError, skillDiffs, } from "../install/index.mjs";
 import { decidePrePush, parsePushedRefs } from "../pre-push/pre-push.mjs";
 import { parseArgs, UsageError } from "../quality-gate/args.mjs";
 import { runQualityGate } from "../quality-gate/run-gate.mjs";
@@ -93,13 +93,6 @@ const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 function packageManifest() {
     return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'));
 }
-// A mistyped flag fails instead of being ignored: `--write-conflict` read as
-// "no flag" would leave the conflict unwritten and say nothing.
-function assertKnownFlags(args, known) {
-    const unknown = args.find((arg) => !known.includes(arg));
-    if (unknown !== undefined)
-        throw new UsageError(`unknown argument: ${unknown}`);
-}
 function skillFolders(root) {
     return new DiskSkillFolders({ packageDir: PACKAGE_DIR, projectRoot: root });
 }
@@ -152,7 +145,7 @@ async function install(root, args) {
     return reports.some((report) => report.status === 'failed') ? 1 : 0;
 }
 function skills(root, args) {
-    assertKnownFlags(args, ['--diff']);
+    const { diff } = parseSkillsArguments(args);
     const inspections = inspectSkills({
         folders: skillFolders(root),
         version: packageManifest().version,
@@ -160,7 +153,7 @@ function skills(root, args) {
     for (const inspection of inspections) {
         for (const line of inspectionLines(inspection))
             console.log(line);
-        if (args.includes('--diff')) {
+        if (diff) {
             for (const diff of skillDiffs(inspection, gitFileDiff))
                 console.log(diff);
         }
@@ -193,7 +186,7 @@ function failure(e) {
     if (e instanceof Cancelled)
         return { message: '', exitCode: 130 };
     const message = e instanceof Error ? e.message : String(e);
-    const usage = e instanceof UsageError || e instanceof InstallUsageError;
+    const usage = e instanceof UsageError || e instanceof SkillCommandUsageError;
     return { message: usage ? `${message}\n${USAGE}` : `toolbox: ${message}`, exitCode: 2 };
 }
 try {

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { GIT_OUTPUT_LIMIT } from "./git-output-limit.mjs";
 // `--diff3` writes the base between the two sides of a conflict: whoever
 // resolves it sees what each side changed, not only where they ended up.
 const MERGE_FILE = ['merge-file', '-p', '--diff3', '-L', 'project', '-L', 'base', '-L', 'toolbox'];
@@ -19,7 +20,7 @@ function runMergeFile(dir) {
     const run = spawnSync('git', [...MERGE_FILE, 'ours', 'base', 'theirs'], {
         cwd: dir,
         encoding: 'utf8',
-        maxBuffer: 64 * 1024 * 1024,
+        maxBuffer: GIT_OUTPUT_LIMIT,
     });
     if (!isMergeAnswer(run.status)) {
         // No stderr means git never started; the spawn error says why.

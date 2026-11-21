@@ -103,6 +103,40 @@ describe('SkillTree', () => {
   );
 });
 
+describe('SkillTree - a path that is both a file and a folder', () => {
+  // A merge can ask for it: the project adds a file `notes`, the new version
+  // adds `notes/x.md`. No disk can hold both; refused here, the skill fails
+  // with a reason instead of an EEXIST from the middle of a write.
+  it('is refused, naming the two paths', () => {
+    const clash = (): SkillTree =>
+      SkillTree.of([
+        ['notes', file('mine')],
+        ['notes/x.md', file('theirs')],
+      ]);
+    expect(clash).toThrow(
+      'skill file path: "notes" is a file and also the folder of "notes/x.md"; a skill cannot hold both',
+    );
+  });
+
+  it('is refused at any depth', () => {
+    expect(() =>
+      SkillTree.of([
+        ['a/b', file('x')],
+        ['a/b/c/d.md', file('y')],
+      ]),
+    ).toThrow('skill file path: "a/b" is a file and also the folder of "a/b/c/d.md"');
+  });
+
+  it('is not seen in names that only share a prefix', () => {
+    const tree = SkillTree.of([
+      ['notes', file('x')],
+      ['notes.md', file('y')],
+      ['notes-old/a.md', file('z')],
+    ]);
+    expect(tree.paths()).toEqual(['notes', 'notes-old/a.md', 'notes.md']);
+  });
+});
+
 describe('sameContent', () => {
   it('compares two files by content, line endings aside', () => {
     expect(sameContent(file('a\n'), file('a\r\n'))).toBe(true);

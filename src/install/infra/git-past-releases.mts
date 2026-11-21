@@ -27,12 +27,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { PastReleases } from '../application/ports.mts';
+import { PACKAGE_SKILLS_DIR } from '../application/skill-layout.mts';
 import type { OriginalLookup } from '../domain/reconcile-skill.mts';
 import { readShippedSkillTree } from './skill-directory.mts';
 
-/** A release, fetched: its package folder, or why it could not be had. */
-export type FetchedRelease =
-  { fetched: true; packageDir: string } | { fetched: false; reason: string };
+// A release, fetched: its package folder, or why it could not be had.
+type FetchedRelease = { fetched: true; packageDir: string } | { fetched: false; reason: string };
 
 // The README's release recipe: `git tag vX.Y.Z`.
 const TAG_PREFIX = 'v';
@@ -74,19 +74,24 @@ function failureReason(stderr: string, error: Error | undefined): string {
 
 export class GitPastReleases implements PastReleases {
   private readonly cloneUrl: string;
+  private readonly downloadsRoot: string;
   private readonly fetched = new Map<string, FetchedRelease>();
   private readonly downloads: string[] = [];
 
   /**
+   * `downloadsRoot` is where the clones go, each in a folder of its own; the
+   * system's temp folder unless a test wants to look at it.
+   *
    * @example
    *   new GitPastReleases(repositoryCloneUrl(packageJson.repository))
    */
-  public constructor(cloneUrl: string) {
+  public constructor(cloneUrl: string, downloadsRoot: string = tmpdir()) {
     this.cloneUrl = cloneUrl;
+    this.downloadsRoot = downloadsRoot;
   }
 
-  /** The package folder of that release, or why it could not be fetched. Asked once per run. */
-  public fetch(version: string): FetchedRelease {
+  // The package folder of that release, or why it could not be fetched. Asked once per run.
+  private fetch(version: string): FetchedRelease {
     const known = this.fetched.get(version);
     if (known) return known;
     const release = this.clone(`${TAG_PREFIX}${version}`);
@@ -103,7 +108,7 @@ export class GitPastReleases implements PastReleases {
   public skill(version: string, name: string): OriginalLookup {
     const release = this.fetch(version);
     if (!release.fetched) return { found: false, reason: release.reason };
-    const tree = readShippedSkillTree(join(release.packageDir, 'skills', name));
+    const tree = readShippedSkillTree(join(release.packageDir, PACKAGE_SKILLS_DIR, name));
     if (tree) return { found: true, tree };
     return { found: false, reason: `the ${version} release has no skill named ${name}` };
   }
@@ -116,7 +121,7 @@ export class GitPastReleases implements PastReleases {
 
   // The tag alone, without history: the skills of one release are all a merge needs.
   private clone(tag: string): FetchedRelease {
-    const dir = mkdtempSync(join(tmpdir(), 'toolbox-release-'));
+    const dir = mkdtempSync(join(this.downloadsRoot, 'toolbox-release-'));
     this.downloads.push(dir);
     const run = spawnSync(
       'git',

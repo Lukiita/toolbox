@@ -205,6 +205,20 @@ describe('writeSkillTree', () => {
     }
   });
 
+  // A staging folder holds a SKILL.md: left behind by a write that failed,
+  // agents list it as a second skill until the next install.
+  it('leaves no staging folder behind when the write fails, and the old folder whole', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'old');
+    const unwritable = treeOf({
+      'SKILL.md': 'new',
+      [`${'x'.repeat(300)}.md`]: 'a name no disk takes',
+    });
+    expect(() => writeSkillTree(join(root, 'retro'), unwritable)).toThrow(/ENAMETOOLONG/);
+    expect(readdirSync(root)).toEqual(['retro']);
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('old');
+  });
+
   it('writes an empty tree as an empty folder', () => {
     const root = scratch();
     writeSkillTree(join(root, 'retro'), treeOf({}));
@@ -242,17 +256,36 @@ describe('swapSkillFolder', () => {
 });
 
 describe('recoverSkillFolder', () => {
-  // A run killed between the two renames of the swap: the folder is beside
-  // its place, whole. Read as it is, the skill would be "deleted by the
-  // project" and never installed again.
-  it('puts back a folder a dead run left swapped out', () => {
-    const root = scratch();
-    put(root, 'retro.toolbox-old/SKILL.md', 'mine');
-    put(root, 'retro.toolbox-old/references/a.md', 'a');
+  /** What a write killed between its two renames leaves: the old folder aside, a marker naming it, the new one in staging. */
+  function deadWrite(root: string, aside = 'retro.toolbox-old'): void {
+    put(root, `${aside}/SKILL.md`, 'mine');
+    put(root, `${aside}/references/a.md`, 'a');
     put(root, 'retro.toolbox-staging/SKILL.md', 'the new one, never moved in');
+    writeFileSync(join(root, 'retro.toolbox-swap'), aside);
+  }
+
+  // Read as it is, that skill would be "deleted by the project".
+  it('puts back the folder a dead write swapped out, and clears the rest', () => {
+    const root = scratch();
+    deadWrite(root);
     recoverSkillFolder(join(root, 'retro'));
     expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('mine');
     expect(readdirSync(root)).toEqual(['retro']);
+  });
+
+  // Leftovers of older writes sit beside it under later names; picked by
+  // name order, the wrong one came back and the real one was deleted next.
+  it('puts back the folder the write itself named, not a leftover beside it', () => {
+    const root = scratch();
+    deadWrite(root);
+    put(
+      root,
+      'retro.toolbox-old-1/scripts/__pycache__/run.pyc',
+      'what an older write could not delete',
+    );
+    recoverSkillFolder(join(root, 'retro'));
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('mine');
+    expect(existsSync(join(root, 'retro', 'scripts'))).toBe(false);
   });
 
   it('clears a staging folder a dead run left, which agents would list as a skill', () => {
@@ -263,9 +296,8 @@ describe('recoverSkillFolder', () => {
     expect(readdirSync(root)).toEqual(['retro']);
   });
 
-  // An old folder that could not be deleted is still whole, SKILL.md and all,
-  // and the project later deleted the skill. No staging folder: the write
-  // that left it had finished. Renamed back, the old version would return.
+  // An old folder that could not be deleted is still whole, and the project
+  // later deleted the skill. No marker: the write that left it had finished.
   it('does not take an old folder that could not be deleted for a dead write', () => {
     const root = scratch();
     put(root, 'retro.toolbox-old/SKILL.md', 'the version before the last update');
@@ -273,17 +305,77 @@ describe('recoverSkillFolder', () => {
     expect(existsSync(join(root, 'retro'))).toBe(false);
   });
 
-  it('touches nothing when the folder is in place', () => {
+  it('does not put anything back over a folder that is in place', () => {
     const root = scratch();
-    put(root, 'retro/SKILL.md', 'mine');
+    deadWrite(root);
+    put(root, 'retro/SKILL.md', 'in place');
     recoverSkillFolder(join(root, 'retro'));
-    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('mine');
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('in place');
+    expect(existsSync(join(root, 'retro.toolbox-swap'))).toBe(false);
   });
+
+  // The marker is a file in the repository: anyone can commit one.
+  it.each(['../outside', 'other-skill', 'retro', 'retro.toolbox-old/..'])(
+    'ignores a marker naming %j, which is not a swapped-out folder of this skill',
+    (named) => {
+      const root = scratch();
+      put(root, 'outside/SKILL.md', 'not ours');
+      put(root, 'other-skill/SKILL.md', 'another skill');
+      writeFileSync(join(root, 'retro.toolbox-swap'), named);
+      recoverSkillFolder(join(root, 'retro'));
+      expect(existsSync(join(root, 'retro'))).toBe(false);
+      expect(readFileSync(join(root, 'outside', 'SKILL.md'), 'utf8')).toBe('not ours');
+      expect(readFileSync(join(root, 'other-skill', 'SKILL.md'), 'utf8')).toBe('another skill');
+    },
+  );
 
   it('has nothing to do in a project with no skills folder yet', () => {
     const root = scratch();
     recoverSkillFolder(join(root, '.agents', 'skills', 'retro'));
     expect(existsSync(join(root, '.agents'))).toBe(false);
+  });
+});
+
+// A repository can commit a symbolic link under any of the names a write
+// uses. Clearing "a staging folder" through one deleted the SKILL.md of
+// whatever folder it pointed at, outside the project (found in review).
+describe('the folders a write keeps beside a skill - when one is a planted symbolic link', () => {
+  function outside(root: string): string {
+    put(root, 'outside/SKILL.md', 'a file outside the project');
+    put(root, 'outside/notes.md', 'n');
+    return join(root, 'outside');
+  }
+  const untouched = (root: string): void => {
+    expect(readFileSync(join(root, 'outside', 'SKILL.md'), 'utf8')).toBe(
+      'a file outside the project',
+    );
+    expect(readFileSync(join(root, 'outside', 'notes.md'), 'utf8')).toBe('n');
+  };
+
+  it('removes a link named like a staging folder, and nothing it points at', () => {
+    const root = scratch();
+    symlinkSync(outside(root), join(root, 'retro.toolbox-staging'), 'dir');
+    recoverSkillFolder(join(root, 'retro'));
+    untouched(root);
+    expect(readdirSync(root)).toEqual(['outside']);
+  });
+
+  it('removes a link named like a swapped-out folder, and nothing it points at', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'old');
+    symlinkSync(outside(root), join(root, 'retro.toolbox-old'), 'dir');
+    writeSkillTree(join(root, 'retro'), treeOf({ 'SKILL.md': 'new' }));
+    untouched(root);
+    expect(readdirSync(root).sort()).toEqual(['outside', 'retro']);
+  });
+
+  it('never moves a link into the place of a skill', () => {
+    const root = scratch();
+    symlinkSync(outside(root), join(root, 'retro.toolbox-old'), 'dir');
+    writeFileSync(join(root, 'retro.toolbox-swap'), 'retro.toolbox-old');
+    recoverSkillFolder(join(root, 'retro'));
+    expect(existsSync(join(root, 'retro'))).toBe(false);
+    untouched(root);
   });
 });
 

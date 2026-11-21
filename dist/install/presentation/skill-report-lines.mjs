@@ -3,7 +3,7 @@
 // two commands name a state the same way.
 import { join } from 'node:path';
 import { SKILLS_DIR } from "../application/skill-layout.mjs";
-import { WRITE_CONFLICTS_FLAG } from "./install-arguments.mjs";
+import { WRITE_CONFLICTS_FLAG } from "./command-arguments.mjs";
 // Empty = the status says it all. A line that asks something of the reader
 // says what, in the line itself: nobody opens the docs for an install log.
 const INSTALL_NOTES = {

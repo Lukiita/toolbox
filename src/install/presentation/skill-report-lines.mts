@@ -8,7 +8,7 @@ import type { SkillInspection } from '../application/inspect-skills.mts';
 import type { InstallStatus, SkillInstallReport } from '../application/install-skills.mts';
 import type { UpstreamState } from '../domain/skill-state.mts';
 import { SKILLS_DIR } from '../application/skill-layout.mts';
-import { WRITE_CONFLICTS_FLAG } from './install-arguments.mts';
+import { WRITE_CONFLICTS_FLAG } from './command-arguments.mts';
 
 // Empty = the status says it all. A line that asks something of the reader
 // says what, in the line itself: nobody opens the docs for an install log.

@@ -20,7 +20,6 @@ export declare class DiskSkillFolders implements SkillFolders {
     readLocal(name: string): SkillTree | undefined;
     writeLocal(name: string, tree: SkillTree): string | undefined;
     linkKind(name: string): SkillLinkKind;
-    removeLink(name: string): void;
     recover(name: string): void;
     readManifest(): SkillManifest;
     saveManifest(manifest: SkillManifest): void;

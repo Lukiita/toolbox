@@ -109,6 +109,18 @@ function requestedSkills(
   return requested;
 }
 
+// A link the 1.x install wrote stands for the skill it pointed at: the
+// project had it, so the copy takes its place whatever the manifest says.
+// Decided from a record that described no folder, this skill came out
+// "deleted by the project" and was never copied (found in review).
+//
+// The link is not removed here: the write swaps it out once the copy is
+// complete. Removed first, a copy that then failed left the project with
+// neither, and the next run read the skill as deleted (found in review).
+function linkedSides(name: string, run: InstallRun): SkillSides {
+  return { ...readSides(name, undefined, run), local: undefined, requested: true };
+}
+
 function readSides(name: string, record: SkillRecord | undefined, run: InstallRun): SkillSides {
   const { folders, pastReleases } = run.options;
   return {
@@ -119,6 +131,11 @@ function readSides(name: string, record: SkillRecord | undefined, run: InstallRu
     requested: run.requested.has(name),
     original: (version) => pastReleases.skill(version, name),
   };
+}
+
+function recordedSides(name: string, run: InstallRun): SkillSides {
+  run.options.folders.recover(name);
+  return readSides(name, run.manifest.find(name), run);
 }
 
 // Writes what the domain decided for a shipped skill and moves its record;
@@ -166,18 +183,10 @@ function reportOf(
 }
 
 function installShipped(name: string, run: InstallRun): SkillInstallReport {
-  const { folders } = run.options;
-  const link = folders.linkKind(name);
+  const link = run.options.folders.linkKind(name);
   if (link === 'pinned') return { name, status: 'pinned', files: [] };
-  // A link the 1.x install wrote stands for the skill it pointed at: the
-  // project had it, so the copy takes its place whatever the manifest says.
-  // Decided from a record that described no folder, this skill came out
-  // "deleted by the project" and was never copied (found in review).
-  const linked = link === 'ours';
-  if (linked) folders.removeLink(name);
-  folders.recover(name);
-  const sides = readSides(name, linked ? undefined : run.manifest.find(name), run);
-  const outcome = reconcileSkill({ ...sides, requested: linked || sides.requested }, run.options);
+  const sides = link === 'ours' ? linkedSides(name, run) : recordedSides(name, run);
+  const outcome = reconcileSkill(sides, run.options);
   return reportOf(name, outcome, write(name, outcome, sides.shipped, run), run);
 }
 

@@ -101,6 +101,13 @@ function kept(status: KeptStatus, files: string[] = [], reason?: string): Reconc
 // printed "delete it if unused" about a folder that was gone (found in review).
 const REMOVED: Reconciliation = { synced: false, status: 'removed', files: [], dropsRecord: true };
 
+// A deleted skill named again is wanted again. Answered `removed` first, the
+// command that asked for it only dropped the record, and the line it printed
+// said "`toolbox install <name>` brings it back" (found in review).
+function reconcileDeleted({ shipped, requested }: SkillSides): Reconciliation {
+  return requested ? synced('copied', shipped) : REMOVED;
+}
+
 function reconcileUnrecorded({ local, shipped, requested }: SkillSides): Reconciliation {
   if (local) return local.equals(shipped) ? synced('adopted') : kept('unmanaged');
   return requested ? synced('copied', shipped) : kept('available');
@@ -160,7 +167,7 @@ export function reconcileSkill(sides: SkillSides, options: ReconcileOptions): Re
   // for `toolbox skills` too; this function only maps the state to an action.
   const state = classifySkill(sides, options.version);
   if (state.upstream === 'ahead') return kept('ahead');
-  if (!local) return REMOVED;
+  if (!local) return reconcileDeleted(sides);
   return reconcileRecorded(state, { ...sides, record, local }, options);
 }
 

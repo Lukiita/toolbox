@@ -2,11 +2,10 @@
 // `.agents/skills/`, behind the port the two commands use. Everything about
 // paths is here; the use cases only name a skill.
 
-import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { SkillFolders, SkillLinkKind, SkillPaths } from '../application/ports.mts';
-import { SKILLS_DIR } from '../application/skill-layout.mts';
+import { PACKAGE_SKILLS_DIR, SKILLS_DIR } from '../application/skill-layout.mts';
 import type { SkillManifest } from '../domain/skill-manifest.mts';
 import type { SkillTree } from '../domain/skill-tree.mts';
 import {
@@ -41,7 +40,7 @@ export class DiskSkillFolders implements SkillFolders {
   public paths(name: string): SkillPaths {
     return {
       local: join(this.projectRoot, SKILLS_DIR, name),
-      shipped: join(this.packageDir, 'skills', name),
+      shipped: join(this.packageDir, PACKAGE_SKILLS_DIR, name),
     };
   }
 
@@ -63,11 +62,6 @@ export class DiskSkillFolders implements SkillFolders {
 
   public linkKind(name: string): SkillLinkKind {
     return skillLinkKind(this.paths(name).local, this.packageDir);
-  }
-
-  // `rmSync` without `recursive` unlinks the link and leaves its target alone.
-  public removeLink(name: string): void {
-    rmSync(this.paths(name).local);
   }
 
   public recover(name: string): void {

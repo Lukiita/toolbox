@@ -1,13 +1,5 @@
 import type { PastReleases } from '../application/ports.mts';
 import type { OriginalLookup } from '../domain/reconcile-skill.mts';
-/** A release, fetched: its package folder, or why it could not be had. */
-export type FetchedRelease = {
-    fetched: true;
-    packageDir: string;
-} | {
-    fetched: false;
-    reason: string;
-};
 /**
  * The URL git clones, from package.json's `repository` field.
  *
@@ -17,15 +9,18 @@ export type FetchedRelease = {
 export declare function repositoryCloneUrl(repository: unknown): string;
 export declare class GitPastReleases implements PastReleases {
     private readonly cloneUrl;
+    private readonly downloadsRoot;
     private readonly fetched;
     private readonly downloads;
     /**
+     * `downloadsRoot` is where the clones go, each in a folder of its own; the
+     * system's temp folder unless a test wants to look at it.
+     *
      * @example
      *   new GitPastReleases(repositoryCloneUrl(packageJson.repository))
      */
-    constructor(cloneUrl: string);
-    /** The package folder of that release, or why it could not be fetched. Asked once per run. */
-    fetch(version: string): FetchedRelease;
+    constructor(cloneUrl: string, downloadsRoot?: string);
+    private fetch;
     /**
      * A skill as that release shipped it.
      *

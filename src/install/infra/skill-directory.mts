@@ -19,6 +19,7 @@ import {
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import type { SkillLinkKind } from '../application/ports.mts';
+import { PACKAGE_SKILLS_DIR } from '../application/skill-layout.mts';
 import { type SkillFile, SkillTree } from '../domain/skill-tree.mts';
 
 /**
@@ -28,7 +29,7 @@ import { type SkillFile, SkillTree } from '../domain/skill-tree.mts';
  *   shippedSkills('/p/node_modules/@lukiita/toolbox') // => ['code-review', 'retro', ...]
  */
 export function shippedSkills(packageDir: string): string[] {
-  const dir = join(packageDir, 'skills');
+  const dir = join(packageDir, PACKAGE_SKILLS_DIR);
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(join(dir, entry.name, 'SKILL.md')))
@@ -110,71 +111,107 @@ function writeSkillFile(path: string, file: SkillFile): void {
   chmodSync(path, file.executable ? 0o755 : 0o644);
 }
 
-// Names of the two folders a write keeps beside the skill for a moment. They
-// sit in `.agents/skills/` on purpose: the same folder is the same filesystem,
-// which is what makes the renames below atomic.
+// What a write keeps beside the skill for a moment: the new folder (staging),
+// the old one renamed aside, and a marker naming it. They sit in
+// `.agents/skills/` on purpose: the same folder is the same filesystem, which
+// is what makes the renames below atomic.
 const STAGING = '.toolbox-staging';
 const SWAPPED_OUT = '.toolbox-old';
+const SWAP_MARKER = '.toolbox-swap';
+
+// What is at a path, without following a link: `existsSync` answers for the
+// link's target, which is the wrong question for everything below.
+function entryKind(path: string): 'absent' | 'link' | 'folder' | 'other' {
+  const stat = lstatSync(path, { throwIfNoEntry: false });
+  if (!stat) return 'absent';
+  if (stat.isSymbolicLink()) return 'link';
+  return stat.isDirectory() ? 'folder' : 'other';
+}
 
 // Best effort, never a throw: this only clears what a write no longer needs,
-// and the new folder is already in place. SKILL.md goes first and on its own:
-// whatever else cannot be deleted (a __pycache__ a container wrote as root),
-// a folder without it is not listed as a skill by any agent. Returns whether
-// the folder is gone, so the caller can say when it is not.
-function discard(dir: string): boolean {
+// and the new folder is already in place. Returns whether the path is gone,
+// so the caller can say when it is not.
+//
+// A symbolic link is unlinked and nothing more. A repository can commit a
+// link under any of the names above; cleared as a folder, the SKILL.md of
+// whatever it pointed at was deleted, outside the project (found in review).
+//
+// In a real folder SKILL.md goes first and on its own: whatever else cannot
+// be deleted (a __pycache__ a container wrote as root), a folder without it
+// is not listed as a skill by any agent.
+function discard(path: string): boolean {
   try {
-    rmSync(join(dir, 'SKILL.md'), { force: true });
-    rmSync(dir, { recursive: true, force: true });
+    if (entryKind(path) === 'folder') rmSync(join(path, 'SKILL.md'), { force: true });
+    // On a link, a recursive rm removes the link itself and stops there.
+    rmSync(path, { recursive: true, force: true });
   } catch {
     // Reported by the caller: `writeSkillTree` hands the path back.
   }
-  return !existsSync(dir);
+  return entryKind(path) === 'absent';
 }
 
-function swappedOutFolders(dir: string): string[] {
+function swappedOutName(dir: string): RegExp {
+  const name = basename(dir).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${name}${SWAPPED_OUT.replace('.', '\\.')}(-\\d+)?$`);
+}
+
+function swappedOutEntries(dir: string): string[] {
   const parent = dirname(dir);
   if (!existsSync(parent)) return [];
+  const mine = swappedOutName(dir);
   return readdirSync(parent)
-    .filter((entry) => entry.startsWith(`${basename(dir)}${SWAPPED_OUT}`))
+    .filter((entry) => mine.test(entry))
     .map((entry) => join(parent, entry));
 }
 
 // Leftovers of an earlier write may still hold the plain name.
 function freeNameBeside(dir: string): string {
   let candidate = `${dir}${SWAPPED_OUT}`;
-  for (let attempt = 1; existsSync(candidate); attempt += 1) {
+  for (let attempt = 1; entryKind(candidate) !== 'absent'; attempt += 1) {
     candidate = `${dir}${SWAPPED_OUT}-${attempt}`;
   }
   return candidate;
 }
 
 /**
- * Moves `staging` into the place of `dir`. The old folder is renamed aside,
+ * Moves `staging` into the place of `dir`. What is there is renamed aside,
  * never deleted first: until 2.0's review this was "delete, then rename", and
  * a delete that failed half-way (or a run killed in between) left a skill
  * half-gone that the next install read as the project's own deletions.
  * Each rename is atomic; when the second one fails, the first is undone.
+ * A marker names the folder set aside while the two renames are under way,
+ * so a run killed between them can be undone exactly (`recoverSkillFolder`).
  * Returns the old folder when it could not be deleted afterwards.
  *
  * @example
  *   swapSkillFolder('/p/.agents/skills/retro.toolbox-staging', '/p/.agents/skills/retro')
  */
 export function swapSkillFolder(staging: string, dir: string): string | undefined {
-  if (!existsSync(dir)) return void renameSync(staging, dir);
+  if (entryKind(dir) === 'absent') return void renameSync(staging, dir);
   const aside = freeNameBeside(dir);
+  const marker = `${dir}${SWAP_MARKER}`;
+  writeFileSync(marker, basename(aside));
   renameSync(dir, aside);
   try {
     renameSync(staging, dir);
   } catch (e) {
     renameSync(aside, dir);
     throw e;
+  } finally {
+    rmSync(marker, { force: true });
   }
   return discard(aside) ? undefined : aside;
 }
 
+function writeStaging(staging: string, tree: SkillTree): void {
+  mkdirSync(staging, { recursive: true });
+  for (const [path, file] of tree.entries()) writeSkillFile(join(staging, path), file);
+}
+
 /**
  * Makes the folder hold exactly the tree. Written beside it first and swapped
- * in, so a failure at any point leaves the old folder whole, not a mix.
+ * in, so a failure at any point leaves the old folder whole, not a mix - and
+ * no staging folder, which holds a SKILL.md and would be listed as a skill.
  * Returns the old folder when it could not be deleted, for the caller to report.
  *
  * @example
@@ -183,10 +220,25 @@ export function swapSkillFolder(staging: string, dir: string): string | undefine
 export function writeSkillTree(dir: string, tree: SkillTree): string | undefined {
   const staging = `${dir}${STAGING}`;
   discard(staging);
-  swappedOutFolders(dir).forEach(discard);
-  mkdirSync(staging, { recursive: true });
-  for (const [path, file] of tree.entries()) writeSkillFile(join(staging, path), file);
-  return swapSkillFolder(staging, dir);
+  swappedOutEntries(dir).forEach(discard);
+  try {
+    writeStaging(staging, tree);
+    return swapSkillFolder(staging, dir);
+  } catch (e) {
+    discard(staging);
+    throw e;
+  }
+}
+
+// The folder the marker names, when it is one a swap of this skill could have
+// set aside: a real folder, beside the skill, under a swapped-out name. The
+// marker is a file in the repository; what it says is checked, not followed.
+function folderSetAside(dir: string): string | undefined {
+  const marker = `${dir}${SWAP_MARKER}`;
+  if (entryKind(marker) !== 'other') return undefined;
+  const named = readFileSync(marker, 'utf8').trim();
+  const aside = join(dirname(dir), named);
+  return swappedOutName(dir).test(named) && entryKind(aside) === 'folder' ? aside : undefined;
 }
 
 /**
@@ -194,21 +246,20 @@ export function writeSkillTree(dir: string, tree: SkillTree): string | undefined
  * read: the old folder is beside its place and the new one never moved in.
  * Read as it is, that skill would be "deleted by the project".
  *
- * The staging folder is what tells this from an old folder that merely could
- * not be deleted: a dead write leaves both, a finished one leaves no staging.
- * Without that test, a leftover was renamed back the day the project deleted
- * the skill, and the old version returned (found in review).
+ * The marker the swap wrote says which folder to put back. Without one there
+ * was no dead write: an old folder that merely could not be deleted stays
+ * where it is. Guessed from the folders present, a leftover was put back in
+ * place of the real one, which the next write then deleted (found in review).
  *
  * @example
  *   recoverSkillFolder('/p/.agents/skills/retro')
  */
 export function recoverSkillFolder(dir: string): void {
-  const staging = `${dir}${STAGING}`;
-  const interrupted = !existsSync(dir) && existsSync(staging);
-  const swappedOut = interrupted ? swappedOutFolders(dir).sort().at(-1) : undefined;
-  if (swappedOut) renameSync(swappedOut, dir);
+  const aside = folderSetAside(dir);
+  if (aside && entryKind(dir) === 'absent') renameSync(aside, dir);
+  discard(`${dir}${SWAP_MARKER}`);
   // A staging folder holds a SKILL.md: left there, agents list it as a skill.
-  discard(staging);
+  discard(`${dir}${STAGING}`);
 }
 
 function isSymlink(path: string): boolean {

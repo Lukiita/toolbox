@@ -220,6 +220,15 @@ describe('reconcileSkill - what the project decided stays decided', () => {
     });
   });
 
+  // `toolbox install <name>` after deleting the folder: the project wants it again.
+  it('copies a deleted skill again when the project asks for it', () => {
+    const outcome = reconcileSkill(
+      recorded({ local: undefined, shipped: V2, requested: true }),
+      options(),
+    );
+    expect(outcome).toEqual({ synced: true, status: 'copied', local: V2, files: [] });
+  });
+
   // A teammate with a stale node_modules must not roll the project's skills
   // back to the version they still have installed.
   it('does not touch a skill recorded by a newer toolbox than the one running', () => {

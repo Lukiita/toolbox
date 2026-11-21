@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PACKAGE_SKILLS_DIR } from "../application/skill-layout.mjs";
 import { readShippedSkillTree } from "./skill-directory.mjs";
 // The README's release recipe: `git tag vX.Y.Z`.
 const TAG_PREFIX = 'v';
@@ -60,16 +61,21 @@ function failureReason(stderr, error) {
 }
 export class GitPastReleases {
     cloneUrl;
+    downloadsRoot;
     fetched = new Map();
     downloads = [];
     /**
+     * `downloadsRoot` is where the clones go, each in a folder of its own; the
+     * system's temp folder unless a test wants to look at it.
+     *
      * @example
      *   new GitPastReleases(repositoryCloneUrl(packageJson.repository))
      */
-    constructor(cloneUrl) {
+    constructor(cloneUrl, downloadsRoot = tmpdir()) {
         this.cloneUrl = cloneUrl;
+        this.downloadsRoot = downloadsRoot;
     }
-    /** The package folder of that release, or why it could not be fetched. Asked once per run. */
+    // The package folder of that release, or why it could not be fetched. Asked once per run.
     fetch(version) {
         const known = this.fetched.get(version);
         if (known)
@@ -88,7 +94,7 @@ export class GitPastReleases {
         const release = this.fetch(version);
         if (!release.fetched)
             return { found: false, reason: release.reason };
-        const tree = readShippedSkillTree(join(release.packageDir, 'skills', name));
+        const tree = readShippedSkillTree(join(release.packageDir, PACKAGE_SKILLS_DIR, name));
         if (tree)
             return { found: true, tree };
         return { found: false, reason: `the ${version} release has no skill named ${name}` };
@@ -101,7 +107,7 @@ export class GitPastReleases {
     }
     // The tag alone, without history: the skills of one release are all a merge needs.
     clone(tag) {
-        const dir = mkdtempSync(join(tmpdir(), 'toolbox-release-'));
+        const dir = mkdtempSync(join(this.downloadsRoot, 'toolbox-release-'));
         this.downloads.push(dir);
         const run = spawnSync('git', ['clone', '--quiet', '--depth', '1', '--branch', tag, this.cloneUrl, dir], {
             encoding: 'utf8',

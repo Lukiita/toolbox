@@ -20,13 +20,12 @@ export interface SkillFolders {
     /** The project's folder for a skill; undefined when there is none. */
     readLocal(name: string): SkillTree | undefined;
     /**
-     * Makes the project's folder hold exactly the tree. Returns the path of an
-     * old folder it could not delete, when there is one.
+     * Makes the project's folder hold exactly the tree, replacing what is in
+     * its place - a folder, or a symlink, which is unlinked and never followed.
+     * Returns the path of an old folder it could not delete, when there is one.
      */
     writeLocal(name: string, tree: SkillTree): string | undefined;
     linkKind(name: string): SkillLinkKind;
-    /** Removes the symlink in a skill's place, never what it points at. */
-    removeLink(name: string): void;
     /** Undoes what a write that died left behind, before the folder is read. */
     recover(name: string): void;
     readManifest(): SkillManifest;
