@@ -113,6 +113,7 @@ system-mind-export.sh  flattens the study vault into one file for the claude.ai 
 | `codebase-design`    | deep-module vocabulary (module, interface, seam, depth, leverage, locality), the deletion test, design-it-twice — vendored from mattpocock/skills                                                                                            |
 | `diagnosing-bugs`    | hard-bug discipline: a tight red loop before any theory, minimise, falsifiable hypotheses, regression test at a real seam — vendored from mattpocock/skills                                                                                  |
 | `writing-for-agents` | how to write skills and AGENTS.md: context pointers, the two loads, leading words, no-op pruning — vendored from mattpocock/skills                                                                                                           |
+| `skill-architect`    | guided build of a new skill: discovery → architecture → craft → validate (ships `validate_skill.py`) — vendored from tech-leads-club/agent-skills                                                                                            |
 | `retro`              | end-of-session retrospective of the agent's _environment_: what should become a hook, a fitness function, a reviewer rule, a pointer, or a cut (proposes; the proposals land as a note in `~/vault/inbox/`, never as an edit to the toolbox) |
 | `setup-pre-commit`   | Husky + lint-staged formatter, typecheck and the tlc commit-msg check, each hook proven to bite                                                                                                                                              |
 
@@ -128,7 +129,7 @@ Evaluated and deferred (2026-08-27, full sweep of mattpocock/skills): `prototype
 
 ## Third-party skills — the upstream contract
 
-`tlc-spec-driven` and `tlc-spec-lean` have a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0); `grilling`, `grill-with-docs`, `domain-modeling`, `codebase-design`, `diagnosing-bugs` and `writing-for-agents` come from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). To avoid silent divergence without losing upstream improvements:
+`tlc-spec-driven`, `tlc-spec-lean` and `skill-architect` have a live upstream ([tech-leads-club/agent-skills](https://github.com/tech-leads-club/agent-skills), CC-BY-4.0); `grilling`, `grill-with-docs`, `domain-modeling`, `codebase-design`, `diagnosing-bugs` and `writing-for-agents` come from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT). To avoid silent divergence without losing upstream improvements:
 
 - the pristine upstream version lives on a **`vendor/<skill>`** branch (never edited);
 - the local delta is documented in the skill's **`UPSTREAM.md`** — every patch with its why;
