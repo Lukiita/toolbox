@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readShippedSkillTree } from "./skill-directory.mjs";
 // The README's release recipe: `git tag vX.Y.Z`.
 const TAG_PREFIX = 'v';
 const CLONE_TIMEOUT_MS = 60_000;
@@ -76,6 +77,21 @@ export class GitPastReleases {
         const release = this.clone(`${TAG_PREFIX}${version}`);
         this.fetched.set(version, release);
         return release;
+    }
+    /**
+     * A skill as that release shipped it.
+     *
+     * @example
+     *   releases.skill('2.0.0', 'ddd-tactical') // => { found: true, tree }
+     */
+    skill(version, name) {
+        const release = this.fetch(version);
+        if (!release.fetched)
+            return { found: false, reason: release.reason };
+        const tree = readShippedSkillTree(join(release.packageDir, 'skills', name));
+        if (tree)
+            return { found: true, tree };
+        return { found: false, reason: `the ${version} release has no skill named ${name}` };
     }
     /** Removes what was downloaded. */
     dispose() {

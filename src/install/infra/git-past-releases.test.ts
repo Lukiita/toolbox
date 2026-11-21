@@ -42,6 +42,29 @@ describe('GitPastReleases', () => {
     releases.dispose();
   });
 
+  it('reads a skill as that release shipped it', () => {
+    const releases = new GitPastReleases(`file://${repository(['1.2.0', '1.3.0'])}`);
+    const lookup = releases.skill('1.2.0', 'retro');
+    expect(lookup.found && lookup.tree.file('SKILL.md')?.content.toString()).toBe('retro 1.2.0\n');
+    releases.dispose();
+  });
+
+  it('says so when the release has no skill by that name', () => {
+    const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
+    expect(releases.skill('1.2.0', 'no-such-skill')).toEqual({
+      found: false,
+      reason: 'the 1.2.0 release has no skill named no-such-skill',
+    });
+    releases.dispose();
+  });
+
+  it('says why a skill cannot be read when its release cannot be fetched', () => {
+    const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
+    const lookup = releases.skill('9.9.9', 'retro');
+    expect(lookup.found ? '' : lookup.reason).toMatch(/^could not fetch v9\.9\.9 from file:/);
+    releases.dispose();
+  });
+
   it('says why when the release has no tag', () => {
     const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
     const fetched = releases.fetch('9.9.9');

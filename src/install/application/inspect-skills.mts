@@ -20,15 +20,7 @@ import {
   type SkillSnapshot,
   type UpstreamState,
 } from '../domain/skill-state.mts';
-import {
-  readShippedSkillTree,
-  readSkillTree,
-  shippedSkills,
-  skillLinkKind,
-  type SkillLinkKind,
-} from '../infra/skill-directory.mts';
-import { type SkillPaths, skillPaths, type SkillRoots } from '../infra/skill-layout.mts';
-import { readSkillManifest } from '../infra/skill-manifest-file.mts';
+import type { FileDiff, SkillFolders, SkillLinkKind, SkillPaths } from './ports.mts';
 
 /** The project's side: the domain's states, plus the two a symlink in the skill's place adds. */
 export type InspectedLocal =
@@ -51,13 +43,11 @@ export interface SkillInspection {
   paths: SkillPaths;
 }
 
-export interface InspectSkillsOptions extends SkillRoots {
+export interface InspectSkillsOptions {
+  folders: SkillFolders;
   /** The version of the running toolbox. */
   version: string;
 }
-
-/** Diffs two files; a path that does not exist reads as an empty file. */
-export type FileDiff = (from: string, to: string) => string;
 
 // A link is not a folder the manifest describes: it is named for what it is.
 const LINK_STATES: Record<SkillLinkKind, InspectedLocal | undefined> = {
@@ -94,25 +84,24 @@ function differingFiles(
 function inspectOne(
   name: string,
   manifest: SkillManifest,
-  options: InspectSkillsOptions,
+  { folders, version }: InspectSkillsOptions,
 ): SkillInspection {
-  const paths = skillPaths(options, name);
   const sides: SkillSnapshot = {
     record: manifest.find(name),
-    local: readSkillTree(paths.local),
-    shipped: readShippedSkillTree(paths.shipped),
+    local: folders.readLocal(name),
+    shipped: folders.readShipped(name),
   };
   // The same classification `toolbox install` acts on: the two commands
   // cannot disagree about a skill.
-  const state = classifySkill(sides, options.version);
-  const local = LINK_STATES[skillLinkKind(paths.local, options.packageDir)] ?? state.local;
+  const state = classifySkill(sides, version);
+  const local = LINK_STATES[folders.linkKind(name)] ?? state.local;
   return {
     name,
     version: sides.record?.version,
     local,
     upstream: state.upstream,
     ...differingFiles(sides, local, state.upstream),
-    paths,
+    paths: folders.paths(name),
   };
 }
 
@@ -120,12 +109,12 @@ function inspectOne(
  * The state of every skill the package ships or the manifest records, by name.
  *
  * @example
- *   inspectSkills({ packageDir, projectRoot: '/p', version: '2.1.0' })
+ *   inspectSkills({ folders, version: '2.1.0' })
  *   // => [{ name: 'ddd-tactical', local: 'altered', upstream: 'current', alteredFiles: ['SKILL.md'], ... }]
  */
 export function inspectSkills(options: InspectSkillsOptions): SkillInspection[] {
-  const manifest = readSkillManifest(options.projectRoot);
-  const names = new Set([...shippedSkills(options.packageDir), ...manifest.names()]);
+  const manifest = options.folders.readManifest();
+  const names = new Set([...options.folders.shipped(), ...manifest.names()]);
   return [...names].sort().map((name) => inspectOne(name, manifest, options));
 }
 

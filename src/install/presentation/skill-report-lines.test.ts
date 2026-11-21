@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { SkillInspection } from '../application/inspect-skills.mts';
 import type { InstallStatus } from '../application/install-skills.mts';
-import { inspectionLines, installLine } from './skill-report-lines.mts';
+import { availableLine, inspectionLines, installLine } from './skill-report-lines.mts';
 
 describe('installLine', () => {
   it('names the status and the folder for a skill that needs no explanation', () => {
@@ -30,7 +30,7 @@ describe('installLine', () => {
 
   it('names the conflicting files and the way out', () => {
     expect(installLine({ name: 'ddd-tactical', status: 'conflict', files: ['SKILL.md'] })).toBe(
-      "conflict:        .agents/skills/ddd-tactical [SKILL.md] - the new version conflicts with the project's edits; nothing was written (`toolbox install --write-conflicts` writes the conflict markers)",
+      "conflict:        .agents/skills/ddd-tactical [SKILL.md] - the new version conflicts with the project's edits; nothing was written (`toolbox install --write-conflicts` writes the merge for you to settle)",
     );
   });
 
@@ -44,6 +44,43 @@ describe('installLine', () => {
       }),
     ).toBe(
       'no-original:     .agents/skills/ddd-tactical - edited by the project; the new version was not merged and nothing was written, because the original could not be read: could not fetch v1.2.0 from https://example.com/t.git: no route to host',
+    );
+  });
+
+  // Edit against delete, add against add, binary: nothing to mark there.
+  it('does not promise markers in every file of a merge written with conflicts', () => {
+    expect(
+      installLine({
+        name: 'ddd-tactical',
+        status: 'conflict-marked',
+        files: ['SKILL.md', 'x.bin'],
+      }),
+    ).toBe(
+      "conflict-marked: .agents/skills/ddd-tactical [SKILL.md, x.bin] - written for you to settle: conflict markers where the text can carry them, the project's side kept elsewhere; check every file listed",
+    );
+  });
+
+  it('says which skill brought another one along', () => {
+    expect(
+      installLine({
+        name: 'sql-quality',
+        status: 'copied',
+        files: [],
+        reason: 'needed by code-review',
+      }),
+    ).toBe('copied:          .agents/skills/sql-quality - needed by code-review');
+  });
+
+  it('says what went wrong with a skill that failed', () => {
+    expect(
+      installLine({
+        name: 'retro',
+        status: 'failed',
+        files: [],
+        reason: 'EACCES: permission denied',
+      }),
+    ).toBe(
+      'failed:          .agents/skills/retro - could not be settled; the other skills were: EACCES: permission denied',
     );
   });
 
@@ -63,6 +100,8 @@ describe('installLine', () => {
       'ahead',
       'pinned',
       'retired',
+      'available',
+      'failed',
     ];
     for (const status of statuses) {
       expect(installLine({ name: 'x', status, files: [] })).toMatch(
@@ -133,5 +172,13 @@ describe('inspectionLines', () => {
         inspection({ version: undefined, local: 'unmanaged', upstream: 'untracked' }),
       ),
     ).toEqual(['unmanaged         ddd-tactical']);
+  });
+});
+
+describe('availableLine', () => {
+  it('names every skill the project did not pick in one line', () => {
+    expect(availableLine(['retro', 'sql-quality'])).toBe(
+      'available:       retro, sql-quality - shipped by the toolbox, not installed here; `toolbox install <name>` adds it',
+    );
   });
 });

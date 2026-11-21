@@ -81,6 +81,17 @@ describe('readSkillTree', () => {
     expect(read?.file('SKILL.md')?.executable).toBe(false);
   });
 
+  // Node's own recursive listing follows a link to a folder; read that way,
+  // files from outside the skill entered its tree, its diff and its merges.
+  it('never follows a symbolic link, to a folder or to a file', () => {
+    const root = scratch();
+    put(root, 'outside/private.txt', 'not part of any skill');
+    put(root, 'retro/SKILL.md', 'x');
+    symlinkSync('../outside', join(root, 'retro', 'linked'), 'dir');
+    symlinkSync('../outside/private.txt', join(root, 'retro', 'linked.txt'));
+    expect(readSkillTree(join(root, 'retro'))?.paths()).toEqual(['SKILL.md']);
+  });
+
   // Running a skill's Python script leaves these behind in the project's
   // copy; counted, every skill with a script would read as edited.
   it('leaves out what running a script or opening the folder leaves behind', () => {
@@ -238,6 +249,7 @@ describe('recoverSkillFolder', () => {
     const root = scratch();
     put(root, 'retro.toolbox-old/SKILL.md', 'mine');
     put(root, 'retro.toolbox-old/references/a.md', 'a');
+    put(root, 'retro.toolbox-staging/SKILL.md', 'the new one, never moved in');
     recoverSkillFolder(join(root, 'retro'));
     expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('mine');
     expect(readdirSync(root)).toEqual(['retro']);
@@ -251,9 +263,12 @@ describe('recoverSkillFolder', () => {
     expect(readdirSync(root)).toEqual(['retro']);
   });
 
-  it('does not take leftovers of an old folder for the skill', () => {
+  // An old folder that could not be deleted is still whole, SKILL.md and all,
+  // and the project later deleted the skill. No staging folder: the write
+  // that left it had finished. Renamed back, the old version would return.
+  it('does not take an old folder that could not be deleted for a dead write', () => {
     const root = scratch();
-    put(root, 'retro.toolbox-old/scripts/__pycache__/run.pyc', 'what could not be deleted');
+    put(root, 'retro.toolbox-old/SKILL.md', 'the version before the last update');
     recoverSkillFolder(join(root, 'retro'));
     expect(existsSync(join(root, 'retro'))).toBe(false);
   });

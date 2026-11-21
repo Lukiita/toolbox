@@ -1,4 +1,4 @@
-import type { FileDiff } from '../application/inspect-skills.mts';
+import type { FileDiff } from '../application/ports.mts';
 /**
  * A unified diff of two files; empty when they are equal.
  *

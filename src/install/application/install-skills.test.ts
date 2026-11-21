@@ -19,7 +19,19 @@ import { describe, expect, it } from 'vitest';
 
 import { scratchDirs } from '../infra/scratch-dirs.fixtures.ts';
 
-import { scratchProject, SKILL_V1, statuses, writeFiles } from './install.fixtures.ts';
+import {
+  hasInstalledSkills,
+  skillCatalog,
+  type SkillInstallReport,
+  UnknownSkillError,
+} from './install-skills.mts';
+import {
+  scratchProject,
+  type ScratchProject,
+  SKILL_V1,
+  statuses,
+  writeFiles,
+} from './install.fixtures.ts';
 
 const scratch = scratchDirs('toolbox-install-');
 
@@ -27,6 +39,12 @@ const read = (path: string): string => readFileSync(path, 'utf8');
 // sha256sum of "SKILL.md\0<sha256 of 'hello\n'>\n" - see skill-tree.test.ts.
 const RETRO_HASH = 'sha256:c9a89a84ba57e7d9f7da6fce928f625d9d5705f00cfdb8aa6117dbd8d6d9122a';
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
+
+/** Leaves in a skill's place the relative link the 1.x install wrote. */
+function linkAsV1(project: ScratchProject, name: string): void {
+  mkdirSync(project.local('.'), { recursive: true });
+  symlinkSync(`../../node_modules/@lukiita/toolbox/skills/${name}`, project.local(name), 'dir');
+}
 
 const IN_JAVA = SKILL_V1.replace('first rule', 'first rule, in Java');
 const REVISED = SKILL_V1.replace('last rule', 'last rule, revised');
@@ -103,6 +121,136 @@ describe('installSkills - first install', () => {
   });
 });
 
+describe('installSkills - the project picks its skills', () => {
+  const only = (...names: string[]): { select: { names: string[]; all: boolean } } => ({
+    select: { names, all: false },
+  });
+
+  it('copies the skills it asked for and leaves the rest available', () => {
+    const project = scratchProject(scratch());
+
+    const reports = project.install('1.2.0', only('retro'));
+
+    expect(reports).toEqual([
+      { name: 'code-review', status: 'available', files: [] },
+      { name: 'retro', status: 'copied', files: [] },
+    ]);
+    expect(existsSync(project.local('code-review'))).toBe(false);
+    expect(Object.keys(project.records())).toEqual(['retro']);
+  });
+
+  it('keeps the selection: a plain install updates what the project has and adds nothing', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0', only('retro'));
+    project.ship('retro', { 'SKILL.md': 'new\n' });
+
+    const reports = project.install('1.3.0');
+
+    expect(statuses(reports)).toEqual({ 'code-review': 'available', retro: 'updated' });
+    expect(existsSync(project.local('code-review'))).toBe(false);
+  });
+
+  it('adds a skill named later to the ones the project has', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0', only('retro'));
+
+    const reports = project.install('1.2.0', only('code-review'));
+
+    expect(statuses(reports)).toEqual({ 'code-review': 'copied', retro: 'unchanged' });
+  });
+
+  it('copies everything when asked for all', () => {
+    const project = scratchProject(scratch());
+    const reports = project.install('1.2.0', { select: { names: [], all: true } });
+    expect(statuses(reports)).toEqual({ 'code-review': 'copied', retro: 'copied' });
+  });
+
+  // A skill installed without the sibling it calls has a dead path in it.
+  it('brings along the siblings a picked skill reaches, and says which skill needed them', () => {
+    const project = scratchProject(scratch());
+    project.ship('code-review', {
+      'SKILL.md': 'load `<skill-dir>/../sql-quality/references/checklist.md`',
+    });
+    project.ship('sql-quality', { 'SKILL.md': 'see `<skill-dir>/../retro/SKILL.md`' });
+
+    const reports = project.install('1.2.0', only('code-review'));
+
+    expect(reports).toEqual([
+      { name: 'code-review', status: 'copied', files: [] },
+      { name: 'retro', status: 'copied', files: [], reason: 'needed by sql-quality' },
+      { name: 'sql-quality', status: 'copied', files: [], reason: 'needed by code-review' },
+    ]);
+  });
+
+  // Only on the way in: what the project deleted stays deleted.
+  it('does not bring back a sibling the project deleted from a skill it already has', () => {
+    const project = scratchProject(scratch());
+    project.ship('code-review', { 'SKILL.md': 'load `<skill-dir>/../retro/SKILL.md`' });
+    project.install('1.2.0', only('code-review'));
+    rmSync(project.local('retro'), { recursive: true });
+    project.install('1.2.0');
+
+    const reports = project.install('1.2.0', only('code-review'));
+
+    expect(statuses(reports)).toEqual({ 'code-review': 'unchanged', retro: 'available' });
+  });
+
+  it('reports a picked skill that cannot be read as failed, without looking for what it needs', () => {
+    const project = scratchProject(scratch());
+    project.ship('code-review', { 'SKILL.md': SKILL_V1, 'bad\\name.md': 'x' });
+
+    const reports = project.install('1.2.0', only('code-review'));
+
+    expect(statuses(reports)).toEqual({ 'code-review': 'failed', retro: 'available' });
+  });
+
+  it('refuses a name the package does not ship, before touching anything', () => {
+    const project = scratchProject(scratch());
+    expect(() => project.install('1.2.0', only('retro', 'no-such-skill'))).toThrow(
+      new UnknownSkillError(
+        'unknown skill: received "no-such-skill", expected one of code-review, retro',
+      ),
+    );
+    expect(existsSync(project.local('retro'))).toBe(false);
+  });
+
+  it("never copies over the project's own folder, even when its name was asked for", () => {
+    const project = scratchProject(scratch());
+    writeFiles(project.local('retro'), { 'SKILL.md': 'mine' });
+    expect(statuses(project.install('1.2.0', only('retro'))).retro).toBe('unmanaged');
+    expect(read(project.local('retro/SKILL.md'))).toBe('mine');
+  });
+});
+
+describe('hasInstalledSkills', () => {
+  it('is false in a project that never installed, true once it has a record', () => {
+    const project = scratchProject(scratch());
+    expect(hasInstalledSkills(project.folders)).toBe(false);
+    project.install();
+    expect(hasInstalledSkills(project.folders)).toBe(true);
+  });
+
+  it('is true for a project that only has links the 1.x install wrote', () => {
+    const project = scratchProject(scratch());
+    linkAsV1(project, 'retro');
+    expect(hasInstalledSkills(project.folders)).toBe(true);
+  });
+});
+
+describe('skillCatalog', () => {
+  it('lists what the package ships, each with the first sentence of its description', () => {
+    const project = scratchProject(scratch());
+    project.ship('retro', {
+      'SKILL.md':
+        '---\nname: retro\ndescription: Looks back at a feature. Use after it ships.\n---\n',
+    });
+    expect(skillCatalog(project.folders)).toEqual([
+      { name: 'code-review', summary: '' },
+      { name: 'retro', summary: 'Looks back at a feature.' },
+    ]);
+  });
+});
+
 describe('installSkills - installing again, same version', () => {
   it('changes nothing: no file and no manifest is rewritten', () => {
     const project = scratchProject(scratch());
@@ -138,14 +286,17 @@ describe('installSkills - installing again, same version', () => {
     expect(statuses(project.install()).retro).toBe('unchanged');
   });
 
-  it('does not bring back a skill the project deleted', () => {
+  // Deleting the folder is how a project stops wanting a skill.
+  it('does not bring back a skill the project deleted: its record goes, and it is only offered', () => {
     const project = scratchProject(scratch());
     project.install();
     rmSync(project.local('retro'), { recursive: true });
 
-    const reports = project.install();
+    expect(statuses(project.install()).retro).toBe('removed');
+    expect(existsSync(project.local('retro'))).toBe(false);
+    expect(project.records()).not.toHaveProperty('retro');
 
-    expect(statuses(reports).retro).toBe('removed');
+    expect(statuses(project.install()).retro).toBe('available');
     expect(existsSync(project.local('retro'))).toBe(false);
   });
 });
@@ -156,29 +307,43 @@ describe('installSkills - a run that does not finish', () => {
     const project = scratchProject(scratch());
     project.install();
     renameSync(project.local('retro'), project.local('retro.toolbox-old'));
+    writeFiles(project.local('retro.toolbox-staging'), { 'SKILL.md': 'never moved in' });
 
     const reports = project.install();
 
     expect(statuses(reports).retro).toBe('unchanged');
     expect(read(project.local('retro/SKILL.md'))).toBe('hello\n');
-    expect(existsSync(project.local('retro.toolbox-old'))).toBe(false);
+    expect(readdirSync(project.local('.')).sort()).toEqual(['code-review', 'retro']);
   });
 
-  // `retro` cannot be read (a file name no tree accepts), after `code-review`
-  // was already replaced on disk.
-  it('keeps the records and the reports of the skills settled before a later one failed', () => {
+  // `code-review` cannot be read: one of its files has a name no tree accepts.
+  // `retro`, after it in the alphabet, must still be settled.
+  it('reports a skill that cannot be settled as failed, and settles the others', () => {
     const project = scratchProject(scratch());
     project.install('1.2.0');
-    project.ship('code-review', { 'SKILL.md': REVISED });
-    project.ship('retro', { 'SKILL.md': 'hello\n', 'bad\\name.md': 'x' });
-    project.reported.length = 0;
+    project.ship('code-review', { 'SKILL.md': SKILL_V1, 'bad\\name.md': 'x' });
+    project.ship('retro', { 'SKILL.md': 'new\n' });
 
-    expect(() => project.install('1.3.0')).toThrow(/skill file path/);
+    const reports = project.install('1.3.0');
 
-    expect(read(project.local('code-review/SKILL.md'))).toBe(REVISED);
-    expect(project.records()['code-review'].version).toBe('1.3.0');
-    expect(project.records().retro.version).toBe('1.2.0');
-    expect(project.reported).toEqual([{ name: 'code-review', status: 'updated', files: [] }]);
+    expect(reports[0]).toMatchObject({ name: 'code-review', status: 'failed', files: [] });
+    expect(reports[0].reason).toMatch(/^skill file path: received "bad\\\\name\.md"/);
+    expect(reports[1]).toEqual({ name: 'retro', status: 'updated', files: [] });
+    expect(read(project.local('retro/SKILL.md'))).toBe('new\n');
+    expect(project.records()['code-review'].version).toBe('1.2.0');
+    expect(project.records().retro.version).toBe('1.3.0');
+  });
+
+  // The manifest itself cannot be read: nothing can be settled, and the
+  // records of an earlier run are not overwritten by an empty manifest.
+  it('stops, and leaves the manifest as it was, when the manifest cannot be read', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    const manifest = join(project.projectRoot, '.agents', 'toolbox-skills.json');
+    writeFileSync(manifest, '{ broken');
+
+    expect(() => project.install('1.3.0')).toThrow(/toolbox-skills\.json/);
+    expect(read(manifest)).toBe('{ broken');
   });
 
   it('hands over each report as the skill is settled, the retired ones last', () => {
@@ -281,7 +446,7 @@ describe('installSkills - the package moved to a new version', () => {
     const revised = SKILL_V1.replace('middle', 'middle, revised');
     project.ship('code-review', { 'SKILL.md': revised, 'references/smells.md': 'smells v2\n' });
 
-    const reports = project.install('1.3.0', true);
+    const reports = project.install('1.3.0', { writeConflicts: true });
 
     expect(reports[0]).toEqual({
       name: 'code-review',
@@ -382,9 +547,55 @@ describe('installSkills - the package moved to a new version', () => {
     project.install('1.2.0');
     expect(project.releases.disposals).toBe(1);
     writeFileSync(join(project.projectRoot, '.agents', 'toolbox-skills.json'), '{ broken');
-    expect(() => project.install('1.2.0')).toThrow(/toolbox-skills\.json/);
+    const plain = { select: { names: [], all: false } };
+    expect(() => project.install('1.2.0', plain)).toThrow(/toolbox-skills\.json/);
     expect(project.releases.disposals).toBe(2);
   });
+
+  // Saved in Windows-1252: 0xE7 0xE3 for "çã", which is not valid UTF-8.
+  it('merges a text file that is not UTF-8 without rewriting a byte of it', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    const mine = Buffer.from(SKILL_V1.replace('first rule', 'descri\u00e7\u00e3o'), 'latin1');
+    writeFileSync(project.local('code-review/SKILL.md'), mine);
+    project.ship('code-review', { 'SKILL.md': REVISED, 'references/smells.md': 'smells v1\n' });
+
+    expect(statuses(project.install('1.3.0'))['code-review']).toBe('merged');
+
+    const merged = readFileSync(project.local('code-review/SKILL.md'));
+    expect(merged).toEqual(
+      Buffer.from(
+        SKILL_V1.replace('first rule', 'descri\u00e7\u00e3o').replace(
+          'last rule',
+          'last rule, revised',
+        ),
+        'latin1',
+      ),
+    );
+  });
+
+  // The old folder is read-only (created as root in a container): it can be
+  // moved aside but not emptied. Root itself can delete anything, so there
+  // the write leaves nothing behind and there is nothing to report.
+  it.skipIf(process.getuid?.() === 0)(
+    'says so when the old folder of an updated skill could not be deleted',
+    () => {
+      const project = scratchProject(scratch());
+      project.install('1.2.0');
+      project.ship('retro', { 'SKILL.md': 'new\n' });
+      chmodSync(project.local('retro'), 0o555);
+      try {
+        const report = project.install('1.3.0').find(({ name }) => name === 'retro');
+        expect(report?.status).toBe('updated');
+        expect(report?.reason).toBe(
+          `the old folder could not be deleted; remove ${project.local('retro.toolbox-old')} by hand`,
+        );
+        expect(read(project.local('retro/SKILL.md'))).toBe('new\n');
+      } finally {
+        chmodSync(project.local('retro.toolbox-old'), 0o755);
+      }
+    },
+  );
 
   it('reports a recorded skill the package no longer ships, and leaves it in place', () => {
     const project = scratchProject(scratch());
@@ -399,6 +610,32 @@ describe('installSkills - the package moved to a new version', () => {
     ]);
     expect(read(project.local('retro/SKILL.md'))).toBe('hello\n');
     expect(project.records().retro.version).toBe('1.2.0');
+  });
+
+  it('drops the record of a retired skill once the project deleted its folder', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    rmSync(join(project.packageDir, 'skills', 'retro'), { recursive: true });
+    rmSync(project.local('retro'), { recursive: true });
+
+    expect(project.install('1.3.0')[1]).toEqual({ name: 'retro', status: 'removed', files: [] });
+    expect(project.records()).not.toHaveProperty('retro');
+    expect(statuses(project.install('1.3.0'))).toEqual({ 'code-review': 'unchanged' });
+  });
+
+  // Toolbox 1.3.0 added a skill; a teammate still runs 1.2.0, which does not
+  // ship it. "Retired - delete it if unused" would be followed.
+  it('does not call retired a skill a newer toolbox added', () => {
+    const project = scratchProject(scratch());
+    project.ship('brand-new', { 'SKILL.md': 'added in 1.3.0\n' });
+    project.install('1.3.0');
+    rmSync(join(project.packageDir, 'skills', 'brand-new'), { recursive: true });
+
+    const reports = project.install('1.2.0');
+
+    expect(statuses(reports)['brand-new']).toBe('ahead');
+    expect(read(project.local('brand-new/SKILL.md'))).toBe('added in 1.3.0\n');
+    expect(project.records()['brand-new'].version).toBe('1.3.0');
   });
 
   // A teammate who pulled the update but still has the old package installed.
@@ -416,19 +653,47 @@ describe('installSkills - the package moved to a new version', () => {
   });
 });
 
+/** `retro` was reported copied and is a real folder with the shipped content, not a link. */
+function expectACopyOfRetro(project: ScratchProject, reports: SkillInstallReport[]): void {
+  expect(statuses(reports).retro).toBe('copied');
+  expect(lstatSync(project.local('retro')).isSymbolicLink()).toBe(false);
+  expect(read(project.local('retro/SKILL.md'))).toBe('hello\n');
+}
+
 describe('installSkills - what was already in .agents/skills', () => {
   it('replaces the link an earlier `toolbox install` wrote with a copy', () => {
     const project = scratchProject(scratch());
-    mkdirSync(project.local('.'), { recursive: true });
-    symlinkSync('../../node_modules/@lukiita/toolbox/skills/retro', project.local('retro'), 'dir');
+    linkAsV1(project, 'retro');
 
     const reports = project.install();
 
-    expect(statuses(reports).retro).toBe('copied');
-    expect(lstatSync(project.local('retro')).isSymbolicLink()).toBe(false);
-    expect(read(project.local('retro/SKILL.md'))).toBe('hello\n');
+    expectACopyOfRetro(project, reports);
     // The package's own folder was the link's target: it must survive the swap.
     expect(read(join(project.packageDir, 'skills', 'retro', 'SKILL.md'))).toBe('hello\n');
+  });
+
+  // The manifest was committed and `.agents/skills/` was still git-ignored:
+  // a teammate has the records and, on disk, the links of the 1.x install.
+  it('replaces that link with a copy even when the manifest already has the skill', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    rmSync(project.local('retro'), { recursive: true });
+    linkAsV1(project, 'retro');
+
+    const reports = project.install('1.2.0');
+
+    expectACopyOfRetro(project, reports);
+    expect(project.records().retro.version).toBe('1.2.0');
+  });
+
+  // The links are the selection of a 1.x project: only they become copies.
+  it('copies the skills a 1.x project had linked, and only those', () => {
+    const project = scratchProject(scratch());
+    linkAsV1(project, 'retro');
+
+    const reports = project.install();
+
+    expect(statuses(reports)).toEqual({ 'code-review': 'available', retro: 'copied' });
   });
 
   it('replaces that link under a pnpm-style package dir, itself a link into the store', () => {
@@ -438,8 +703,7 @@ describe('installSkills - what was already in .agents/skills', () => {
     writeFiles(join(store, 'skills', 'retro'), { 'SKILL.md': 'hello\n' });
     rmSync(project.packageDir, { recursive: true });
     symlinkSync(store, project.packageDir, 'dir');
-    mkdirSync(project.local('.'), { recursive: true });
-    symlinkSync('../../node_modules/@lukiita/toolbox/skills/retro', project.local('retro'), 'dir');
+    linkAsV1(project, 'retro');
 
     project.install();
 

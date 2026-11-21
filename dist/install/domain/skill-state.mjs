@@ -21,12 +21,14 @@ function localState(snapshot) {
 }
 function upstreamState(snapshot, runningVersion) {
     const { record, shipped } = snapshot;
-    if (!shipped)
-        return 'retired';
     // A teammate with a stale node_modules: what their package ships is older
-    // than the record, never something to move the project's skill to.
+    // than the record, never something to move the project's skill to. Asked
+    // before "is it shipped at all": a skill a newer toolbox added is not
+    // shipped by the older one, and "retired - delete it" would be obeyed.
     if (isOlderVersion(runningVersion, record.version))
         return 'ahead';
+    if (!shipped)
+        return 'retired';
     return shipped.hash === record.hash || holdsShipped(snapshot) ? 'current' : 'behind';
 }
 /**

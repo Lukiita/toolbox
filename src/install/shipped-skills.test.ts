@@ -10,11 +10,10 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { readSkillTree, shippedSkills } from './infra/skill-directory.mts';
+import { describeSkill, SIBLING_REFERENCE } from './domain/skill-catalog.mts';
+import { readShippedSkillTree, readSkillTree, shippedSkills } from './infra/skill-directory.mts';
 
 const REPO = resolve(import.meta.dirname, '..', '..');
-// `<skill-dir>/../<skill>/<path>`: the sibling folder, wherever the skills live.
-const SIBLING_REFERENCE = /<skill-dir>\/\.\.\/([a-z0-9-]+)\/([\w./-]*)/g;
 
 interface SkillText {
   skill: string;
@@ -52,5 +51,17 @@ describe('the shipped skills', () => {
         .map(([reference]) => `${skill}/${file}: ${reference}`),
     );
     expect(dead).toEqual([]);
+  });
+
+  // A project installs a selection: every sibling a skill reaches must be a
+  // skill the package ships, or the install could not bring it along.
+  it('need only skills that are shipped', () => {
+    const shipped = shippedSkills(REPO);
+    const missing = shipped.flatMap((skill) => {
+      const tree = readShippedSkillTree(join(REPO, 'skills', skill));
+      const needs = tree ? describeSkill(tree).needs : [];
+      return needs.filter((sibling) => !shipped.includes(sibling)).map((s) => `${skill} -> ${s}`);
+    });
+    expect(missing).toEqual([]);
   });
 });

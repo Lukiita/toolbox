@@ -1,3 +1,4 @@
+import type { SkillLinkKind } from '../application/ports.mts';
 import { SkillTree } from '../domain/skill-tree.mts';
 /**
  * Every folder under the package's `skills/` that has a SKILL.md.
@@ -27,31 +28,35 @@ export declare function readShippedSkillTree(dir: string): SkillTree | undefined
  * a delete that failed half-way (or a run killed in between) left a skill
  * half-gone that the next install read as the project's own deletions.
  * Each rename is atomic; when the second one fails, the first is undone.
+ * Returns the old folder when it could not be deleted afterwards.
  *
  * @example
  *   swapSkillFolder('/p/.agents/skills/retro.toolbox-staging', '/p/.agents/skills/retro')
  */
-export declare function swapSkillFolder(staging: string, dir: string): void;
+export declare function swapSkillFolder(staging: string, dir: string): string | undefined;
 /**
  * Makes the folder hold exactly the tree. Written beside it first and swapped
  * in, so a failure at any point leaves the old folder whole, not a mix.
+ * Returns the old folder when it could not be deleted, for the caller to report.
  *
  * @example
  *   writeSkillTree('/p/.agents/skills/retro', shipped)
  */
-export declare function writeSkillTree(dir: string, tree: SkillTree): void;
+export declare function writeSkillTree(dir: string, tree: SkillTree): string | undefined;
 /**
- * Undoes what a write that died left behind, before the folder is read: a
- * staging folder (agents would list it as a skill), and a folder swapped out
- * with nothing swapped in - read as it is, that skill would be "deleted by the
- * project" and never installed again.
+ * Undoes a write that died between its two renames, before the folder is
+ * read: the old folder is beside its place and the new one never moved in.
+ * Read as it is, that skill would be "deleted by the project".
+ *
+ * The staging folder is what tells this from an old folder that merely could
+ * not be deleted: a dead write leaves both, a finished one leaves no staging.
+ * Without that test, a leftover was renamed back the day the project deleted
+ * the skill, and the old version returned (found in review).
  *
  * @example
  *   recoverSkillFolder('/p/.agents/skills/retro')
  */
 export declare function recoverSkillFolder(dir: string): void;
-/** `ours`: written by the link-era install, or dangling. `pinned`: the project's own link. */
-export type SkillLinkKind = 'none' | 'ours' | 'pinned';
 /**
  * What kind of symlink sits where a skill goes, if any.
  *

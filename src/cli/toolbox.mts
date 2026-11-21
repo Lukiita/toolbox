@@ -3,33 +3,44 @@
 //
 //   toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]
 //   toolbox pre-push        (git's pre-push stdin; install as .husky/pre-push)
-//   toolbox install [--write-conflicts]
-//                           (copies the shipped skills into .agents/skills/, ADR-0003)
+//   toolbox install [--all] [--write-conflicts] [<skill>...]
+//                           (copies the skills the project picks into .agents/skills/
+//                            and brings the ones it has up to date, ADR-0003)
 //   toolbox skills [--diff] (which skills the project edited, which are behind the package)
 //
-// Exit codes: 0 ok, 1 the ratchet failed, 2 usage error - whoever reads a CI
-// log needs to tell the last two apart.
+// Exit codes: 0 ok, 1 the ratchet failed or a skill could not be installed,
+// 2 usage error - whoever reads a CI log needs to tell the last two apart.
 //
 // Ships built (`dist/`, committed): Node refuses to strip types under
 // node_modules, and pnpm 12 refuses a git dependency's build script unless the
 // consumer allowlists it per commit - so nothing runs on install (ADR-0001).
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createInterface } from 'node:readline/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadToolboxConfig } from '../config/load-config.mts';
 import type { ResolvedToolboxConfig } from '../config/toolbox-config.mts';
 import {
+  availableLine,
+  DiskSkillFolders,
   gitFileDiff,
   GitPastReleases,
   gitTextMerge,
+  hasInstalledSkills,
   inspectionLines,
   inspectSkills,
   installLine,
   installSkills,
+  InstallUsageError,
+  parseInstallArguments,
+  parseSelection,
   repositoryCloneUrl,
+  selectionMenu,
+  skillCatalog,
   skillDiffs,
+  type SkillSelection,
 } from '../install/index.mts';
 import { decidePrePush, parsePushedRefs, type PrePushPorts } from '../pre-push/pre-push.mts';
 import { type GateOptions, parseArgs, UsageError } from '../quality-gate/args.mts';
@@ -40,7 +51,7 @@ const USAGE =
   'Usage: toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]\n' +
   '       (--update-baseline re-freezes and exits; --baseline-from and --out are ignored with it)\n' +
   '       toolbox pre-push\n' +
-  '       toolbox install [--write-conflicts]\n' +
+  '       toolbox install [--all] [--write-conflicts] [<skill>...]\n' +
   '       toolbox skills [--diff]';
 
 function quality(root: string, config: ResolvedToolboxConfig, args: string[]): number {
@@ -127,35 +138,79 @@ function assertKnownFlags(args: readonly string[], known: readonly string[]): vo
   if (unknown !== undefined) throw new UsageError(`unknown argument: ${unknown}`);
 }
 
-function install(root: string, args: string[]): number {
-  assertKnownFlags(args, ['--write-conflicts']);
+function skillFolders(root: string): DiskSkillFolders {
+  return new DiskSkillFolders({ packageDir: PACKAGE_DIR, projectRoot: root });
+}
+
+// A terminal is asked; a script or an agent is told what to type. Guessing
+// "all of them" for either would undo the point of picking.
+async function askWhichSkills(folders: DiskSkillFolders, version: string): Promise<SkillSelection> {
+  const catalog = skillCatalog(folders);
+  const menu = selectionMenu(catalog, version);
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new UsageError(
+      `this project has no skill from the toolbox yet: name the ones it gets, or pass --all.\n${menu.slice(0, -1).join('\n')}`,
+    );
+  }
+  for (const line of menu) console.log(line);
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return parseSelection(
+      await terminal.question('> '),
+      catalog.map((entry) => entry.name),
+    );
+  } finally {
+    terminal.close();
+  }
+}
+
+// Names or --all on the command line, or a project that already has skills:
+// the selection is settled. Only a project starting from nothing is asked.
+async function selectionFor(
+  request: SkillSelection,
+  folders: DiskSkillFolders,
+  version: string,
+): Promise<SkillSelection> {
+  const settled = request.all || request.names.length > 0 || hasInstalledSkills(folders);
+  return settled ? request : askWhichSkills(folders, version);
+}
+
+async function install(root: string, args: string[]): Promise<number> {
+  const request = parseInstallArguments(args);
   const { version, repository } = packageManifest();
-  installSkills({
-    packageDir: PACKAGE_DIR,
-    projectRoot: root,
+  const folders = skillFolders(root);
+  const available: string[] = [];
+  const reports = installSkills({
+    folders,
     version,
-    writeConflicts: args.includes('--write-conflicts'),
+    select: await selectionFor(request, folders, version),
+    writeConflicts: request.writeConflicts,
     mergeText: gitTextMerge,
     // The original of an edited skill comes from the tag of the release it
     // was copied from, in the package's own repository (ADR-0003).
     pastReleases: new GitPastReleases(repositoryCloneUrl(repository)),
-    // Printed skill by skill: a run that fails later has already said what it wrote.
-    onReport: (report) => console.log(installLine(report)),
+    // Printed skill by skill: a run that stops early has already said what it
+    // wrote. The skills the project did not pick go in one line, at the end.
+    onReport: (report) => {
+      if (report.status === 'available') available.push(report.name);
+      else console.log(installLine(report));
+    },
   });
-  return 0;
+  if (available.length > 0) console.log(availableLine(available));
+  return reports.some((report) => report.status === 'failed') ? 1 : 0;
 }
 
 function skills(root: string, args: string[]): number {
   assertKnownFlags(args, ['--diff']);
   const inspections = inspectSkills({
-    packageDir: PACKAGE_DIR,
-    projectRoot: root,
+    folders: skillFolders(root),
     version: packageManifest().version,
   });
   for (const inspection of inspections) {
     for (const line of inspectionLines(inspection)) console.log(line);
-    if (args.includes('--diff'))
+    if (args.includes('--diff')) {
       for (const diff of skillDiffs(inspection, gitFileDiff)) console.log(diff);
+    }
   }
   return 0;
 }
@@ -188,6 +243,7 @@ try {
   process.exitCode = await main(process.argv.slice(2));
 } catch (e) {
   const message = e instanceof Error ? e.message : String(e);
-  console.error(e instanceof UsageError ? `${message}\n${USAGE}` : `toolbox: ${message}`);
+  const usage = e instanceof UsageError || e instanceof InstallUsageError;
+  console.error(usage ? `${message}\n${USAGE}` : `toolbox: ${message}`);
   process.exitCode = 2;
 }

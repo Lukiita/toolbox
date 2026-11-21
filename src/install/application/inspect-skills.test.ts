@@ -11,8 +11,7 @@ import { scratchProject, type ScratchProject, SKILL_V1, writeFiles } from './ins
 const scratch = scratchDirs('toolbox-install-');
 
 function inspect(project: ScratchProject, version = '1.2.0'): Record<string, SkillInspection> {
-  const { packageDir, projectRoot } = project;
-  const inspections = inspectSkills({ packageDir, projectRoot, version });
+  const inspections = inspectSkills({ folders: project.folders, version });
   return Object.fromEntries(inspections.map((inspection) => [inspection.name, inspection]));
 }
 
@@ -47,8 +46,7 @@ describe('inspectSkills', () => {
     project.install();
     rmSync(join(project.packageDir, 'skills', 'retro'), { recursive: true });
     project.ship('zeta', { 'SKILL.md': 'z' });
-    const { packageDir, projectRoot } = project;
-    const names = inspectSkills({ packageDir, projectRoot, version: '1.2.0' }).map((i) => i.name);
+    const names = inspectSkills({ folders: project.folders, version: '1.2.0' }).map((i) => i.name);
     expect(names).toEqual(['code-review', 'retro', 'zeta']);
   });
 

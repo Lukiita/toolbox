@@ -3,10 +3,11 @@
 // nowhere deeper - what this file does not export is private to the feature,
 // free to move between its layers.
 //
-// Exported: the two commands (`toolbox install`, `toolbox skills`), the
-// adapters each needs wired in by whoever calls it (the CLI is the one place
-// that picks git for the merge, the diff and the past releases), and the
-// lines the commands print.
+// Exported: the two commands (`toolbox install`, `toolbox skills`) and what
+// `install` asks before it runs; the adapters each needs wired in by whoever
+// calls it (the CLI is the one place that picks the disk, and git for the
+// merge, the diff and the past releases); how the arguments are read; and
+// the lines the commands print.
 
 export {
   inspectSkills,
@@ -15,11 +16,21 @@ export {
   type SkillInspection,
 } from './application/inspect-skills.mts';
 export {
+  hasInstalledSkills,
   installSkills,
   type InstallSkillsOptions,
+  skillCatalog,
   type SkillInstallReport,
+  type SkillSelection,
 } from './application/install-skills.mts';
+export { DiskSkillFolders } from './infra/disk-skill-folders.mts';
 export { gitFileDiff } from './infra/git-file-diff.mts';
 export { GitPastReleases, repositoryCloneUrl } from './infra/git-past-releases.mts';
 export { gitTextMerge } from './infra/git-text-merge.mts';
-export { inspectionLines, installLine } from './presentation/skill-report-lines.mts';
+export {
+  InstallUsageError,
+  parseInstallArguments,
+  parseSelection,
+  selectionMenu,
+} from './presentation/install-arguments.mts';
+export { availableLine, inspectionLines, installLine } from './presentation/skill-report-lines.mts';

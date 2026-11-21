@@ -26,7 +26,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { FetchedRelease, PastReleases } from '../application/install-skills.mts';
+import type { PastReleases } from '../application/ports.mts';
+import type { OriginalLookup } from '../domain/reconcile-skill.mts';
+import { readShippedSkillTree } from './skill-directory.mts';
+
+/** A release, fetched: its package folder, or why it could not be had. */
+export type FetchedRelease =
+  { fetched: true; packageDir: string } | { fetched: false; reason: string };
 
 // The README's release recipe: `git tag vX.Y.Z`.
 const TAG_PREFIX = 'v';
@@ -86,6 +92,20 @@ export class GitPastReleases implements PastReleases {
     const release = this.clone(`${TAG_PREFIX}${version}`);
     this.fetched.set(version, release);
     return release;
+  }
+
+  /**
+   * A skill as that release shipped it.
+   *
+   * @example
+   *   releases.skill('2.0.0', 'ddd-tactical') // => { found: true, tree }
+   */
+  public skill(version: string, name: string): OriginalLookup {
+    const release = this.fetch(version);
+    if (!release.fetched) return { found: false, reason: release.reason };
+    const tree = readShippedSkillTree(join(release.packageDir, 'skills', name));
+    if (tree) return { found: true, tree };
+    return { found: false, reason: `the ${version} release has no skill named ${name}` };
   }
 
   /** Removes what was downloaded. */

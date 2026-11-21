@@ -15,14 +15,20 @@ import { isBinary, sameContent, SkillTree, withUnixLineEndings, } from "./skill-
 function isText(file) {
     return file !== undefined && !isBinary(file.content);
 }
+// latin1 on the way in and on the way out: every byte is one code unit and
+// comes back as itself, whatever the file's encoding. The hash reads text the
+// same way (skill-tree.mts). Decoded as UTF-8, a file saved in Windows-1252
+// came back from a clean merge with each accent replaced by U+FFFD (found in
+// review). The line merge only needs line breaks, and those are ASCII.
+const BYTES = 'latin1';
 function unixText(file) {
-    return withUnixLineEndings(file.content.toString('utf8'));
+    return withUnixLineEndings(file.content.toString(BYTES));
 }
 // Merged as LF, written back the way the project keeps the file: a CRLF
 // checkout (`core.autocrlf`) stays CRLF, or git would show every line changed.
 function inLineEndingsOf(file, text) {
     const crlf = file.content.includes('\r\n');
-    return Buffer.from(crlf ? text.replaceAll('\n', '\r\n') : text, 'utf8');
+    return Buffer.from(crlf ? text.replaceAll('\n', '\r\n') : text, BYTES);
 }
 // Reached only when the three sides differ. A side that is absent (edited
 // here, deleted there; or added on both sides) or binary has no line-level

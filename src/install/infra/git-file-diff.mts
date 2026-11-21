@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
-import type { FileDiff } from '../application/inspect-skills.mts';
+import type { FileDiff } from '../application/ports.mts';
 
 // A file present on one side only (added or deleted by the project, or by the
 // new version) is diffed against nothing - git's own spelling of "no file".

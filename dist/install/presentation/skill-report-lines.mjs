@@ -2,7 +2,8 @@
 // person (or an agent) reading a terminal. One place for the wording, so the
 // two commands name a state the same way.
 import { join } from 'node:path';
-import { SKILLS_DIR } from "../infra/skill-layout.mjs";
+import { SKILLS_DIR } from "../application/skill-layout.mjs";
+import { WRITE_CONFLICTS_FLAG } from "./install-arguments.mjs";
 // Empty = the status says it all. A line that asks something of the reader
 // says what, in the line itself: nobody opens the docs for an install log.
 const INSTALL_NOTES = {
@@ -11,15 +12,20 @@ const INSTALL_NOTES = {
     unchanged: '',
     adopted: "already equal to the package's; now recorded",
     merged: "the new version was merged into the project's edits",
-    'conflict-marked': 'written with conflict markers; resolve them by hand',
+    // Not "with conflict markers" alone: a file edited here and deleted there,
+    // added on both sides, or binary has no text to mark, and keeps the
+    // project's side. The line once promised markers for those too (found in review).
+    'conflict-marked': "written for you to settle: conflict markers where the text can carry them, the project's side kept elsewhere; check every file listed",
     altered: 'edited by the project; kept',
+    available: 'shipped by the toolbox, not installed here; `toolbox install <name>` adds it',
     unmanaged: "the project's own folder; not managed by the toolbox",
-    removed: 'deleted by the project; not restored',
-    conflict: "the new version conflicts with the project's edits; nothing was written (`toolbox install --write-conflicts` writes the conflict markers)",
+    removed: 'deleted by the project; no longer installed (`toolbox install <name>` brings it back)',
+    conflict: `the new version conflicts with the project's edits; nothing was written (\`toolbox install ${WRITE_CONFLICTS_FLAG}\` writes the merge for you to settle)`,
     'no-original': 'edited by the project; the new version was not merged and nothing was written, because the original could not be read',
     ahead: 'recorded by a newer toolbox than the one running; update the package',
     pinned: "the project's own link; not replaced",
     retired: 'no longer shipped by the toolbox; delete it if unused',
+    failed: 'could not be settled; the other skills were',
 };
 const STATUS_WIDTH = 'conflict-marked: '.length;
 const STATE_WIDTH = 'altered, retired  '.length;
@@ -37,6 +43,17 @@ export function installLine({ name, status, files, reason }) {
     const note = [INSTALL_NOTES[status], reason].filter(Boolean).join(': ');
     const subject = `${join(SKILLS_DIR, name)}${inBrackets(files)}`;
     return `${`${status}:`.padEnd(STATUS_WIDTH)}${subject}${note ? ` - ${note}` : ''}`;
+}
+/**
+ * One line for every skill the project did not pick, instead of one each: a
+ * project with three skills should not read thirteen lines about the rest.
+ *
+ * @example
+ *   availableLine(['retro', 'sql-quality'])
+ *   // => 'available:       retro, sql-quality - shipped by the toolbox, not installed here; …'
+ */
+export function availableLine(names) {
+    return `${'available:'.padEnd(STATUS_WIDTH)}${names.join(', ')} - ${INSTALL_NOTES.available}`;
 }
 // `current` and `untracked` add nothing to the project's side of the story.
 const UPSTREAM_WORTH_NAMING = ['behind', 'ahead', 'retired'];

@@ -1,5 +1,5 @@
 import { type LocalState, type UpstreamState } from '../domain/skill-state.mts';
-import { type SkillPaths, type SkillRoots } from '../infra/skill-layout.mts';
+import type { FileDiff, SkillFolders, SkillPaths } from './ports.mts';
 /** The project's side: the domain's states, plus the two a symlink in the skill's place adds. */
 export type InspectedLocal = LocalState | 'pinned' | 'linked';
 export interface SkillInspection {
@@ -16,17 +16,16 @@ export interface SkillInspection {
     divergedFiles: string[];
     paths: SkillPaths;
 }
-export interface InspectSkillsOptions extends SkillRoots {
+export interface InspectSkillsOptions {
+    folders: SkillFolders;
     /** The version of the running toolbox. */
     version: string;
 }
-/** Diffs two files; a path that does not exist reads as an empty file. */
-export type FileDiff = (from: string, to: string) => string;
 /**
  * The state of every skill the package ships or the manifest records, by name.
  *
  * @example
- *   inspectSkills({ packageDir, projectRoot: '/p', version: '2.1.0' })
+ *   inspectSkills({ folders, version: '2.1.0' })
  *   // => [{ name: 'ddd-tactical', local: 'altered', upstream: 'current', alteredFiles: ['SKILL.md'], ... }]
  */
 export declare function inspectSkills(options: InspectSkillsOptions): SkillInspection[];

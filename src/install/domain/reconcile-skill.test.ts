@@ -5,6 +5,7 @@ import {
   type OriginalLookup,
   type ReconcileOptions,
   reconcileSkill,
+  reconcileUnshipped,
   type SkillSides,
 } from './reconcile-skill.mts';
 import { treeOf } from './skill-tree.fixtures.ts';
@@ -38,21 +39,32 @@ function recorded(overrides: Partial<SkillSides>): SkillSides {
     record: { version: '1.2.0', hash: V1.hash },
     local: V1,
     shipped: V1,
+    requested: false,
     original: neverFetched,
     ...overrides,
   };
 }
 
-function unrecorded(local: SkillSides['local']): SkillSides {
-  return { record: undefined, local, shipped: V1, original: neverFetched };
+function unrecorded(local: SkillSides['local'], requested = true): SkillSides {
+  return { record: undefined, local, shipped: V1, requested, original: neverFetched };
 }
 
 describe('reconcileSkill - a skill the manifest does not know', () => {
-  it('copies it when the project has no folder with its name', () => {
+  it('copies it when the project asked for it and has no folder with its name', () => {
     expect(reconcileSkill(unrecorded(undefined), options())).toEqual({
       synced: true,
       status: 'copied',
       local: V1,
+      files: [],
+    });
+  });
+
+  // A project picks the skills it wants: one it did not ask for is offered,
+  // never copied in.
+  it('leaves a skill the project did not ask for as available', () => {
+    expect(reconcileSkill(unrecorded(undefined, false), options())).toEqual({
+      synced: false,
+      status: 'available',
       files: [],
     });
   });
@@ -197,11 +209,14 @@ describe('reconcileSkill - the package ships a new version of the skill', () => 
 });
 
 describe('reconcileSkill - what the project decided stays decided', () => {
-  it('does not bring back a skill the project deleted', () => {
+  // Deleting the folder is how a project stops wanting a skill: the record
+  // goes with it, and from then on the skill is only offered.
+  it('does not bring back a skill the project deleted, and drops its record', () => {
     expect(reconcileSkill(recorded({ local: undefined, shipped: V2 }), options())).toEqual({
       synced: false,
       status: 'removed',
       files: [],
+      dropsRecord: true,
     });
   });
 
@@ -213,10 +228,47 @@ describe('reconcileSkill - what the project decided stays decided', () => {
         record: { version: '1.4.0', hash: V2.hash },
         local: V2,
         shipped: V1,
+        requested: false,
         original: neverFetched,
       },
       options({ version: '1.3.0' }),
     );
     expect(outcome).toEqual({ synced: false, status: 'ahead', files: [] });
+  });
+});
+
+describe('reconcileUnshipped - a recorded skill the running package does not ship', () => {
+  const record = { version: '1.2.0', hash: V1.hash };
+
+  it('is retired, and kept, while the project still has its folder', () => {
+    expect(reconcileUnshipped({ record, local: V1 }, '1.3.0')).toEqual({
+      synced: false,
+      status: 'retired',
+      files: [],
+    });
+  });
+
+  it('drops the record once the project deleted the folder: nothing is left to describe', () => {
+    expect(reconcileUnshipped({ record, local: undefined }, '1.3.0')).toEqual({
+      synced: false,
+      status: 'removed',
+      files: [],
+      dropsRecord: true,
+    });
+  });
+
+  // The skill was added by a newer toolbox than the one running.
+  it('is ahead, and untouched, when a newer toolbox recorded it', () => {
+    const newer = { version: '1.4.0', hash: V2.hash };
+    expect(reconcileUnshipped({ record: newer, local: V2 }, '1.3.0')).toEqual({
+      synced: false,
+      status: 'ahead',
+      files: [],
+    });
+    expect(reconcileUnshipped({ record: newer, local: undefined }, '1.3.0')).toEqual({
+      synced: false,
+      status: 'ahead',
+      files: [],
+    });
   });
 });

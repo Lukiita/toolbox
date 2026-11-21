@@ -9,7 +9,11 @@ export interface TextMergeResult {
     text: string;
     conflicted: boolean;
 }
-/** The line-level merge, behind a port: git does it (`infra/git-text-merge.mts`). */
+/**
+ * The line-level merge, behind a port: git does it (`infra/git-text-merge.mts`).
+ * The strings carry the files' bytes, one per code unit: an implementation
+ * may split and join lines, and must hand back every other unit untouched.
+ */
 export type TextMerge = (sides: TextSides) => TextMergeResult;
 export interface TreeSides {
     base: SkillTree;

@@ -17,7 +17,7 @@ import { classifySkill, type SkillState } from './skill-state.mts';
 
 /** The skill is settled against what the package ships; the record moves to the running version. */
 export type SyncedStatus =
-  | 'copied' // first install
+  | 'copied' // a skill the project asked for: its first copy
   | 'adopted' // the project's folder already equalled the package's: recorded, not written
   | 'updated' // intact skill, new version: replaced
   | 'merged' // edited skill, new version: every file settled
@@ -27,8 +27,10 @@ export type SyncedStatus =
 
 /** Nothing is written and the record stays where it was. */
 export type KeptStatus =
+  | 'available' // shipped, and not one of the skills this project asked for
   | 'unmanaged' // the project's own folder under a shipped skill's name
-  | 'removed' // the project deleted the skill: not brought back
+  | 'removed' // the project deleted the skill: not brought back, its record dropped
+  | 'retired' // recorded, and no longer shipped by the package
   | 'conflict' // edited skill, new version, at least one file unsettled
   | 'no-original' // edited skill, new version, and the original could not be fetched
   | 'ahead'; // recorded by a newer toolbox than the one running
@@ -48,7 +50,10 @@ export type Reconciliation =
       synced: false;
       status: KeptStatus;
       files: string[];
-      /** Why, when the status alone does not say. */ reason?: string;
+      /** Why, when the status alone does not say. */
+      reason?: string;
+      /** The record no longer describes anything in the project: it leaves the manifest. */
+      dropsRecord?: true;
     };
 
 /** The skill as a past release shipped it, or why it could not be read. */
@@ -59,6 +64,11 @@ export interface SkillSides {
   /** The project's folder; undefined when there is none. */
   local: SkillTree | undefined;
   shipped: SkillTree;
+  /**
+   * Whether the project asked for this skill. A project installs the skills
+   * it picks, not all of them: an unrecorded skill is copied only when asked for.
+   */
+  requested: boolean;
   /**
    * Reads the skill as the given release shipped it. Called only when a merge
    * needs the original: it costs a download.
@@ -86,9 +96,14 @@ function kept(status: KeptStatus, files: string[] = [], reason?: string): Reconc
     : { synced: false, status, files, reason };
 }
 
-function reconcileUnrecorded({ local, shipped }: SkillSides): Reconciliation {
-  if (!local) return synced('copied', shipped);
-  return local.equals(shipped) ? synced('adopted') : kept('unmanaged');
+// Deleting the folder is how a project stops wanting a skill. The record goes
+// too: kept as a marker, it outlived skills the toolbox later retired and
+// printed "delete it if unused" about a folder that was gone (found in review).
+const REMOVED: Reconciliation = { synced: false, status: 'removed', files: [], dropsRecord: true };
+
+function reconcileUnrecorded({ local, shipped, requested }: SkillSides): Reconciliation {
+  if (local) return local.equals(shipped) ? synced('adopted') : kept('unmanaged');
+  return requested ? synced('copied', shipped) : kept('available');
 }
 
 // The fetched release must be the one the project copied from. A tag that
@@ -145,6 +160,22 @@ export function reconcileSkill(sides: SkillSides, options: ReconcileOptions): Re
   // for `toolbox skills` too; this function only maps the state to an action.
   const state = classifySkill(sides, options.version);
   if (state.upstream === 'ahead') return kept('ahead');
-  if (!local) return kept('removed');
+  if (!local) return REMOVED;
   return reconcileRecorded(state, { ...sides, record, local }, options);
+}
+
+/**
+ * Decides what an install does with a recorded skill the running package does
+ * not ship. Never a write: the folder is the project's to keep or delete.
+ *
+ * @example
+ *   reconcileUnshipped({ record, local }, '2.1.0') // => { synced: false, status: 'retired', files: [] }
+ */
+export function reconcileUnshipped(
+  recorded: { record: SkillRecord; local: SkillTree | undefined },
+  runningVersion: string,
+): Reconciliation {
+  const state = classifySkill({ ...recorded, shipped: undefined }, runningVersion);
+  if (state.upstream === 'ahead') return kept('ahead');
+  return state.local === 'removed' ? REMOVED : kept('retired');
 }

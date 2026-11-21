@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mergeSkillTrees, type TextMerge, type TextSides } from './merge-skill-trees.mts';
 import { treeOf } from './skill-tree.fixtures.ts';
-import type { SkillTree } from './skill-tree.mts';
+import { type SkillFile, SkillTree } from './skill-tree.mts';
 
 function text(merged: SkillTree, path: string): string | undefined {
   return merged.file(path)?.content.toString('utf8');
@@ -216,6 +216,51 @@ describe('mergeSkillTrees - a project checked out with CRLF', () => {
       merge,
     );
     expect(text(result.tree, 'a.md')).toBe('x\ny\n');
+  });
+});
+
+// The hash reads text byte for byte (latin1). The merge must too: decoded as
+// UTF-8, a file saved in Windows-1252 came back with every accent replaced
+// by U+FFFD, under the one status that writes over an edited skill.
+describe('mergeSkillTrees - a text file that is not UTF-8', () => {
+  const latin1 = (text: string): SkillFile => ({
+    content: Buffer.from(text, 'latin1'),
+    executable: false,
+  });
+
+  it('writes back the bytes the merge returned, none rewritten', () => {
+    // The merge keeps the project's line, which holds 0xE7 0xE3 ("çã" in latin1).
+    const merge: TextMerge = ({ ours, theirs }) => ({
+      text: `${ours}${theirs}`,
+      conflicted: false,
+    });
+    const result = mergeSkillTrees(
+      {
+        base: SkillTree.of([['a.md', latin1('base\n')]]),
+        ours: SkillTree.of([['a.md', latin1('descri\u00e7\u00e3o\n')]]),
+        theirs: SkillTree.of([['a.md', latin1('theirs\n')]]),
+      },
+      merge,
+    );
+    expect(result.tree.file('a.md')?.content).toEqual(
+      Buffer.from([
+        0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0xe7, 0xe3, 0x6f, 0x0a, 0x74, 0x68, 0x65, 0x69, 0x72,
+        0x73, 0x0a,
+      ]),
+    );
+  });
+
+  it('writes a UTF-8 file back as the same UTF-8', () => {
+    const merge: TextMerge = ({ ours }) => ({ text: ours, conflicted: false });
+    const result = mergeSkillTrees(
+      {
+        base: treeOf({ 'a.md': 'base\n' }),
+        ours: treeOf({ 'a.md': 'descrição\n' }),
+        theirs: treeOf({ 'a.md': 'theirs\n' }),
+      },
+      merge,
+    );
+    expect(text(result.tree, 'a.md')).toBe('descrição\n');
   });
 });
 

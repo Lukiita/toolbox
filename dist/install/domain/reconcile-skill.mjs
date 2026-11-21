@@ -19,10 +19,14 @@ function kept(status, files = [], reason) {
         ? { synced: false, status, files }
         : { synced: false, status, files, reason };
 }
-function reconcileUnrecorded({ local, shipped }) {
-    if (!local)
-        return synced('copied', shipped);
-    return local.equals(shipped) ? synced('adopted') : kept('unmanaged');
+// Deleting the folder is how a project stops wanting a skill. The record goes
+// too: kept as a marker, it outlived skills the toolbox later retired and
+// printed "delete it if unused" about a folder that was gone (found in review).
+const REMOVED = { synced: false, status: 'removed', files: [], dropsRecord: true };
+function reconcileUnrecorded({ local, shipped, requested }) {
+    if (local)
+        return local.equals(shipped) ? synced('adopted') : kept('unmanaged');
+    return requested ? synced('copied', shipped) : kept('available');
 }
 // The fetched release must be the one the project copied from. A tag that
 // was moved, or a release packed differently, is not: merging against it
@@ -74,6 +78,19 @@ export function reconcileSkill(sides, options) {
     if (state.upstream === 'ahead')
         return kept('ahead');
     if (!local)
-        return kept('removed');
+        return REMOVED;
     return reconcileRecorded(state, { ...sides, record, local }, options);
+}
+/**
+ * Decides what an install does with a recorded skill the running package does
+ * not ship. Never a write: the folder is the project's to keep or delete.
+ *
+ * @example
+ *   reconcileUnshipped({ record, local }, '2.1.0') // => { synced: false, status: 'retired', files: [] }
+ */
+export function reconcileUnshipped(recorded, runningVersion) {
+    const state = classifySkill({ ...recorded, shipped: undefined }, runningVersion);
+    if (state.upstream === 'ahead')
+        return kept('ahead');
+    return state.local === 'removed' ? REMOVED : kept('retired');
 }

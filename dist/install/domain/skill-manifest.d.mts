@@ -27,6 +27,14 @@ export declare class SkillManifest {
      *   manifest.record('code-review', { version: '2.0.0', hash: shipped.hash })
      */
     record(name: string, record: Partial<SkillRecord>): void;
+    /**
+     * The record leaves the manifest: the project deleted the skill's folder, so
+     * there is nothing left for it to describe.
+     *
+     * @example
+     *   manifest.forget('setup-pre-commit')
+     */
+    forget(name: string): void;
     /** Sorted and indented, so an update shows as a readable diff in the project. */
     serialize(): string;
 }

@@ -61,6 +61,16 @@ describe('classifySkill - a recorded skill', () => {
     });
   });
 
+  // A skill a newer toolbox added: the older one running does not ship it,
+  // and must not call it retired - "delete it if unused" would be followed.
+  it('is ahead, not retired, when a newer toolbox recorded a skill this one does not ship', () => {
+    const record = { version: '1.4.0', hash: V2.hash };
+    expect(classifySkill({ record, local: V2, shipped: undefined }, '1.3.0')).toEqual({
+      local: 'intact',
+      upstream: 'ahead',
+    });
+  });
+
   // A teammate with a stale node_modules: what their package ships is older
   // than the record, not newer.
   it('is ahead, not behind, when the record was written by a newer toolbox', () => {

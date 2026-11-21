@@ -12,9 +12,6 @@
 // original and settles it.
 import { join } from 'node:path';
 import { classifySkill, } from "../domain/skill-state.mjs";
-import { readShippedSkillTree, readSkillTree, shippedSkills, skillLinkKind, } from "../infra/skill-directory.mjs";
-import { skillPaths } from "../infra/skill-layout.mjs";
-import { readSkillManifest } from "../infra/skill-manifest-file.mjs";
 // A link is not a folder the manifest describes: it is named for what it is.
 const LINK_STATES = {
     none: undefined,
@@ -35,36 +32,35 @@ function differingFiles(sides, local, upstream) {
         return lists;
     return { ...lists, [list]: sides.local.differingPaths(sides.shipped) };
 }
-function inspectOne(name, manifest, options) {
-    const paths = skillPaths(options, name);
+function inspectOne(name, manifest, { folders, version }) {
     const sides = {
         record: manifest.find(name),
-        local: readSkillTree(paths.local),
-        shipped: readShippedSkillTree(paths.shipped),
+        local: folders.readLocal(name),
+        shipped: folders.readShipped(name),
     };
     // The same classification `toolbox install` acts on: the two commands
     // cannot disagree about a skill.
-    const state = classifySkill(sides, options.version);
-    const local = LINK_STATES[skillLinkKind(paths.local, options.packageDir)] ?? state.local;
+    const state = classifySkill(sides, version);
+    const local = LINK_STATES[folders.linkKind(name)] ?? state.local;
     return {
         name,
         version: sides.record?.version,
         local,
         upstream: state.upstream,
         ...differingFiles(sides, local, state.upstream),
-        paths,
+        paths: folders.paths(name),
     };
 }
 /**
  * The state of every skill the package ships or the manifest records, by name.
  *
  * @example
- *   inspectSkills({ packageDir, projectRoot: '/p', version: '2.1.0' })
+ *   inspectSkills({ folders, version: '2.1.0' })
  *   // => [{ name: 'ddd-tactical', local: 'altered', upstream: 'current', alteredFiles: ['SKILL.md'], ... }]
  */
 export function inspectSkills(options) {
-    const manifest = readSkillManifest(options.projectRoot);
-    const names = new Set([...shippedSkills(options.packageDir), ...manifest.names()]);
+    const manifest = options.folders.readManifest();
+    const names = new Set([...options.folders.shipped(), ...manifest.names()]);
     return [...names].sort().map((name) => inspectOne(name, manifest, options));
 }
 /**

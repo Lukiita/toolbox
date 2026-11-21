@@ -90,6 +90,16 @@ export class SkillManifest {
         assertRecord(name, record);
         this.records.set(name, { version: record.version, hash: record.hash });
     }
+    /**
+     * The record leaves the manifest: the project deleted the skill's folder, so
+     * there is nothing left for it to describe.
+     *
+     * @example
+     *   manifest.forget('setup-pre-commit')
+     */
+    forget(name) {
+        this.records.delete(name);
+    }
     /** Sorted and indented, so an update shows as a readable diff in the project. */
     serialize() {
         const skills = Object.fromEntries(this.names().map((name) => [name, this.records.get(name)]));

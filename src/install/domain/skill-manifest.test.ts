@@ -26,6 +26,15 @@ describe('SkillManifest', () => {
     expect(manifest.names()).toEqual(['code-review']);
   });
 
+  it('forgets a skill, and only that one', () => {
+    const manifest = SkillManifest.empty();
+    manifest.record('retro', { version: '1.2.0', hash: HASH_A });
+    manifest.record('code-review', { version: '1.2.0', hash: HASH_A });
+    manifest.forget('retro');
+    expect(manifest.find('retro')).toBeUndefined();
+    expect(manifest.names()).toEqual(['code-review']);
+  });
+
   it('lists the names sorted', () => {
     const manifest = SkillManifest.empty();
     manifest.record('retro', { version: '1.2.0', hash: HASH_A });

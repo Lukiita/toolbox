@@ -5,16 +5,24 @@ import * as install from './index.mts';
 describe('the public API of src/install', () => {
   // What is not exported here is private to the feature: code outside
   // src/install imports from this file and nowhere deeper.
-  it('is the two commands, what each needs wired in, and their lines', () => {
+  it('is the two commands, what each needs wired in, how arguments are read, and their lines', () => {
     expect(Object.keys(install).sort()).toEqual([
+      'DiskSkillFolders',
       'GitPastReleases',
+      'InstallUsageError',
+      'availableLine',
       'gitFileDiff',
       'gitTextMerge',
+      'hasInstalledSkills',
       'inspectSkills',
       'inspectionLines',
       'installLine',
       'installSkills',
+      'parseInstallArguments',
+      'parseSelection',
       'repositoryCloneUrl',
+      'selectionMenu',
+      'skillCatalog',
       'skillDiffs',
     ]);
   });
