@@ -69,8 +69,12 @@ Copier updates a project from its template).
    the link points at. So every path it owns in a project is looked at without following
    it. A link where the manifest goes is refused. A link under one of the names a write
    keeps beside a skill (`<name>.toolbox-staging`, `<name>.toolbox-old`,
-   `<name>.toolbox-swap`) is unlinked. A link in a skill's place is the 1.x install's
-   (replaced by a copy) or the project's own (`pinned`), and is never read through. Only
+   `<name>.toolbox-swap`) is unlinked - except the one a marker names as what a dead write
+   set aside, which goes back into the skill's place and is judged there. A link in a
+   skill's place is the 1.x install's (replaced by a copy) or the project's own (`pinned`),
+   and is never read through. Neither is a link inside a skill: its files are absent, for
+   the hash, for a merge and for `toolbox skills --diff`, which diffs only content already
+   read and never hands git a path in the project. Only
    the path itself is not followed: a project whose `.agents/` is a link elsewhere keeps
    working. One test file plants a link under each of these names.
 
@@ -141,7 +145,7 @@ The original is the skill as the recorded release shipped it. File by file, it s
 moved. One side moved (an edit, a new file, a deletion):
 that side wins. Both moved the same way: nothing to do. Both moved differently: the line
 merge decides (`git merge-file --diff3`), and what it cannot settle is a conflict. A file
-edited on one side and deleted on the other, or binary on both, is a conflict that keeps
+edited on one side and deleted on the other, or binary on any side, is a conflict that keeps
 the project's side.
 
 Text is merged as bytes and compared with LF line endings, the way the hash reads it: no
@@ -155,7 +159,7 @@ the old folder is renamed aside and the new one renamed into place - two atomic 
 the first undone when the second fails - and only then is the old one deleted, best
 effort. A failure at any point leaves a whole folder and no half-written one beside it. A
 marker file names the folder set aside while the two renames are under way; a run killed
-between them is undone by the next install, from that marker, before it reads anything.
+between them is undone by the next install, from that marker, before it reads that skill.
 An old folder that could not be deleted is named in the report, never left unsaid. The
 manifest is saved even when the run stops early, so a skill already written is never left
 under a stale record.
@@ -207,7 +211,9 @@ no copy of the original at hand, whose change a file carries is known only while
 still equals the original: an edited skill is compared with the package when the package
 did not move, a waiting version with the project's folder when that is unedited. When
 both moved, the differing files are listed as one set, unattributed; `install` is what
-fetches the original and settles them.
+fetches the original and settles them. A skill that cannot be read is listed as
+`unreadable`, with the reason, and the others are still listed; the command then exits 1,
+as `install` does.
 
 ### The source is the running package
 
