@@ -98,13 +98,13 @@ ships content whose hash differs from it.
 
 | The manifest | The project's folder                        | The package   | Install                                                              | Reported          |
 | ------------ | ------------------------------------------- | ------------- | -------------------------------------------------------------------- | ----------------- |
-| no record    | absent, and the skill was asked for         | —             | copies; records                                                      | `copied`          |
+| any          | absent, and the skill was asked for         | —             | copies; records                                                      | `copied`          |
 | no record    | absent, not asked for                       | —             | nothing                                                              | `available`       |
 | any          | a link the 1.x install wrote, or a dangling | —             | replaces the link with a copy; records                               | `copied`          |
 | any          | the project's own link to elsewhere         | —             | nothing                                                              | `pinned`          |
 | no record    | a folder equal to the package's             | —             | records it, writes no file in it                                     | `adopted`         |
 | no record    | any other folder                            | —             | nothing: it is the project's own skill, asked for or not             | `unmanaged`       |
-| a record     | absent                                      | any           | drops the record                                                     | `removed`         |
+| a record     | absent, not asked for                       | any           | drops the record                                                     | `removed`         |
 | a record     | intact                                      | same          | nothing (the record moves to the running version)                    | `unchanged`       |
 | a record     | already equal to the package's              | new version   | nothing (the record moves): applied by hand, or a run that died      | `unchanged`       |
 | a record     | intact                                      | new version   | replaces the folder                                                  | `updated`         |
@@ -144,10 +144,18 @@ byte of a file is rewritten for being outside UTF-8, and a checkout with CRLF
 A skill's folder is never deleted to be rewritten. The new content is written beside it,
 the old folder is renamed aside and the new one renamed into place - two atomic renames,
 the first undone when the second fails - and only then is the old one deleted, best
-effort. A failure at any point leaves a whole folder; a run killed between the renames is
-undone by the next install before it reads anything. An old folder that could not be
-deleted is named in the report, never left unsaid. The manifest is saved even when the run
-stops early, so a skill already written is never left under a stale record.
+effort. A failure at any point leaves a whole folder and no half-written one beside it. A
+marker file names the folder set aside while the two renames are under way; a run killed
+between them is undone by the next install, from that marker, before it reads anything.
+An old folder that could not be deleted is named in the report, never left unsaid. The
+manifest is saved even when the run stops early, so a skill already written is never left
+under a stale record.
+
+The names a write uses beside a skill (`<name>.toolbox-staging`, `<name>.toolbox-old`,
+`<name>.toolbox-swap`) can be committed by anyone as symbolic links. A link under one of
+them is unlinked and never followed, and never moved into the place of a skill. A link the
+1.x install wrote in a skill's place stays until its copy is complete: the same swap
+replaces it.
 
 ### The original comes from the release's tag
 
@@ -166,8 +174,8 @@ re-run by a person, and the edited skills copied from one release must cost one 
 fetch, not one timeout each.
 
 When a release can never be fetched again, the way out is by hand: delete the skill's
-folder and its entry in the manifest, run `install` (it is `copied` anew) and re-apply the
-edits from git.
+folder and run `toolbox install <name>` (it is `copied` anew), then re-apply the edits
+from git. The manifest is never edited by hand.
 
 ### What is hashed
 
