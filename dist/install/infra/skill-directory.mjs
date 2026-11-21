@@ -1,10 +1,11 @@
 // The disk side of the installer: a skill's folder read into a `SkillTree`
 // and written back from one, and the one question about symlinks the
 // migration from the link-era install needs answered (ADR-0003).
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { PACKAGE_SKILLS_DIR } from "../application/skill-layout.mjs";
 import { SkillTree } from "../domain/skill-tree.mjs";
+import { pathKind } from "./path-kind.mjs";
 /**
  * Every folder under the package's `skills/` that has a SKILL.md.
  *
@@ -30,9 +31,6 @@ const LEFTOVER = /(^|\/)__pycache__\/|\.pyc$|(^|\/)\.DS_Store$/;
 // was read from, and a fetched original would never match its record. A test
 // holds this list to package.json's.
 const NOT_PACKAGED = /(^|\/)test_[^/]*\.py$/;
-function isDirectory(path) {
-    return existsSync(path) && statSync(path).isDirectory();
-}
 function readSkillFile(path) {
     return { content: readFileSync(path), executable: (statSync(path).mode & 0o111) !== 0 };
 }
@@ -54,8 +52,10 @@ function filesUnder(dir) {
         return entry.isFile() ? [path] : [];
     });
 }
+// The folder itself must be a real one. Through a link in its place, the tree
+// of whatever the link pointed at was read - all of it, however large.
 function readTree(dir, leftOut) {
-    if (!isDirectory(dir))
+    if (pathKind(dir) !== 'folder')
         return undefined;
     const entries = filesUnder(dir)
         .map((path) => [relative(dir, path).split(sep).join('/'), path])
@@ -94,16 +94,6 @@ function writeSkillFile(path, file) {
 const STAGING = '.toolbox-staging';
 const SWAPPED_OUT = '.toolbox-old';
 const SWAP_MARKER = '.toolbox-swap';
-// What is at a path, without following a link: `existsSync` answers for the
-// link's target, which is the wrong question for everything below.
-function entryKind(path) {
-    const stat = lstatSync(path, { throwIfNoEntry: false });
-    if (!stat)
-        return 'absent';
-    if (stat.isSymbolicLink())
-        return 'link';
-    return stat.isDirectory() ? 'folder' : 'other';
-}
 // Best effort, never a throw: this only clears what a write no longer needs,
 // and the new folder is already in place. Returns whether the path is gone,
 // so the caller can say when it is not.
@@ -117,7 +107,7 @@ function entryKind(path) {
 // is not listed as a skill by any agent.
 function discard(path) {
     try {
-        if (entryKind(path) === 'folder')
+        if (pathKind(path) === 'folder')
             rmSync(join(path, 'SKILL.md'), { force: true });
         // On a link, a recursive rm removes the link itself and stops there.
         rmSync(path, { recursive: true, force: true });
@@ -125,7 +115,7 @@ function discard(path) {
     catch {
         // Reported by the caller: `writeSkillTree` hands the path back.
     }
-    return entryKind(path) === 'absent';
+    return pathKind(path) === 'absent';
 }
 function swappedOutName(dir) {
     const name = basename(dir).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -143,7 +133,7 @@ function swappedOutEntries(dir) {
 // Leftovers of an earlier write may still hold the plain name.
 function freeNameBeside(dir) {
     let candidate = `${dir}${SWAPPED_OUT}`;
-    for (let attempt = 1; entryKind(candidate) !== 'absent'; attempt += 1) {
+    for (let attempt = 1; pathKind(candidate) !== 'absent'; attempt += 1) {
         candidate = `${dir}${SWAPPED_OUT}-${attempt}`;
     }
     return candidate;
@@ -162,22 +152,28 @@ function freeNameBeside(dir) {
  *   swapSkillFolder('/p/.agents/skills/retro.toolbox-staging', '/p/.agents/skills/retro')
  */
 export function swapSkillFolder(staging, dir) {
-    if (entryKind(dir) === 'absent')
+    if (pathKind(dir) === 'absent')
         return void renameSync(staging, dir);
     const aside = freeNameBeside(dir);
     const marker = `${dir}${SWAP_MARKER}`;
-    writeFileSync(marker, basename(aside));
+    // Cleared, then created with `wx`: a link planted under the marker's name
+    // is unlinked, and one that appears in between makes the write fail. Plain
+    // `writeFileSync` followed it and overwrote the file it pointed at (found
+    // in review).
+    discard(marker);
+    writeFileSync(marker, basename(aside), { flag: 'wx' });
     renameSync(dir, aside);
     try {
         renameSync(staging, dir);
     }
     catch (e) {
+        // If putting the old folder back fails too, the marker stays: it is then
+        // the only thing that says where the project's folder went.
         renameSync(aside, dir);
+        rmSync(marker, { force: true });
         throw e;
     }
-    finally {
-        rmSync(marker, { force: true });
-    }
+    rmSync(marker, { force: true });
     return discard(aside) ? undefined : aside;
 }
 function writeStaging(staging, tree) {
@@ -207,45 +203,42 @@ export function writeSkillTree(dir, tree) {
         throw e;
     }
 }
-// The folder the marker names, when it is one a swap of this skill could have
-// set aside: a real folder, beside the skill, under a swapped-out name. The
-// marker is a file in the repository; what it says is checked, not followed.
-function folderSetAside(dir) {
+// What the marker names, when it is something a swap of this skill could
+// have set aside: a folder, or the link the 1.x install wrote, beside the
+// skill and under a swapped-out name. The marker is a file in the repository;
+// what it says is checked, not followed.
+function setAside(dir) {
     const marker = `${dir}${SWAP_MARKER}`;
-    if (entryKind(marker) !== 'other')
+    if (pathKind(marker) !== 'file')
         return undefined;
     const named = readFileSync(marker, 'utf8').trim();
     const aside = join(dirname(dir), named);
-    return swappedOutName(dir).test(named) && entryKind(aside) === 'folder' ? aside : undefined;
+    const movable = ['folder', 'link'].includes(pathKind(aside));
+    return swappedOutName(dir).test(named) && movable ? aside : undefined;
 }
 /**
  * Undoes a write that died between its two renames, before the folder is
- * read: the old folder is beside its place and the new one never moved in.
- * Read as it is, that skill would be "deleted by the project".
+ * read: what was in the skill's place is beside it and the new folder never
+ * moved in. Read as it is, that skill would be "deleted by the project".
  *
- * The marker the swap wrote says which folder to put back. Without one there
- * was no dead write: an old folder that merely could not be deleted stays
- * where it is. Guessed from the folders present, a leftover was put back in
- * place of the real one, which the next write then deleted (found in review).
+ * The marker the swap wrote says what to put back. Without one there was no
+ * dead write: an old folder that merely could not be deleted stays where it
+ * is. Guessed from the folders present, a leftover was put back in place of
+ * the real one, which the next write then deleted (found in review).
+ *
+ * A link is put back like a folder, and then judged like any link in a
+ * skill's place (`skillLinkKind`): the caller asks that only after this.
  *
  * @example
  *   recoverSkillFolder('/p/.agents/skills/retro')
  */
 export function recoverSkillFolder(dir) {
-    const aside = folderSetAside(dir);
-    if (aside && entryKind(dir) === 'absent')
+    const aside = setAside(dir);
+    if (aside && pathKind(dir) === 'absent')
         renameSync(aside, dir);
     discard(`${dir}${SWAP_MARKER}`);
     // A staging folder holds a SKILL.md: left there, agents list it as a skill.
     discard(`${dir}${STAGING}`);
-}
-function isSymlink(path) {
-    try {
-        return lstatSync(path).isSymbolicLink();
-    }
-    catch {
-        return false;
-    }
 }
 // The link-era install wrote `../../node_modules/@lukiita/toolbox/skills/<name>`.
 // Recognised by that path, not by the running package's location: `pnpm dlx`
@@ -265,11 +258,11 @@ function pointsIntoToolbox(target, packageDir) {
  *   skillLinkKind('/p/.agents/skills/retro', packageDir) // => 'ours' after a v1 install
  */
 export function skillLinkKind(dest, packageDir) {
-    if (!isSymlink(dest))
+    if (pathKind(dest) !== 'link')
         return 'none';
     // Resolved from where the link really lives: when `.agents/skills` is itself
     // a symlink, the nominal parent resolves a relative target from the wrong
-    // place (link-skills, loop round 1).
+    // place (found in the 1.x installer's first review).
     const target = resolve(realpathSync(dirname(dest)), readlinkSync(dest));
     // A dangling link is nobody's pin.
     if (!existsSync(target))

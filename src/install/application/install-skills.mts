@@ -19,14 +19,8 @@ import { describeSkill } from '../domain/skill-catalog.mts';
 import type { SkillManifest, SkillRecord } from '../domain/skill-manifest.mts';
 import type { SkillTree } from '../domain/skill-tree.mts';
 import type { PastReleases, SkillFolders } from './ports.mts';
-
-/** Which skills the caller asked for, beyond the ones the project already has. */
-export interface SkillSelection {
-  /** Skills named one by one. */
-  names: string[];
-  /** Every skill the package ships. */
-  all: boolean;
-}
+import type { SkillSelection } from './skill-selection.mts';
+import { SkillCommandUsageError } from './usage-error.mts';
 
 export interface InstallSkillsOptions {
   folders: SkillFolders;
@@ -58,9 +52,6 @@ export interface SkillInstallReport {
   reason?: string;
 }
 
-/** A name on the command line that is not a skill the package ships. */
-export class UnknownSkillError extends Error {}
-
 interface InstallRun {
   manifest: SkillManifest;
   options: InstallSkillsOptions;
@@ -71,7 +62,7 @@ interface InstallRun {
 function assertShipped(names: readonly string[], shipped: readonly string[]): void {
   const unknown = names.find((name) => !shipped.includes(name));
   if (unknown === undefined) return;
-  throw new UnknownSkillError(
+  throw new SkillCommandUsageError(
     `unknown skill: received ${JSON.stringify(unknown)}, expected one of ${shipped.join(', ')}`,
   );
 }
@@ -133,11 +124,6 @@ function readSides(name: string, record: SkillRecord | undefined, run: InstallRu
   };
 }
 
-function recordedSides(name: string, run: InstallRun): SkillSides {
-  run.options.folders.recover(name);
-  return readSides(name, run.manifest.find(name), run);
-}
-
 // Writes what the domain decided for a shipped skill and moves its record;
 // returns an old folder that could not be deleted, if any.
 function write(
@@ -183,9 +169,16 @@ function reportOf(
 }
 
 function installShipped(name: string, run: InstallRun): SkillInstallReport {
-  const link = run.options.folders.linkKind(name);
+  const { folders } = run.options;
+  // First of all, and for every skill: a write that died may have left this
+  // skill's folder, or its 1.x link, beside its place. Only once that is
+  // undone can what sits there be judged - asked before, a link put back
+  // afterwards went on to be read as a folder (found in review).
+  folders.recover(name);
+  const link = folders.linkKind(name);
   if (link === 'pinned') return { name, status: 'pinned', files: [] };
-  const sides = link === 'ours' ? linkedSides(name, run) : recordedSides(name, run);
+  const sides =
+    link === 'ours' ? linkedSides(name, run) : readSides(name, run.manifest.find(name), run);
   const outcome = reconcileSkill(sides, run.options);
   return reportOf(name, outcome, write(name, outcome, sides.shipped, run), run);
 }
@@ -259,37 +252,4 @@ export function installSkills(options: InstallSkillsOptions): SkillInstallReport
   } finally {
     options.pastReleases.dispose();
   }
-}
-
-/**
- * Whether the project already has skills from the toolbox: a manifest with
- * records, or a link the 1.x install wrote. When it has none and asks for
- * none, there is nothing an install can do but ask which ones.
- *
- * @example
- *   hasInstalledSkills(folders) // => false in a project that never ran install
- */
-export function hasInstalledSkills(folders: SkillFolders): boolean {
-  if (folders.readManifest().names().length > 0) return true;
-  return folders.shipped().some((name) => folders.linkKind(name) === 'ours');
-}
-
-export interface CatalogEntry {
-  name: string;
-  /** One line about the skill; empty when it has no description. */
-  summary: string;
-}
-
-/**
- * The skills the package ships, each with a line about it: what a person
- * picks from.
- *
- * @example
- *   skillCatalog(folders) // => [{ name: 'code-review', summary: 'Reviews the branch diff…' }, ...]
- */
-export function skillCatalog(folders: SkillFolders): CatalogEntry[] {
-  return folders.shipped().map((name) => {
-    const shipped = folders.readShipped(name);
-    return { name, summary: shipped ? describeSkill(shipped).summary : '' };
-  });
 }

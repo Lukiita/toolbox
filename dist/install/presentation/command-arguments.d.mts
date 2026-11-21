@@ -1,4 +1,4 @@
-import type { SkillSelection } from '../application/install-skills.mts';
+import type { SkillSelection } from '../application/skill-selection.mts';
 /** `toolbox install`: every skill the package ships. */
 export declare const ALL_FLAG = "--all";
 /**
@@ -9,9 +9,6 @@ export declare const ALL_FLAG = "--all";
 export declare const WRITE_CONFLICTS_FLAG = "--write-conflicts";
 /** `toolbox skills`: print the diffs behind each state. */
 export declare const DIFF_FLAG = "--diff";
-/** A mistake in what was typed; the CLI answers with exit code 2. */
-export declare class SkillCommandUsageError extends Error {
-}
 export interface InstallArguments extends SkillSelection {
     writeConflicts: boolean;
 }

@@ -113,6 +113,20 @@ function titleOf(version) {
 export function catalogLines(catalog, version) {
     return [`${titleOf(version)}:`, ...listed(catalog, () => '  ')];
 }
+/**
+ * What a script or an agent is told when the project has no skill yet and the
+ * command named none: there is no terminal to pick in, and guessing "all of
+ * them" would undo the point of picking.
+ *
+ * @example
+ *   throw new SkillCommandUsageError(selectionRequiredLines(catalog, '2.0.0').join('\n'))
+ */
+export function selectionRequiredLines(catalog, version) {
+    return [
+        'this project has no skill from the toolbox yet: name the ones it gets, or pass --all.',
+        ...catalogLines(catalog, version),
+    ];
+}
 function openLines(state, version) {
     const rows = listed(state.entries, (index) => {
         const cursor = index === state.cursor ? '❯' : ' ';

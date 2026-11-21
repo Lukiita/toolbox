@@ -1,9 +1,33 @@
 // The manifest's file. Versioned in the project on purpose: it is what tells
 // the next install - on any machine - which skills the project edited.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { SkillManifest, SkillManifestError } from "../domain/skill-manifest.mjs";
 import { MANIFEST_FILE } from "../application/skill-layout.mjs";
+import { pathKind } from "./path-kind.mjs";
+// Sixteen skills are about three kilobytes. Anything near this is not a
+// manifest, and reading it whole would only be a way to hang the command.
+const LARGEST_MANIFEST = 1024 * 1024;
+const FOUND = {
+    link: 'a symbolic link',
+    folder: 'a folder',
+    other: 'something that is not a file',
+};
+// Where the manifest goes there is a regular file, or nothing. A link there
+// was followed both ways: an install created, or overwrote, the file it
+// pointed at, outside the project (found in review).
+function manifestOnDisk(path) {
+    const kind = pathKind(path);
+    if (kind === 'absent' || kind === 'file')
+        return kind;
+    throw new SkillManifestError(`${MANIFEST_FILE}: expected a regular file, found ${FOUND[kind]}; the manifest is never read or written through one`);
+}
+function readManifestText(path) {
+    const { size } = statSync(path);
+    if (size <= LARGEST_MANIFEST)
+        return readFileSync(path, 'utf8');
+    throw new SkillManifestError(`${MANIFEST_FILE}: received a file of ${size} bytes, expected a manifest of at most ${LARGEST_MANIFEST}`);
+}
 /**
  * The project's manifest; empty when the project has none yet.
  *
@@ -12,13 +36,13 @@ import { MANIFEST_FILE } from "../application/skill-layout.mjs";
  */
 export function readSkillManifest(projectRoot) {
     const path = join(projectRoot, MANIFEST_FILE);
-    if (!existsSync(path))
+    if (manifestOnDisk(path) === 'absent')
         return SkillManifest.empty();
     try {
-        return SkillManifest.parse(readFileSync(path, 'utf8'));
+        return SkillManifest.parse(readManifestText(path));
     }
     catch (e) {
-        if (!(e instanceof SkillManifestError))
+        if (!(e instanceof SkillManifestError) || e.message.startsWith(MANIFEST_FILE))
             throw e;
         throw new SkillManifestError(`${MANIFEST_FILE}: ${e.message}`);
     }
@@ -33,7 +57,7 @@ export function readSkillManifest(projectRoot) {
 export function writeSkillManifest(projectRoot, manifest) {
     const path = join(projectRoot, MANIFEST_FILE);
     const content = manifest.serialize();
-    const current = existsSync(path) ? readFileSync(path, 'utf8') : undefined;
+    const current = manifestOnDisk(path) === 'file' ? readManifestText(path) : undefined;
     if (current === content)
         return;
     if (current === undefined && manifest.names().length === 0)

@@ -4,7 +4,8 @@
 // know through the same check and the same error: read in two places, the
 // check was written twice and threw two different classes (found in review).
 
-import type { SkillSelection } from '../application/install-skills.mts';
+import type { SkillSelection } from '../application/skill-selection.mts';
+import { SkillCommandUsageError } from '../application/usage-error.mts';
 
 /** `toolbox install`: every skill the package ships. */
 export const ALL_FLAG = '--all';
@@ -16,9 +17,6 @@ export const ALL_FLAG = '--all';
 export const WRITE_CONFLICTS_FLAG = '--write-conflicts';
 /** `toolbox skills`: print the diffs behind each state. */
 export const DIFF_FLAG = '--diff';
-
-/** A mistake in what was typed; the CLI answers with exit code 2. */
-export class SkillCommandUsageError extends Error {}
 
 export interface InstallArguments extends SkillSelection {
   writeConflicts: boolean;

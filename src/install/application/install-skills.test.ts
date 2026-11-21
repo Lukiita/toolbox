@@ -19,12 +19,8 @@ import { describe, expect, it } from 'vitest';
 
 import { scratchDirs } from '../infra/scratch-dirs.fixtures.ts';
 
-import {
-  hasInstalledSkills,
-  skillCatalog,
-  type SkillInstallReport,
-  UnknownSkillError,
-} from './install-skills.mts';
+import type { SkillInstallReport } from './install-skills.mts';
+import { SkillCommandUsageError } from './usage-error.mts';
 import {
   scratchProject,
   type ScratchProject,
@@ -220,7 +216,7 @@ describe('installSkills - the project picks its skills', () => {
   it('refuses a name the package does not ship, before touching anything', () => {
     const project = scratchProject(scratch());
     expect(() => project.install('1.2.0', only('retro', 'no-such-skill'))).toThrow(
-      new UnknownSkillError(
+      new SkillCommandUsageError(
         'unknown skill: received "no-such-skill", expected one of code-review, retro',
       ),
     );
@@ -232,35 +228,6 @@ describe('installSkills - the project picks its skills', () => {
     writeFiles(project.local('retro'), { 'SKILL.md': 'mine' });
     expect(statuses(project.install('1.2.0', only('retro'))).retro).toBe('unmanaged');
     expect(read(project.local('retro/SKILL.md'))).toBe('mine');
-  });
-});
-
-describe('hasInstalledSkills', () => {
-  it('is false in a project that never installed, true once it has a record', () => {
-    const project = scratchProject(scratch());
-    expect(hasInstalledSkills(project.folders)).toBe(false);
-    project.install();
-    expect(hasInstalledSkills(project.folders)).toBe(true);
-  });
-
-  it('is true for a project that only has links the 1.x install wrote', () => {
-    const project = scratchProject(scratch());
-    linkAsV1(project, 'retro');
-    expect(hasInstalledSkills(project.folders)).toBe(true);
-  });
-});
-
-describe('skillCatalog', () => {
-  it('lists what the package ships, each with the first sentence of its description', () => {
-    const project = scratchProject(scratch());
-    project.ship('retro', {
-      'SKILL.md':
-        '---\nname: retro\ndescription: Looks back at a feature. Use after it ships.\n---\n',
-    });
-    expect(skillCatalog(project.folders)).toEqual([
-      { name: 'code-review', summary: '' },
-      { name: 'retro', summary: 'Looks back at a feature.' },
-    ]);
   });
 });
 

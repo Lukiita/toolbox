@@ -11,13 +11,9 @@ import type { OriginalLookup } from '../domain/reconcile-skill.mts';
 import { DiskSkillFolders } from '../infra/disk-skill-folders.mts';
 import { gitTextMerge } from '../infra/git-text-merge.mts';
 import { readShippedSkillTree } from '../infra/skill-directory.mts';
-import {
-  hasInstalledSkills,
-  installSkills,
-  type SkillInstallReport,
-  type SkillSelection,
-} from './install-skills.mts';
+import { installSkills, type SkillInstallReport } from './install-skills.mts';
 import type { PastReleases } from './ports.mts';
+import { hasInstalledSkills, type SkillSelection } from './skill-selection.mts';
 
 /** Three paragraphs far enough apart for git to merge edits of two of them. */
 export const SKILL_V1 = ['# Skill', '', 'first rule', '', 'middle', '', 'last rule', ''].join('\n');

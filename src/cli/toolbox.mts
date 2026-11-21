@@ -24,19 +24,19 @@ import { loadToolboxConfig } from '../config/load-config.mts';
 import type { ResolvedToolboxConfig } from '../config/toolbox-config.mts';
 import {
   availableLine,
-  catalogLines,
   DiskSkillFolders,
   gitFileDiff,
   GitPastReleases,
   gitTextMerge,
-  hasInstalledSkills,
   inspectionLines,
   inspectSkills,
   installLine,
   installSkills,
+  needsSelection,
   parseInstallArguments,
   parseSkillsArguments,
   repositoryCloneUrl,
+  selectionRequiredLines,
   skillCatalog,
   SkillCommandUsageError,
   skillDiffs,
@@ -140,28 +140,14 @@ function skillFolders(root: string): DiskSkillFolders {
 class Cancelled extends Error {}
 
 // A terminal gets the picker; a script or an agent is told what to type.
-// Guessing "all of them" for either would undo the point of picking.
 async function askWhichSkills(folders: DiskSkillFolders, version: string): Promise<SkillSelection> {
   const catalog = skillCatalog(folders);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new UsageError(
-      `this project has no skill from the toolbox yet: name the ones it gets, or pass --all.\n${catalogLines(catalog, version).join('\n')}`,
-    );
+    throw new SkillCommandUsageError(selectionRequiredLines(catalog, version).join('\n'));
   }
   const picked = await pickSkills(catalog, version);
   if (!picked) throw new Cancelled();
   return picked;
-}
-
-// Names or --all on the command line, or a project that already has skills:
-// the selection is settled. Only a project starting from nothing is asked.
-async function selectionFor(
-  request: SkillSelection,
-  folders: DiskSkillFolders,
-  version: string,
-): Promise<SkillSelection> {
-  const settled = request.all || request.names.length > 0 || hasInstalledSkills(folders);
-  return settled ? request : askWhichSkills(folders, version);
 }
 
 async function install(root: string, args: string[]): Promise<number> {
@@ -172,7 +158,7 @@ async function install(root: string, args: string[]): Promise<number> {
   const reports = installSkills({
     folders,
     version,
-    select: await selectionFor(request, folders, version),
+    select: needsSelection(request, folders) ? await askWhichSkills(folders, version) : request,
     writeConflicts: request.writeConflicts,
     mergeText: gitTextMerge,
     // The original of an edited skill comes from the tag of the release it

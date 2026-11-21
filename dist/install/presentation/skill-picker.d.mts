@@ -1,4 +1,4 @@
-import type { CatalogEntry, SkillSelection } from '../application/install-skills.mts';
+import type { CatalogEntry, SkillSelection } from '../application/skill-selection.mts';
 export type PickerKey = 'up' | 'down' | 'toggle' | 'all' | 'confirm' | 'cancel';
 export interface PickerState {
     entries: readonly CatalogEntry[];
@@ -51,6 +51,15 @@ export declare function pickedSelection({ entries, picked }: PickerState): Skill
  *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
  */
 export declare function catalogLines(catalog: readonly CatalogEntry[], version: string): string[];
+/**
+ * What a script or an agent is told when the project has no skill yet and the
+ * command named none: there is no terminal to pick in, and guessing "all of
+ * them" would undo the point of picking.
+ *
+ * @example
+ *   throw new SkillCommandUsageError(selectionRequiredLines(catalog, '2.0.0').join('\n'))
+ */
+export declare function selectionRequiredLines(catalog: readonly CatalogEntry[], version: string): string[];
 /**
  * What the picker shows: the list while it is open, one line once it closed.
  *

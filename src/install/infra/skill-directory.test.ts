@@ -1,6 +1,7 @@
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -62,6 +63,13 @@ describe('readSkillTree', () => {
     const read = readSkillTree(join(root, 'retro'));
     expect(read?.paths()).toEqual(['SKILL.md', 'references/deep/note.md']);
     expect(read?.file('references/deep/note.md')?.content.toString()).toBe('n');
+  });
+
+  it("is undefined for a link in the folder's place: nothing is read through it", () => {
+    const root = scratch();
+    put(root, 'elsewhere/SKILL.md', 'x');
+    symlinkSync(join(root, 'elsewhere'), join(root, 'retro'), 'dir');
+    expect(readSkillTree(join(root, 'retro'))).toBeUndefined();
   });
 
   it('is undefined when there is no folder', () => {
@@ -369,13 +377,27 @@ describe('the folders a write keeps beside a skill - when one is a planted symbo
     expect(readdirSync(root).sort()).toEqual(['outside', 'retro']);
   });
 
-  it('never moves a link into the place of a skill', () => {
+  // A link a dead write set aside goes back like a folder would. It is then
+  // a link in a skill's place, which a repository could have committed there
+  // directly: judged as such by whoever reads next, never read through here.
+  it('puts back a link a dead write set aside, and reads nothing through it', () => {
     const root = scratch();
     symlinkSync(outside(root), join(root, 'retro.toolbox-old'), 'dir');
     writeFileSync(join(root, 'retro.toolbox-swap'), 'retro.toolbox-old');
     recoverSkillFolder(join(root, 'retro'));
-    expect(existsSync(join(root, 'retro'))).toBe(false);
+    expect(lstatSync(join(root, 'retro')).isSymbolicLink()).toBe(true);
+    expect(readSkillTree(join(root, 'retro'))).toBeUndefined();
     untouched(root);
+  });
+
+  it("writes its marker beside the skill, never through a link under the marker's name", () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'old');
+    outside(root);
+    symlinkSync(join(root, 'outside', 'notes.md'), join(root, 'retro.toolbox-swap'));
+    writeSkillTree(join(root, 'retro'), treeOf({ 'SKILL.md': 'new' }));
+    untouched(root);
+    expect(readdirSync(root).sort()).toEqual(['outside', 'retro']);
   });
 });
 

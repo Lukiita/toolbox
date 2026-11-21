@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -50,6 +58,65 @@ describe('the skills manifest on disk', () => {
     expect(() => readSkillManifest(root)).toThrow(SkillManifestError);
     expect(() => readSkillManifest(root)).toThrow(
       /^\.agents\/toolbox-skills\.json: skills manifest is not valid JSON: /,
+    );
+  });
+
+  // Followed, a link here made an install create or overwrite the file it
+  // pointed at, outside the project.
+  const REFUSED_LINK =
+    '.agents/toolbox-skills.json: expected a regular file, found a symbolic link; the manifest is never read or written through one';
+
+  function withAManifestLink(target: string | undefined): { root: string; pointsAt: string } {
+    const root = scratch();
+    const pointsAt = join(root, 'target.json');
+    if (target !== undefined) writeFileSync(pointsAt, target);
+    mkdirSync(join(root, '.agents'), { recursive: true });
+    symlinkSync(pointsAt, file(root));
+    return { root, pointsAt };
+  }
+
+  function aManifest(): SkillManifest {
+    const manifest = SkillManifest.empty();
+    manifest.record('retro', { version: '1.2.0', hash: HASH });
+    return manifest;
+  }
+
+  it('refuses a link to a file, on reading and on writing, and leaves the file as it was', () => {
+    const { root, pointsAt } = withAManifestLink('precious');
+    expect(() => readSkillManifest(root)).toThrow(new SkillManifestError(REFUSED_LINK));
+    expect(() => writeSkillManifest(root, aManifest())).toThrow(
+      new SkillManifestError(REFUSED_LINK),
+    );
+    expect(readFileSync(pointsAt, 'utf8')).toBe('precious');
+  });
+
+  it('refuses a link to nothing, and creates nothing where it points', () => {
+    const { root, pointsAt } = withAManifestLink(undefined);
+    expect(() => readSkillManifest(root)).toThrow(new SkillManifestError(REFUSED_LINK));
+    expect(() => writeSkillManifest(root, aManifest())).toThrow(
+      new SkillManifestError(REFUSED_LINK),
+    );
+    expect(existsSync(pointsAt)).toBe(false);
+  });
+
+  it('refuses a folder where the manifest goes', () => {
+    const root = scratch();
+    mkdirSync(file(root), { recursive: true });
+    expect(() => readSkillManifest(root)).toThrow(
+      new SkillManifestError(
+        '.agents/toolbox-skills.json: expected a regular file, found a folder; the manifest is never read or written through one',
+      ),
+    );
+  });
+
+  it('refuses a file far too large to be a manifest, instead of reading it whole', () => {
+    const root = scratch();
+    mkdirSync(join(root, '.agents'), { recursive: true });
+    writeFileSync(file(root), 'x'.repeat(1024 * 1024 + 1));
+    expect(() => readSkillManifest(root)).toThrow(
+      new SkillManifestError(
+        '.agents/toolbox-skills.json: received a file of 1048577 bytes, expected a manifest of at most 1048576',
+      ),
     );
   });
 });

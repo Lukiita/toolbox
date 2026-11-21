@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadToolboxConfig } from "../config/load-config.mjs";
-import { availableLine, catalogLines, DiskSkillFolders, gitFileDiff, GitPastReleases, gitTextMerge, hasInstalledSkills, inspectionLines, inspectSkills, installLine, installSkills, parseInstallArguments, parseSkillsArguments, repositoryCloneUrl, skillCatalog, SkillCommandUsageError, skillDiffs, } from "../install/index.mjs";
+import { availableLine, DiskSkillFolders, gitFileDiff, GitPastReleases, gitTextMerge, inspectionLines, inspectSkills, installLine, installSkills, needsSelection, parseInstallArguments, parseSkillsArguments, repositoryCloneUrl, selectionRequiredLines, skillCatalog, SkillCommandUsageError, skillDiffs, } from "../install/index.mjs";
 import { decidePrePush, parsePushedRefs } from "../pre-push/pre-push.mjs";
 import { parseArgs, UsageError } from "../quality-gate/args.mjs";
 import { runQualityGate } from "../quality-gate/run-gate.mjs";
@@ -100,22 +100,15 @@ function skillFolders(root) {
 class Cancelled extends Error {
 }
 // A terminal gets the picker; a script or an agent is told what to type.
-// Guessing "all of them" for either would undo the point of picking.
 async function askWhichSkills(folders, version) {
     const catalog = skillCatalog(folders);
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
-        throw new UsageError(`this project has no skill from the toolbox yet: name the ones it gets, or pass --all.\n${catalogLines(catalog, version).join('\n')}`);
+        throw new SkillCommandUsageError(selectionRequiredLines(catalog, version).join('\n'));
     }
     const picked = await pickSkills(catalog, version);
     if (!picked)
         throw new Cancelled();
     return picked;
-}
-// Names or --all on the command line, or a project that already has skills:
-// the selection is settled. Only a project starting from nothing is asked.
-async function selectionFor(request, folders, version) {
-    const settled = request.all || request.names.length > 0 || hasInstalledSkills(folders);
-    return settled ? request : askWhichSkills(folders, version);
 }
 async function install(root, args) {
     const request = parseInstallArguments(args);
@@ -125,7 +118,7 @@ async function install(root, args) {
     const reports = installSkills({
         folders,
         version,
-        select: await selectionFor(request, folders, version),
+        select: needsSelection(request, folders) ? await askWhichSkills(folders, version) : request,
         writeConflicts: request.writeConflicts,
         mergeText: gitTextMerge,
         // The original of an edited skill comes from the tag of the release it

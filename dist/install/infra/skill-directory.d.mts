@@ -48,13 +48,16 @@ export declare function swapSkillFolder(staging: string, dir: string): string | 
 export declare function writeSkillTree(dir: string, tree: SkillTree): string | undefined;
 /**
  * Undoes a write that died between its two renames, before the folder is
- * read: the old folder is beside its place and the new one never moved in.
- * Read as it is, that skill would be "deleted by the project".
+ * read: what was in the skill's place is beside it and the new folder never
+ * moved in. Read as it is, that skill would be "deleted by the project".
  *
- * The marker the swap wrote says which folder to put back. Without one there
- * was no dead write: an old folder that merely could not be deleted stays
- * where it is. Guessed from the folders present, a leftover was put back in
- * place of the real one, which the next write then deleted (found in review).
+ * The marker the swap wrote says what to put back. Without one there was no
+ * dead write: an old folder that merely could not be deleted stays where it
+ * is. Guessed from the folders present, a leftover was put back in place of
+ * the real one, which the next write then deleted (found in review).
+ *
+ * A link is put back like a folder, and then judged like any link in a
+ * skill's place (`skillLinkKind`): the caller asks that only after this.
  *
  * @example
  *   recoverSkillFolder('/p/.agents/skills/retro')

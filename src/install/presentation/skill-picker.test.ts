@@ -8,6 +8,7 @@ import {
   type PickerKey,
   type PickerState,
   pressKey,
+  selectionRequiredLines,
   startPicker,
 } from './skill-picker.mts';
 
@@ -131,6 +132,18 @@ describe('the skill picker - what is drawn', () => {
 describe('catalogLines', () => {
   it('lists the skills for whoever cannot use the picker, in the same columns', () => {
     expect(catalogLines(CATALOG, '2.0.0')).toEqual([
+      'Skills in @lukiita/toolbox 2.0.0:',
+      '  code-review    Reviews the branch diff.',
+      '  ddd-tactical',
+      '  retro          Looks back at a feature.',
+    ]);
+  });
+});
+
+describe('selectionRequiredLines', () => {
+  it('says what to type, then lists what there is to name', () => {
+    expect(selectionRequiredLines(CATALOG, '2.0.0')).toEqual([
+      'this project has no skill from the toolbox yet: name the ones it gets, or pass --all.',
       'Skills in @lukiita/toolbox 2.0.0:',
       '  code-review    Reviews the branch diff.',
       '  ddd-tactical',

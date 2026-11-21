@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  parseInstallArguments,
-  parseSkillsArguments,
-  SkillCommandUsageError,
-} from './command-arguments.mts';
+import { SkillCommandUsageError } from '../application/usage-error.mts';
+import { parseInstallArguments, parseSkillsArguments } from './command-arguments.mts';
 
 describe('parseInstallArguments', () => {
   it('asks for nothing new with no arguments', () => {

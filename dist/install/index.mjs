@@ -9,11 +9,13 @@
 // merge, the diff and the past releases); how the arguments are read; the
 // picker a terminal shows; and the lines the commands print.
 export { inspectSkills, skillDiffs, } from "./application/inspect-skills.mjs";
-export { hasInstalledSkills, installSkills, skillCatalog, } from "./application/install-skills.mjs";
+export { installSkills, } from "./application/install-skills.mjs";
+export { needsSelection, skillCatalog, } from "./application/skill-selection.mjs";
+export { SkillCommandUsageError } from "./application/usage-error.mjs";
 export { DiskSkillFolders } from "./infra/disk-skill-folders.mjs";
 export { gitFileDiff } from "./infra/git-file-diff.mjs";
 export { GitPastReleases, repositoryCloneUrl } from "./infra/git-past-releases.mjs";
 export { gitTextMerge } from "./infra/git-text-merge.mjs";
-export { parseInstallArguments, parseSkillsArguments, SkillCommandUsageError, } from "./presentation/command-arguments.mjs";
-export { catalogLines, keyOf, pickedSelection, pickerLines, pressKey, startPicker, } from "./presentation/skill-picker.mjs";
+export { parseInstallArguments, parseSkillsArguments } from "./presentation/command-arguments.mjs";
+export { keyOf, pickedSelection, pickerLines, pressKey, selectionRequiredLines, startPicker, } from "./presentation/skill-picker.mjs";
 export { availableLine, inspectionLines, installLine } from "./presentation/skill-report-lines.mjs";
