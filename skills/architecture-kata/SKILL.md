@@ -41,7 +41,7 @@ Business drivers → architecture characteristics (top 3, forced ranking) → co
 
 Kata mode writes to `~/.agents/katas/<slug>/` — the toolbox's own `katas/`, linked by `install.sh` — never to the current directory: a kata started inside a client repo must not leave a `katas/` folder in it. Another location only when the user points at one. The files: `kata.md` (the statement + client-Q&A answers appended as canon), `gabarito.md` (the answer key, written at generation time so it survives session breaks — spoiler-marked, the user's discipline not to open), `decisoes.md` (the running decision log — the resumable state), `review.md`. Practice ADRs stay in the kata folder — they never pollute a real `docs/adr/`.
 
-Real mode produces real artifacts through the domain-modeling skill (`~/.agents/skills/domain-modeling/`): glossary terms into `CONTEXT.md` as they crystallize, decisions that pass the three-part test into `docs/adr/`.
+Real mode produces real artifacts through the domain-modeling skill (`<skill-dir>/../domain-modeling/`, where `<skill-dir>` is the directory that contains this `SKILL.md`): glossary terms into `CONTEXT.md` as they crystallize, decisions that pass the three-part test into `docs/adr/`.
 
 ## Neighbors
 

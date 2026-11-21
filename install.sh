@@ -7,9 +7,10 @@
 # AGENTS.md, Claude settings and subagents, lives in a private dotfiles repo
 # with its own installer):
 #   ~/.claude/skills    -> skills/            (Claude Code)
-#   ~/.agents/skills    -> skills/            (canonical multi-agent path;
-#                                              tlc, capability-sync and
-#                                              pr-review-triage reference it)
+#   ~/.agents/skills    -> skills/            (multi-agent path; a skill
+#                                              reaches a sibling through its
+#                                              own folder, never through this
+#                                              path - ADR-0003)
 #   ~/.agents/hooks     -> hooks/             (the global secrets guard)
 #   ~/.codex/skills/<s> -> skills/<s>         (one link per skill: Codex keeps
 #                                              its own .system/ in that dir, so

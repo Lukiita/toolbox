@@ -1,6 +1,6 @@
 # ADR-0002 — A project's decisions over a skill live in the project, outside the skill
 
-**Status:** Proposed (2026-10-05) — implemented for `ddd-tactical` in the same change; accepted by merging it
+**Status:** Proposed (2026-10-05) — implemented for `ddd-tactical` in the same change; accepted by merging it. Amended by [ADR-0003](0003-skills-vendored-with-a-manifest.md) (2026-11-20): a project can now edit a skill, so the premise below is history; the decision stands as the first choice, because an unedited skill updates with no merge
 
 ## Context
 

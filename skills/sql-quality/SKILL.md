@@ -49,6 +49,6 @@ project-d#1126: a listing of ~10 rows joined two independent 1:N branches (`proj
 
 - **ddd-tactical** owns WHERE queries live (read side: `application/queries/`, ORM inline, own read model — its `application-cqrs.md`); this skill owns the SHAPE of what they execute. Modeling the read model is theirs; making it survive growth is here.
 - **code-review**'s bug reviewer applies [review-checklist.md](references/review-checklist.md) whenever the diff touches SQL, builders or migrations.
-- Cross-skill paths resolve on the canonical `~/.agents/skills/` prefix.
+- Cross-skill paths start at `<skill-dir>`, the directory that contains this `SKILL.md`: a sibling skill is `<skill-dir>/../<name>/`, in a project's copy and in a global install alike.
 
 Credit: the classic-antipattern layer distills the four SQL skills of github/awesome-copilot (MIT — sql-optimization, sql-code-review, postgresql-optimization, postgresql-code-review); the shape layer and everything ORM came from the incident above.

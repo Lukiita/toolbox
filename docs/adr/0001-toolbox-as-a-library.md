@@ -1,6 +1,6 @@
 # ADR-0001 — The toolbox becomes a versioned library
 
-**Status:** Accepted (2026-09-15) — implemented in the same change; deviations recorded below
+**Status:** Accepted (2026-09-15) — implemented in the same change; deviations recorded below. Amended by [ADR-0003](0003-skills-vendored-with-a-manifest.md) (2026-11-20): skills are copied into the project with a manifest, no longer linked; everything about hooks, the quality gate and the config stands
 
 ## Context
 

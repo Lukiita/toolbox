@@ -6,7 +6,7 @@
 
 ## Local delta - why this copy differs from the base
 
-1. **`capability-sync` integration** (born in project-b, Jul/2026): `.specs/capabilities/` in the structure, Verifier item (6) in SKILL.md, Step 11 + capability regression (2b) in validate.md, "Sync on PASS" tips. The `capability-sync` skill is ours - **it does not exist upstream**. Candidate for contribution as a new skill in their registry. Cross-skill references use the global `~/.agents/skills/capability-sync/` prefix (per-project installs swap the prefix).
+1. **`capability-sync` integration** (born in project-b, Jul/2026): `.specs/capabilities/` in the structure, Verifier item (6) in SKILL.md, Step 11 + capability regression (2b) in validate.md, "Sync on PASS" tips. The `capability-sync` skill is ours - **it does not exist upstream**. Candidate for contribution as a new skill in their registry. Cross-skill references go through the sibling folder, `<skill-dir>/../capability-sync/`, so they resolve from a project's copy as well as from a global install (toolbox ADR-0003; until then they used a fixed home-directory prefix).
 2. **Verified-commit stamp** (project-b): item 2 of validate.md Step 9 - `**Commit verificado**` filled with `git log -1 --format=%H -- . ':!.specs'`, never raw HEAD; plus the matching tip. The archon flow depends on this field (`archon/commands/tlc-verify-feature.md`).
 3. **Discuss trigger refinement** (project-b): a dimension being *present* does not trigger; a dimension being *unresolved* does (SKILL.md + discuss.md). Upstream still triggers on any present dimension. PR candidate.
 4. **`penalize` guard in lessons.py** (project-b): only a `confirmed` lesson can be penalized - a candidate was never loaded as guidance, so it cannot have "failed when applied"; plus the matching sentence in lessons.md. PR candidate.
@@ -19,7 +19,7 @@
 
 ## Retired in the 3.3.0 update (upstream solved it better)
 
-- The `~/.agents/skills/` prefix for the skill's own scripts → replaced by upstream's `<skill-dir>` resolution (issue #158).
+- The fixed home-directory prefix for the skill's own scripts → replaced by upstream's `<skill-dir>` resolution (issue #158).
 - The diacritic fold in lessons.py `_norm` → superseded by the upstream fix (casefold + any-script + built-in selftest).
 - The `pnpm` example in the tasks.md coverage matrix → back to the upstream example (illustrative only; the real one derives from the repo).
 
