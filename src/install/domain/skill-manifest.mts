@@ -8,11 +8,11 @@
 // tree hash, under a name that is a plain folder name. Everything the
 // installer writes is addressed by these names.
 
-import { isReleaseNumber } from './toolbox-version.mts';
+import { isReleaseNumber, type ReleaseNumber } from './toolbox-version.mts';
 
 export interface SkillRecord {
   /** The toolbox release the project copied the skill from: where a merge fetches the original. */
-  version: string;
+  version: ReleaseNumber;
   /** `SkillTree.hash` of that original. */
   hash: string;
 }
@@ -37,7 +37,13 @@ function assertFolderName(name: string): void {
   );
 }
 
-function assertRecord(name: string, record: Partial<SkillRecord>): asserts record is SkillRecord {
+/** A record as read from JSON or handed in by a caller: checked before it is kept. */
+export interface SkillRecordInput {
+  version?: unknown;
+  hash?: unknown;
+}
+
+function assertRecord(name: string, record: SkillRecordInput): asserts record is SkillRecord {
   if (!isReleaseNumber(record.version)) {
     throw new SkillManifestError(
       `skill "${name}": version received ${JSON.stringify(record.version)}, expected "<major>.<minor>.<patch>"`,
@@ -116,7 +122,7 @@ export class SkillManifest {
    * @example
    *   manifest.record('code-review', { version: '2.0.0', hash: shipped.hash })
    */
-  public record(name: string, record: Partial<SkillRecord>): void {
+  public record(name: string, record: SkillRecordInput): void {
     assertFolderName(name);
     assertRecord(name, record);
     this.records.set(name, { version: record.version, hash: record.hash });

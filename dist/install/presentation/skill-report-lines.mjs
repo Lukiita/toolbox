@@ -55,7 +55,7 @@ export function installLine({ name, status, files, reason }) {
 export function availableLine(names) {
     return `${'available:'.padEnd(STATUS_WIDTH)}${names.join(', ')} - ${INSTALL_NOTES.available}`;
 }
-// `current` and `untracked` add nothing to the project's side of the story.
+// `current`, `untracked` and `unknown` add nothing to the project's side of the story.
 const UPSTREAM_WORTH_NAMING = ['behind', 'ahead', 'retired'];
 function stateLabel({ local, upstream }) {
     return UPSTREAM_WORTH_NAMING.includes(upstream) ? `${local}, ${upstream}` : local;
@@ -71,12 +71,13 @@ function fileLine(label, files) {
  *   // => ['altered           ddd-tactical (1.2.0)', '    edited by the project: SKILL.md']
  */
 export function inspectionLines(inspection) {
-    const { name, version, alteredFiles, behindFiles, divergedFiles } = inspection;
+    const { name, version, alteredFiles, behindFiles, divergedFiles, reason } = inspection;
     const head = `${stateLabel(inspection).padEnd(STATE_WIDTH)}${name}${version ? ` (${version})` : ''}`;
     return [
         head,
         ...fileLine('edited by the project', alteredFiles),
         ...fileLine('changed in the toolbox', behindFiles),
         ...fileLine('differs from the toolbox (edits and new version together)', divergedFiles),
+        ...(reason === undefined ? [] : [`    could not be read: ${reason}`]),
     ];
 }

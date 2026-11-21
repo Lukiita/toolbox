@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadToolboxConfig } from "../config/load-config.mjs";
-import { availableLine, DiskSkillFolders, gitFileDiff, GitPastReleases, gitTextMerge, inspectionLines, inspectSkills, installLine, installSkills, needsSelection, parseInstallArguments, parseSkillsArguments, repositoryCloneUrl, selectionRequiredLines, skillCatalog, SkillCommandUsageError, skillDiffs, } from "../install/index.mjs";
+import { availableLine, DiskSkillFolders, gitFileDiff, GitPastReleases, gitTextMerge, inspectionLines, inspectSkills, installLine, installSkills, needsSelection, parseInstallArguments, parseReleaseNumber, parseSkillsArguments, repositoryCloneUrl, selectionRequiredLines, skillCatalog, SkillCommandUsageError, skillDiffs, } from "../install/index.mjs";
 import { decidePrePush, parsePushedRefs } from "../pre-push/pre-push.mjs";
 import { parseArgs, UsageError } from "../quality-gate/args.mjs";
 import { runQualityGate } from "../quality-gate/run-gate.mjs";
@@ -90,8 +90,15 @@ function prePush(root, config) {
 // node_modules or from a `pnpm dlx` / `npx` cache, in a repository with no
 // package.json of its own (ADR-0003).
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+// The running package's own package.json. Its version is parsed here, where
+// it enters: a bad one fails once, naming the field, instead of every skill
+// reporting `failed` (found in review).
 function packageManifest() {
-    return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'));
+    const json = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'));
+    return {
+        version: parseReleaseNumber(json.version, 'package.json "version"'),
+        repository: json.repository,
+    };
 }
 function skillFolders(root) {
     return new DiskSkillFolders({ packageDir: PACKAGE_DIR, projectRoot: root });
@@ -137,21 +144,25 @@ async function install(root, args) {
         console.log(availableLine(available));
     return reports.some((report) => report.status === 'failed') ? 1 : 0;
 }
+function printInspection(inspection, withDiffs) {
+    for (const line of inspectionLines(inspection))
+        console.log(line);
+    if (!withDiffs)
+        return;
+    for (const diff of skillDiffs(inspection, gitFileDiff))
+        console.log(diff);
+}
 function skills(root, args) {
     const { diff } = parseSkillsArguments(args);
     const inspections = inspectSkills({
         folders: skillFolders(root),
         version: packageManifest().version,
     });
-    for (const inspection of inspections) {
-        for (const line of inspectionLines(inspection))
-            console.log(line);
-        if (diff) {
-            for (const diff of skillDiffs(inspection, gitFileDiff))
-                console.log(diff);
-        }
-    }
-    return 0;
+    for (const inspection of inspections)
+        printInspection(inspection, diff);
+    // Like `install`: every skill is listed, and one that could not be read
+    // makes the command exit 1, so a script notices.
+    return inspections.some((inspection) => inspection.local === 'unreadable') ? 1 : 0;
 }
 // `install` and `skills` never read the config: a project with no
 // toolbox.config.ts (or a typo in it) still gets its skills (found in review).

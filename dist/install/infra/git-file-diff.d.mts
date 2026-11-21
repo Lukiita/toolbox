@@ -1,8 +1,24 @@
-import type { FileDiff } from '../application/ports.mts';
+import type { DiffSide, FileDiff } from '../application/ports.mts';
+/** What `git diff` left behind: its exit status and its two outputs. */
+export interface DiffRun {
+    status: number | null;
+    stdout: string | Buffer;
+    stderr: string | Buffer;
+    error?: Error;
+}
 /**
- * A unified diff of two files; empty when they are equal.
+ * Exit 0 means "equal" and 1 "they differ": both are the answer. Anything
+ * else is a failure, said in the output instead of an empty diff that reads
+ * as "nothing changed".
  *
  * @example
- *   gitFileDiff('node_modules/@lukiita/toolbox/skills/retro/SKILL.md', '.agents/skills/retro/SKILL.md')
+ *   diffOrFailure({ status: 128, stdout: '', stderr: 'fatal: …' }, from) // => 'could not diff …: fatal: …\n'
+ */
+export declare function diffOrFailure(run: DiffRun, from: DiffSide): string;
+/**
+ * A unified diff of two contents, headed by their labels; empty when equal.
+ *
+ * @example
+ *   gitFileDiff({ label: 'toolbox/retro/SKILL.md', content }, { label: '.agents/skills/retro/SKILL.md', content: mine })
  */
 export declare const gitFileDiff: FileDiff;

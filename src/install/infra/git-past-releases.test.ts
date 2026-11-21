@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { parseReleaseNumber as v } from '../domain/toolbox-version.mts';
+
 import { GitPastReleases, repositoryCloneUrl } from './git-past-releases.mts';
 import { scratchDirs } from './scratch-dirs.fixtures.ts';
 
@@ -33,11 +35,11 @@ function release(repo: string, version: string): void {
 }
 
 const retroOf = (releases: GitPastReleases, version: string): string | undefined => {
-  const lookup = releases.skill(version, 'retro');
+  const lookup = releases.skill(v(version), 'retro');
   return lookup.found ? lookup.tree.file('SKILL.md')?.content.toString() : undefined;
 };
 const reasonOf = (releases: GitPastReleases, version: string): string => {
-  const lookup = releases.skill(version, 'retro');
+  const lookup = releases.skill(v(version), 'retro');
   return lookup.found ? '' : lookup.reason;
 };
 
@@ -50,7 +52,7 @@ describe('GitPastReleases', () => {
 
   it('says so when the release has no skill by that name', () => {
     const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`);
-    expect(releases.skill('1.2.0', 'no-such-skill')).toEqual({
+    expect(releases.skill(v('1.2.0'), 'no-such-skill')).toEqual({
       found: false,
       reason: 'the 1.2.0 release has no skill named no-such-skill',
     });
@@ -98,8 +100,8 @@ describe('GitPastReleases', () => {
   it('downloads into the folder it was given, and removes it all when disposed of', () => {
     const downloads = scratch();
     const releases = new GitPastReleases(`file://${repository(['1.2.0'])}`, downloads);
-    releases.skill('1.2.0', 'retro');
-    releases.skill('9.9.9', 'retro');
+    releases.skill(v('1.2.0'), 'retro');
+    releases.skill(v('9.9.9'), 'retro');
     expect(readdirSync(downloads).length).toBeGreaterThan(0);
     releases.dispose();
     expect(readdirSync(downloads)).toEqual([]);

@@ -29,6 +29,7 @@ import { join } from 'node:path';
 import type { PastReleases } from '../application/ports.mts';
 import { PACKAGE_SKILLS_DIR } from '../application/skill-layout.mts';
 import type { OriginalLookup } from '../domain/reconcile-skill.mts';
+import type { ReleaseNumber } from '../domain/toolbox-version.mts';
 import { readShippedSkillTree } from './skill-directory.mts';
 
 // A release, fetched: its package folder, or why it could not be had.
@@ -91,7 +92,7 @@ export class GitPastReleases implements PastReleases {
   }
 
   // The package folder of that release, or why it could not be fetched. Asked once per run.
-  private fetch(version: string): FetchedRelease {
+  private fetch(version: ReleaseNumber): FetchedRelease {
     const known = this.fetched.get(version);
     if (known) return known;
     const release = this.clone(`${TAG_PREFIX}${version}`);
@@ -105,7 +106,7 @@ export class GitPastReleases implements PastReleases {
    * @example
    *   releases.skill('2.0.0', 'ddd-tactical') // => { found: true, tree }
    */
-  public skill(version: string, name: string): OriginalLookup {
+  public skill(version: ReleaseNumber, name: string): OriginalLookup {
     const release = this.fetch(version);
     if (!release.fetched) return { found: false, reason: release.reason };
     const tree = readShippedSkillTree(join(release.packageDir, PACKAGE_SKILLS_DIR, name));

@@ -4,7 +4,7 @@
 
 import { join } from 'node:path';
 
-import type { SkillFolders, SkillLinkKind, SkillPaths } from '../application/ports.mts';
+import type { SkillFolders, SkillLinkKind } from '../application/ports.mts';
 import { PACKAGE_SKILLS_DIR, SKILLS_DIR } from '../application/skill-layout.mts';
 import type { SkillManifest } from '../domain/skill-manifest.mts';
 import type { SkillTree } from '../domain/skill-tree.mts';
@@ -37,7 +37,7 @@ export class DiskSkillFolders implements SkillFolders {
     this.projectRoot = projectRoot;
   }
 
-  public paths(name: string): SkillPaths {
+  private paths(name: string): { local: string; shipped: string } {
     return {
       local: join(this.projectRoot, SKILLS_DIR, name),
       shipped: join(this.packageDir, PACKAGE_SKILLS_DIR, name),

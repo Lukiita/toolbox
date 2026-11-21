@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { parseReleaseNumber as v } from '../domain/toolbox-version.mts';
+
 import { scratchDirs } from '../infra/scratch-dirs.fixtures.ts';
 
 import { inspectSkills, type SkillInspection, skillDiffs } from './inspect-skills.mts';
@@ -11,7 +13,7 @@ import { scratchProject, type ScratchProject, SKILL_V1, writeFiles } from './ins
 const scratch = scratchDirs('toolbox-install-');
 
 function inspect(project: ScratchProject, version = '1.2.0'): Record<string, SkillInspection> {
-  const inspections = inspectSkills({ folders: project.folders, version });
+  const inspections = inspectSkills({ folders: project.folders, version: v(version) });
   return Object.fromEntries(inspections.map((inspection) => [inspection.name, inspection]));
 }
 
@@ -32,7 +34,7 @@ describe('inspectSkills', () => {
     project.install('1.2.0');
     expect(inspect(project).retro).toMatchObject({
       name: 'retro',
-      version: '1.2.0',
+      version: v('1.2.0'),
       local: 'intact',
       upstream: 'current',
       alteredFiles: [],
@@ -46,7 +48,9 @@ describe('inspectSkills', () => {
     project.install();
     rmSync(join(project.packageDir, 'skills', 'retro'), { recursive: true });
     project.ship('zeta', { 'SKILL.md': 'z' });
-    const names = inspectSkills({ folders: project.folders, version: '1.2.0' }).map((i) => i.name);
+    const names = inspectSkills({ folders: project.folders, version: v('1.2.0') }).map(
+      (i) => i.name,
+    );
     expect(names).toEqual(['code-review', 'retro', 'zeta']);
   });
 
@@ -71,7 +75,7 @@ describe('inspectSkills', () => {
     project.ship('code-review', { 'SKILL.md': SKILL_V1, 'references/smells.md': 'smells v2\n' });
 
     expect(inspect(project, '1.3.0')['code-review']).toMatchObject({
-      version: '1.2.0',
+      version: v('1.2.0'),
       local: 'intact',
       upstream: 'behind',
       alteredFiles: [],
@@ -176,51 +180,91 @@ describe('inspectSkills', () => {
 });
 
 describe('skillDiffs', () => {
-  function asking(inspection: SkillInspection): [string, string][] {
-    const asked: [string, string][] = [];
+  interface Asked {
+    from: string;
+    to: string;
+    fromText: string | undefined;
+    toText: string | undefined;
+  }
+  function asking(inspection: SkillInspection): Asked[] {
+    const asked: Asked[] = [];
     const diffs = skillDiffs(inspection, (from, to) => {
-      asked.push([from, to]);
+      asked.push({
+        from: from.label,
+        to: to.label,
+        fromText: from.content?.toString(),
+        toText: to.content?.toString(),
+      });
       return 'a diff';
     });
     expect(diffs).toEqual(asked.map(() => 'a diff'));
     return asked;
   }
 
-  const shipped = (project: ScratchProject, path: string): string =>
-    join(project.packageDir, 'skills', path);
-
-  it("diffs an edited file from the package's, which is the original, to the project's", () => {
+  it("diffs an edited file from the package's content, which is the original, to the project's", () => {
     const project = scratchProject(scratch());
     project.install();
     writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
 
     expect(asking(inspect(project)['code-review'])).toEqual([
-      [shipped(project, 'code-review/SKILL.md'), project.local('code-review/SKILL.md')],
+      {
+        from: 'toolbox/code-review/SKILL.md',
+        to: '.agents/skills/code-review/SKILL.md',
+        fromText: SKILL_V1,
+        toText: IN_JAVA,
+      },
     ]);
   });
 
-  it("diffs a waiting file from the project's, which is the original, to the package's", () => {
+  it("diffs a waiting file from the project's content, which is the original, to the package's", () => {
     const project = scratchProject(scratch());
     project.install('1.2.0');
     project.ship('code-review', { 'SKILL.md': SKILL_V1, 'references/smells.md': 'smells v2\n' });
 
     expect(asking(inspect(project, '1.3.0')['code-review'])).toEqual([
+      {
+        from: '.agents/skills/code-review/references/smells.md',
+        to: 'toolbox/code-review/references/smells.md',
+        fromText: 'smells v1\n',
+        toText: 'smells v2\n',
+      },
+    ]);
+  });
+
+  it('diffs every differing file from the project to the package when both moved', () => {
+    const project = editedAndBehind();
+    const asked = asking(inspect(project, '1.3.0')['code-review']);
+    expect(asked.map(({ from, to }) => [from, to])).toEqual([
+      ['.agents/skills/code-review/SKILL.md', 'toolbox/code-review/SKILL.md'],
       [
-        project.local('code-review/references/smells.md'),
-        shipped(project, 'code-review/references/smells.md'),
+        '.agents/skills/code-review/references/smells.md',
+        'toolbox/code-review/references/smells.md',
       ],
     ]);
   });
 
-  it('diffs every file from the project to the package when both moved', () => {
-    const project = editedAndBehind();
+  // The skill's `references` folder is a link to somewhere else: the project's
+  // tree does not hold its files, so they are absent - never read through it.
+  it('takes a file behind a link inside the skill as absent, and reads nothing through it', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    writeFiles(join(project.projectRoot, '..', 'outside'), { 'smells.md': 'TOP-SECRET\n' });
+    rmSync(project.local('code-review/references'), { recursive: true });
+    symlinkSync(
+      join(project.projectRoot, '..', 'outside'),
+      project.local('code-review/references'),
+      'dir',
+    );
 
-    expect(asking(inspect(project, '1.3.0')['code-review'])).toEqual([
-      [project.local('code-review/SKILL.md'), shipped(project, 'code-review/SKILL.md')],
-      [
-        project.local('code-review/references/smells.md'),
-        shipped(project, 'code-review/references/smells.md'),
-      ],
+    const asked = asking(inspect(project)['code-review']);
+
+    expect(asked).toEqual([
+      {
+        from: 'toolbox/code-review/references/smells.md',
+        to: '.agents/skills/code-review/references/smells.md',
+        fromText: 'smells v1\n',
+        toText: undefined,
+      },
     ]);
   });
 
@@ -228,5 +272,23 @@ describe('skillDiffs', () => {
     const project = scratchProject(scratch());
     project.install();
     expect(asking(inspect(project).retro)).toEqual([]);
+  });
+});
+
+describe('inspectSkills - a skill that cannot be read', () => {
+  // `install` reports such a skill and goes on; `skills` stopped before
+  // printing anything, for every skill (found in review).
+  it('is reported unreadable, with the reason, and the other skills are still inspected', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    writeFiles(project.local('code-review'), { 'bad\\name.md': 'x' });
+
+    const inspections = inspect(project);
+
+    expect(inspections['code-review']).toMatchObject({ local: 'unreadable', upstream: 'unknown' });
+    expect(inspections['code-review'].reason).toMatch(
+      /^skill file path: received "bad\\\\name\.md"/,
+    );
+    expect(inspections.retro).toMatchObject({ local: 'intact', upstream: 'current' });
   });
 });

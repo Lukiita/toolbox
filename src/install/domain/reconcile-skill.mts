@@ -14,6 +14,7 @@ import { mergeSkillTrees, type TextMerge } from './merge-skill-trees.mts';
 import type { SkillRecord } from './skill-manifest.mts';
 import type { SkillTree } from './skill-tree.mts';
 import { classifySkill, type SkillState } from './skill-state.mts';
+import type { ReleaseNumber } from './toolbox-version.mts';
 
 /** The skill is settled against what the package ships; the record moves to the running version. */
 export type SyncedStatus =
@@ -73,18 +74,18 @@ export interface SkillSides {
    * Reads the skill as the given release shipped it. Called only when a merge
    * needs the original: it costs a download.
    */
-  original: (version: string) => OriginalLookup;
+  original: (version: ReleaseNumber) => OriginalLookup;
 }
 
 export interface ReconcileOptions {
   /** The version of the running toolbox. */
-  version: string;
+  version: ReleaseNumber;
   /** Write a merge that left conflicts, markers included. */
   writeConflicts: boolean;
   mergeText: TextMerge;
 }
 
-type Recorded = SkillSides & { record: SkillRecord; local: SkillTree };
+type RecordedSides = SkillSides & { record: SkillRecord; local: SkillTree };
 
 function synced(status: SyncedStatus, local?: SkillTree, files: string[] = []): Reconciliation {
   return local ? { synced: true, status, local, files } : { synced: true, status, files };
@@ -116,7 +117,7 @@ function reconcileUnrecorded({ local, shipped, requested }: SkillSides): Reconci
 // The fetched release must be the one the project copied from. A tag that
 // was moved, or a release packed differently, is not: merging against it
 // would read as edits what the project never touched.
-function recordedOriginal({ record, original }: Recorded): OriginalLookup {
+function recordedOriginal({ record, original }: RecordedSides): OriginalLookup {
   const lookup = original(record.version);
   if (!lookup.found || lookup.tree.hash === record.hash) return lookup;
   return {
@@ -127,7 +128,7 @@ function recordedOriginal({ record, original }: Recorded): OriginalLookup {
 
 // Without the original there is no third side, and a two-way "merge" would
 // read the project's edits as deletions to undo.
-function mergeIntoEdited(sides: Recorded, options: ReconcileOptions): Reconciliation {
+function mergeIntoEdited(sides: RecordedSides, options: ReconcileOptions): Reconciliation {
   const original = recordedOriginal(sides);
   if (!original.found) return kept('no-original', [], original.reason);
   const { tree, merged, conflicts } = mergeSkillTrees(
@@ -142,7 +143,7 @@ function mergeIntoEdited(sides: Recorded, options: ReconcileOptions): Reconcilia
 
 function reconcileRecorded(
   state: SkillState,
-  sides: Recorded,
+  sides: RecordedSides,
   options: ReconcileOptions,
 ): Reconciliation {
   if (state.upstream === 'current')
@@ -180,7 +181,7 @@ export function reconcileSkill(sides: SkillSides, options: ReconcileOptions): Re
  */
 export function reconcileUnshipped(
   recorded: { record: SkillRecord; local: SkillTree | undefined },
-  runningVersion: string,
+  runningVersion: ReleaseNumber,
 ): Reconciliation {
   const state = classifySkill({ ...recorded, shipped: undefined }, runningVersion);
   if (state.upstream === 'ahead') return kept('ahead');

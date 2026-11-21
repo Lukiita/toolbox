@@ -1,5 +1,6 @@
 import type { SkillRecord } from './skill-manifest.mts';
 import type { SkillTree } from './skill-tree.mts';
+import { type ReleaseNumber } from './toolbox-version.mts';
 /** The project's side. */
 export type LocalState = 'intact' | 'altered' | 'removed' | 'not-installed' | 'unmanaged';
 /** The package's side. */
@@ -22,4 +23,4 @@ export interface SkillSnapshot {
  *   classifySkill({ record, local, shipped }, '2.1.0')
  *   // => { local: 'altered', upstream: 'behind' }
  */
-export declare function classifySkill(snapshot: SkillSnapshot, runningVersion: string): SkillState;
+export declare function classifySkill(snapshot: SkillSnapshot, runningVersion: ReleaseNumber): SkillState;

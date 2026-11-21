@@ -18,7 +18,7 @@ function assertShipped(names, shipped) {
 // A skill about to be added brings the siblings its files reach, or it would
 // arrive with a dead path in it. Only on the way in: a skill the project
 // already has does not bring back a sibling the project deleted.
-function needsOf(name, manifest, folders) {
+function siblingsToBringAlong(name, manifest, folders) {
     if (manifest.find(name))
         return [];
     try {
@@ -36,7 +36,7 @@ function requestedSkills(manifest, { folders, select }, shipped) {
     const pending = [...asked];
     for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
         const by = name;
-        const added = needsOf(by, manifest, folders).filter((sibling) => shipped.includes(sibling) && !requested.has(sibling));
+        const added = siblingsToBringAlong(by, manifest, folders).filter((sibling) => shipped.includes(sibling) && !requested.has(sibling));
         added.forEach((sibling) => requested.set(sibling, by));
         pending.push(...added);
     }
@@ -151,7 +151,7 @@ function installAll(manifest, options) {
  * settled; `select` adds to them. Idempotent.
  *
  * @example
- *   installSkills({ folders, pastReleases, mergeText: gitTextMerge, version: '2.0.0', writeConflicts: false, select: { names: ['code-review'], all: false } })
+ *   installSkills({ folders, pastReleases, mergeText: gitTextMerge, version: parseReleaseNumber('2.0.0'), writeConflicts: false, select: { names: ['code-review'], all: false } })
  *   // => [{ name: 'code-review', status: 'copied', files: [] }, { name: 'sql-quality', status: 'copied', files: [], reason: 'needed by code-review' }, ...]
  */
 export function installSkills(options) {

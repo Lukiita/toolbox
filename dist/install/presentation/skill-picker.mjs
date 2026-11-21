@@ -7,6 +7,7 @@
 // Written on Node's own readline rather than a prompt library: a dependency
 // would land in the node_modules of every project that uses the toolbox, for
 // a question asked once.
+import { ALL_FLAG } from "./command-arguments.mjs";
 /**
  * The picker as it opens: the cursor on the first skill, nothing picked.
  *
@@ -102,15 +103,9 @@ function listed(entries, before) {
 function titleOf(version) {
     return `Skills in @lukiita/toolbox ${version}`;
 }
-/**
- * The skills the package ships, one per line with a line about each: what a
- * script or an agent is shown when a project has no skill yet and named
- * none. A person at a terminal gets the picker instead.
- *
- * @example
- *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
- */
-export function catalogLines(catalog, version) {
+// The skills the package ships, one per line with a line about each: what a
+// script or an agent is shown, inside `selectionRequiredLines`.
+function catalogLines(catalog, version) {
     return [`${titleOf(version)}:`, ...listed(catalog, () => '  ')];
 }
 /**
@@ -123,7 +118,7 @@ export function catalogLines(catalog, version) {
  */
 export function selectionRequiredLines(catalog, version) {
     return [
-        'this project has no skill from the toolbox yet: name the ones it gets, or pass --all.',
+        `this project has no skill from the toolbox yet: name the ones it gets, or pass ${ALL_FLAG}.`,
         ...catalogLines(catalog, version),
     ];
 }

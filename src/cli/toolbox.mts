@@ -34,12 +34,15 @@ import {
   installSkills,
   needsSelection,
   parseInstallArguments,
+  parseReleaseNumber,
   parseSkillsArguments,
   repositoryCloneUrl,
   selectionRequiredLines,
   skillCatalog,
   SkillCommandUsageError,
   skillDiffs,
+  type ReleaseNumber,
+  type SkillInspection,
   type SkillSelection,
 } from '../install/index.mts';
 import { decidePrePush, parsePushedRefs, type PrePushPorts } from '../pre-push/pre-push.mts';
@@ -124,12 +127,22 @@ function prePush(root: string, config: ResolvedToolboxConfig): number {
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 interface PackageManifest {
-  version: string;
+  version: ReleaseNumber;
   repository: unknown;
 }
 
+// The running package's own package.json. Its version is parsed here, where
+// it enters: a bad one fails once, naming the field, instead of every skill
+// reporting `failed` (found in review).
 function packageManifest(): PackageManifest {
-  return JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')) as PackageManifest;
+  const json = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
+    version?: unknown;
+    repository?: unknown;
+  };
+  return {
+    version: parseReleaseNumber(json.version, 'package.json "version"'),
+    repository: json.repository,
+  };
 }
 
 function skillFolders(root: string): DiskSkillFolders {
@@ -175,19 +188,22 @@ async function install(root: string, args: string[]): Promise<number> {
   return reports.some((report) => report.status === 'failed') ? 1 : 0;
 }
 
+function printInspection(inspection: SkillInspection, withDiffs: boolean): void {
+  for (const line of inspectionLines(inspection)) console.log(line);
+  if (!withDiffs) return;
+  for (const diff of skillDiffs(inspection, gitFileDiff)) console.log(diff);
+}
+
 function skills(root: string, args: string[]): number {
   const { diff } = parseSkillsArguments(args);
   const inspections = inspectSkills({
     folders: skillFolders(root),
     version: packageManifest().version,
   });
-  for (const inspection of inspections) {
-    for (const line of inspectionLines(inspection)) console.log(line);
-    if (diff) {
-      for (const diff of skillDiffs(inspection, gitFileDiff)) console.log(diff);
-    }
-  }
-  return 0;
+  for (const inspection of inspections) printInspection(inspection, diff);
+  // Like `install`: every skill is listed, and one that could not be read
+  // makes the command exit 1, so a script notices.
+  return inspections.some((inspection) => inspection.local === 'unreadable') ? 1 : 0;
 }
 
 type Command = (root: string, args: string[]) => number | Promise<number>;

@@ -1,10 +1,16 @@
+import { type ReleaseNumber } from './toolbox-version.mts';
 export interface SkillRecord {
     /** The toolbox release the project copied the skill from: where a merge fetches the original. */
-    version: string;
+    version: ReleaseNumber;
     /** `SkillTree.hash` of that original. */
     hash: string;
 }
 export declare class SkillManifestError extends Error {
+}
+/** A record as read from JSON or handed in by a caller: checked before it is kept. */
+export interface SkillRecordInput {
+    version?: unknown;
+    hash?: unknown;
 }
 export declare class SkillManifest {
     private readonly records;
@@ -26,7 +32,7 @@ export declare class SkillManifest {
      * @example
      *   manifest.record('code-review', { version: '2.0.0', hash: shipped.hash })
      */
-    record(name: string, record: Partial<SkillRecord>): void;
+    record(name: string, record: SkillRecordInput): void;
     /**
      * The record leaves the manifest: the project deleted the skill's folder, so
      * there is nothing left for it to describe.

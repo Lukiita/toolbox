@@ -32,7 +32,7 @@ function summaryOf(tree) {
 function siblingsIn(text) {
     return [...text.matchAll(SIBLING_REFERENCE)].map(([, sibling]) => sibling);
 }
-function needsOf(tree) {
+function siblingReferences(tree) {
     const texts = tree
         .entries()
         .filter(([, file]) => !isBinary(file.content))
@@ -47,5 +47,5 @@ function needsOf(tree) {
  *   // => { summary: 'Reviews the branch diff against its base.', needs: ['sql-quality'] }
  */
 export function describeSkill(tree) {
-    return { summary: summaryOf(tree), needs: needsOf(tree) };
+    return { summary: summaryOf(tree), needs: siblingReferences(tree) };
 }

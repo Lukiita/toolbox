@@ -4,9 +4,8 @@
 
 import { join } from 'node:path';
 
-import type { SkillInspection } from '../application/inspect-skills.mts';
+import type { InspectedUpstream, SkillInspection } from '../application/inspect-skills.mts';
 import type { InstallStatus, SkillInstallReport } from '../application/install-skills.mts';
-import type { UpstreamState } from '../domain/skill-state.mts';
 import { SKILLS_DIR } from '../application/skill-layout.mts';
 import { WRITE_CONFLICTS_FLAG } from './command-arguments.mts';
 
@@ -68,8 +67,8 @@ export function availableLine(names: readonly string[]): string {
   return `${'available:'.padEnd(STATUS_WIDTH)}${names.join(', ')} - ${INSTALL_NOTES.available}`;
 }
 
-// `current` and `untracked` add nothing to the project's side of the story.
-const UPSTREAM_WORTH_NAMING: readonly UpstreamState[] = ['behind', 'ahead', 'retired'];
+// `current`, `untracked` and `unknown` add nothing to the project's side of the story.
+const UPSTREAM_WORTH_NAMING: readonly InspectedUpstream[] = ['behind', 'ahead', 'retired'];
 
 function stateLabel({ local, upstream }: SkillInspection): string {
   return UPSTREAM_WORTH_NAMING.includes(upstream) ? `${local}, ${upstream}` : local;
@@ -87,12 +86,13 @@ function fileLine(label: string, files: readonly string[]): string[] {
  *   // => ['altered           ddd-tactical (1.2.0)', '    edited by the project: SKILL.md']
  */
 export function inspectionLines(inspection: SkillInspection): string[] {
-  const { name, version, alteredFiles, behindFiles, divergedFiles } = inspection;
+  const { name, version, alteredFiles, behindFiles, divergedFiles, reason } = inspection;
   const head = `${stateLabel(inspection).padEnd(STATE_WIDTH)}${name}${version ? ` (${version})` : ''}`;
   return [
     head,
     ...fileLine('edited by the project', alteredFiles),
     ...fileLine('changed in the toolbox', behindFiles),
     ...fileLine('differs from the toolbox (edits and new version together)', divergedFiles),
+    ...(reason === undefined ? [] : [`    could not be read: ${reason}`]),
   ];
 }

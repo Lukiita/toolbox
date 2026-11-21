@@ -1,6 +1,7 @@
 import { type TextMerge } from './merge-skill-trees.mts';
 import type { SkillRecord } from './skill-manifest.mts';
 import type { SkillTree } from './skill-tree.mts';
+import type { ReleaseNumber } from './toolbox-version.mts';
 /** The skill is settled against what the package ships; the record moves to the running version. */
 export type SyncedStatus = 'copied' | 'adopted' | 'updated' | 'merged' | 'conflict-marked' | 'unchanged' | 'altered';
 /** Nothing is written and the record stays where it was. */
@@ -44,11 +45,11 @@ export interface SkillSides {
      * Reads the skill as the given release shipped it. Called only when a merge
      * needs the original: it costs a download.
      */
-    original: (version: string) => OriginalLookup;
+    original: (version: ReleaseNumber) => OriginalLookup;
 }
 export interface ReconcileOptions {
     /** The version of the running toolbox. */
-    version: string;
+    version: ReleaseNumber;
     /** Write a merge that left conflicts, markers included. */
     writeConflicts: boolean;
     mergeText: TextMerge;
@@ -72,4 +73,4 @@ export declare function reconcileSkill(sides: SkillSides, options: ReconcileOpti
 export declare function reconcileUnshipped(recorded: {
     record: SkillRecord;
     local: SkillTree | undefined;
-}, runningVersion: string): Reconciliation;
+}, runningVersion: ReleaseNumber): Reconciliation;

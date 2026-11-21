@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseReleaseNumber as v } from './toolbox-version.mts';
+
 import type { TextMerge } from './merge-skill-trees.mts';
 import {
   type OriginalLookup,
@@ -30,13 +32,13 @@ const neverFetched = (version: string): OriginalLookup => {
 const fetchedV1 = (): OriginalLookup => ({ found: true, tree: V1 });
 
 function options(overrides: Partial<ReconcileOptions> = {}): ReconcileOptions {
-  return { version: '1.3.0', writeConflicts: false, mergeText: neverMerges, ...overrides };
+  return { version: v('1.3.0'), writeConflicts: false, mergeText: neverMerges, ...overrides };
 }
 
 /** A skill installed at 1.2.0 from V1, unless a field says otherwise. */
 function recorded(overrides: Partial<SkillSides>): SkillSides {
   return {
-    record: { version: '1.2.0', hash: V1.hash },
+    record: { version: v('1.2.0'), hash: V1.hash },
     local: V1,
     shipped: V1,
     requested: false,
@@ -234,23 +236,23 @@ describe('reconcileSkill - what the project decided stays decided', () => {
   it('does not touch a skill recorded by a newer toolbox than the one running', () => {
     const outcome = reconcileSkill(
       {
-        record: { version: '1.4.0', hash: V2.hash },
+        record: { version: v('1.4.0'), hash: V2.hash },
         local: V2,
         shipped: V1,
         requested: false,
         original: neverFetched,
       },
-      options({ version: '1.3.0' }),
+      options({ version: v('1.3.0') }),
     );
     expect(outcome).toEqual({ synced: false, status: 'ahead', files: [] });
   });
 });
 
 describe('reconcileUnshipped - a recorded skill the running package does not ship', () => {
-  const record = { version: '1.2.0', hash: V1.hash };
+  const record = { version: v('1.2.0'), hash: V1.hash };
 
   it('is retired, and kept, while the project still has its folder', () => {
-    expect(reconcileUnshipped({ record, local: V1 }, '1.3.0')).toEqual({
+    expect(reconcileUnshipped({ record, local: V1 }, v('1.3.0'))).toEqual({
       synced: false,
       status: 'retired',
       files: [],
@@ -258,7 +260,7 @@ describe('reconcileUnshipped - a recorded skill the running package does not shi
   });
 
   it('drops the record once the project deleted the folder: nothing is left to describe', () => {
-    expect(reconcileUnshipped({ record, local: undefined }, '1.3.0')).toEqual({
+    expect(reconcileUnshipped({ record, local: undefined }, v('1.3.0'))).toEqual({
       synced: false,
       status: 'removed',
       files: [],
@@ -268,13 +270,13 @@ describe('reconcileUnshipped - a recorded skill the running package does not shi
 
   // The skill was added by a newer toolbox than the one running.
   it('is ahead, and untouched, when a newer toolbox recorded it', () => {
-    const newer = { version: '1.4.0', hash: V2.hash };
-    expect(reconcileUnshipped({ record: newer, local: V2 }, '1.3.0')).toEqual({
+    const newer = { version: v('1.4.0'), hash: V2.hash };
+    expect(reconcileUnshipped({ record: newer, local: V2 }, v('1.3.0'))).toEqual({
       synced: false,
       status: 'ahead',
       files: [],
     });
-    expect(reconcileUnshipped({ record: newer, local: undefined }, '1.3.0')).toEqual({
+    expect(reconcileUnshipped({ record: newer, local: undefined }, v('1.3.0'))).toEqual({
       synced: false,
       status: 'ahead',
       files: [],

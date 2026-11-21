@@ -9,6 +9,7 @@ import { join } from 'node:path';
 
 import type { OriginalLookup } from '../domain/reconcile-skill.mts';
 import { DiskSkillFolders } from '../infra/disk-skill-folders.mts';
+import { parseReleaseNumber } from '../domain/toolbox-version.mts';
 import { gitTextMerge } from '../infra/git-text-merge.mts';
 import { readShippedSkillTree } from '../infra/skill-directory.mts';
 import { installSkills, type SkillInstallReport } from './install-skills.mts';
@@ -119,7 +120,7 @@ export function scratchProject(root: string): ScratchProject {
       releases.tag(version, packageDir);
       return installSkills({
         folders,
-        version,
+        version: parseReleaseNumber(version),
         writeConflicts: choices.writeConflicts ?? false,
         select: choices.select ?? { names: [], all: !hasInstalledSkills(folders) },
         mergeText: gitTextMerge,

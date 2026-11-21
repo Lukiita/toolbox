@@ -1,6 +1,8 @@
 // Where the feature keeps things in a project (ADR-0003). A contract with
-// every project that ran `toolbox install`, so it lives with the use cases:
-// the disk adapter writes there and the report lines name it.
+// every project that ran `toolbox install`, kept in `application/` because
+// every layer around it names these places: the disk adapter reads and
+// writes there, the status command labels its diffs with them, the report
+// lines print them.
 //
 //   .agents/skills/<name>/        the project's copy of a skill - its to edit
 //   .agents/toolbox-skills.json   the manifest: version + hash of each original

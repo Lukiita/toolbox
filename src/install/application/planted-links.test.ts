@@ -12,6 +12,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -19,8 +20,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { SkillManifestError } from '../domain/skill-manifest.mts';
+import { parseReleaseNumber as v } from '../domain/toolbox-version.mts';
 import { scratchDirs } from '../infra/scratch-dirs.fixtures.ts';
-import { inspectSkills } from './inspect-skills.mts';
+import { gitFileDiff } from '../infra/git-file-diff.mts';
+import { inspectSkills, skillDiffs } from './inspect-skills.mts';
 import {
   scratchProject,
   type ScratchProject,
@@ -141,7 +144,7 @@ describe('a link planted where the manifest goes', () => {
   it('is refused by `toolbox skills` too', () => {
     const { project, outside } = planted();
     symlinkSync(join(outside, 'victim.txt'), manifestOf(project));
-    expect(() => inspectSkills({ folders: project.folders, version: '1.2.0' })).toThrow(REFUSED);
+    expect(() => inspectSkills({ folders: project.folders, version: v('1.2.0') })).toThrow(REFUSED);
   });
 });
 
@@ -151,7 +154,7 @@ describe("a link the project keeps in a skill's place", () => {
     symlinkSync(outside, project.local('retro'), 'dir');
 
     expect(statuses(project.install()).retro).toBe('pinned');
-    const inspected = inspectSkills({ folders: project.folders, version: '1.2.0' });
+    const inspected = inspectSkills({ folders: project.folders, version: v('1.2.0') });
     expect(inspected.find(({ name }) => name === 'retro')).toMatchObject({
       local: 'pinned',
       alteredFiles: [],
@@ -172,12 +175,32 @@ describe("a link the project keeps in a skill's place", () => {
       chmodSync(join(outside, 'locked'), 0o000);
       symlinkSync(outside, project.local('retro'), 'dir');
       try {
-        expect(() => inspectSkills({ folders: project.folders, version: '1.2.0' })).not.toThrow();
+        expect(() =>
+          inspectSkills({ folders: project.folders, version: v('1.2.0') }),
+        ).not.toThrow();
       } finally {
         chmodSync(join(outside, 'locked'), 0o755);
       }
     },
   );
+});
+
+describe('a link inside a skill', () => {
+  it('never puts what it points at into `toolbox skills --diff`', () => {
+    const { project, outside } = planted();
+    project.install();
+    rmSync(project.local('code-review/references'), { recursive: true });
+    writeFiles(outside, { 'smells.md': 'TOP-SECRET\n' });
+    symlinkSync(outside, project.local('code-review/references'), 'dir');
+
+    const [inspection] = inspectSkills({ folders: project.folders, version: v('1.2.0') }).filter(
+      ({ name }) => name === 'code-review',
+    );
+    const diffs = skillDiffs(inspection, gitFileDiff).join('\n');
+
+    expect(diffs).toContain('-smells v1');
+    expect(diffs).not.toContain('TOP-SECRET');
+  });
 });
 
 describe('a write killed while replacing a 1.x link', () => {

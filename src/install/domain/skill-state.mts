@@ -9,7 +9,7 @@
 
 import type { SkillRecord } from './skill-manifest.mts';
 import type { SkillTree } from './skill-tree.mts';
-import { isOlderVersion } from './toolbox-version.mts';
+import { isOlderVersion, type ReleaseNumber } from './toolbox-version.mts';
 
 /** The project's side. */
 export type LocalState =
@@ -40,7 +40,7 @@ export interface SkillSnapshot {
   shipped: SkillTree | undefined;
 }
 
-type Recorded = SkillSnapshot & { record: SkillRecord };
+type RecordedSnapshot = SkillSnapshot & { record: SkillRecord };
 
 // The project already holds what the package ships: the new version applied
 // by hand, or an install that died after writing the folder and before saving
@@ -49,13 +49,13 @@ function holdsShipped({ local, shipped }: SkillSnapshot): boolean {
   return local !== undefined && shipped !== undefined && local.equals(shipped);
 }
 
-function localState(snapshot: Recorded): LocalState {
+function localState(snapshot: RecordedSnapshot): LocalState {
   const { record, local } = snapshot;
   if (!local) return 'removed';
   return local.hash === record.hash || holdsShipped(snapshot) ? 'intact' : 'altered';
 }
 
-function upstreamState(snapshot: Recorded, runningVersion: string): UpstreamState {
+function upstreamState(snapshot: RecordedSnapshot, runningVersion: ReleaseNumber): UpstreamState {
   const { record, shipped } = snapshot;
   // A teammate with a stale node_modules: what their package ships is older
   // than the record, never something to move the project's skill to. Asked
@@ -73,7 +73,7 @@ function upstreamState(snapshot: Recorded, runningVersion: string): UpstreamStat
  *   classifySkill({ record, local, shipped }, '2.1.0')
  *   // => { local: 'altered', upstream: 'behind' }
  */
-export function classifySkill(snapshot: SkillSnapshot, runningVersion: string): SkillState {
+export function classifySkill(snapshot: SkillSnapshot, runningVersion: ReleaseNumber): SkillState {
   const { record, local } = snapshot;
   if (!record) return { local: local ? 'unmanaged' : 'not-installed', upstream: 'untracked' };
   const recorded = { ...snapshot, record };

@@ -12,6 +12,7 @@ export { inspectSkills, skillDiffs, } from "./application/inspect-skills.mjs";
 export { installSkills, } from "./application/install-skills.mjs";
 export { needsSelection, skillCatalog, } from "./application/skill-selection.mjs";
 export { SkillCommandUsageError } from "./application/usage-error.mjs";
+export { parseReleaseNumber, ReleaseNumberError, } from "./domain/toolbox-version.mjs";
 export { DiskSkillFolders } from "./infra/disk-skill-folders.mjs";
 export { gitFileDiff } from "./infra/git-file-diff.mjs";
 export { GitPastReleases, repositoryCloneUrl } from "./infra/git-past-releases.mjs";

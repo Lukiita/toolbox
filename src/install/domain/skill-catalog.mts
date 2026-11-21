@@ -47,7 +47,7 @@ function siblingsIn(text: string): string[] {
   return [...text.matchAll(SIBLING_REFERENCE)].map(([, sibling]) => sibling);
 }
 
-function needsOf(tree: SkillTree): string[] {
+function siblingReferences(tree: SkillTree): string[] {
   const texts = tree
     .entries()
     .filter(([, file]) => !isBinary(file.content))
@@ -63,5 +63,5 @@ function needsOf(tree: SkillTree): string[] {
  *   // => { summary: 'Reviews the branch diff against its base.', needs: ['sql-quality'] }
  */
 export function describeSkill(tree: SkillTree): SkillDescription {
-  return { summary: summaryOf(tree), needs: needsOf(tree) };
+  return { summary: summaryOf(tree), needs: siblingReferences(tree) };
 }

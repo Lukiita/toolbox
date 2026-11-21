@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseReleaseNumber as v } from '../domain/toolbox-version.mts';
+
 import type { SkillInspection } from '../application/inspect-skills.mts';
 import type { InstallStatus } from '../application/install-skills.mts';
 import { availableLine, inspectionLines, installLine } from './skill-report-lines.mts';
@@ -114,13 +116,13 @@ describe('installLine', () => {
 function inspection(overrides: Partial<SkillInspection>): SkillInspection {
   return {
     name: 'ddd-tactical',
-    version: '1.2.0',
+    version: v('1.2.0'),
     local: 'intact',
     upstream: 'current',
     alteredFiles: [],
     behindFiles: [],
     divergedFiles: [],
-    paths: { local: '/p/l', shipped: '/p/s' },
+    sides: { local: undefined, shipped: undefined },
     ...overrides,
   };
 }
@@ -180,5 +182,21 @@ describe('availableLine', () => {
     expect(availableLine(['retro', 'sql-quality'])).toBe(
       'available:       retro, sql-quality - shipped by the toolbox, not installed here; `toolbox install <name>` adds it',
     );
+  });
+});
+
+describe('inspectionLines - a skill that cannot be read', () => {
+  it('says so, with the reason, and nothing about the package side', () => {
+    const lines = inspectionLines(
+      inspection({
+        local: 'unreadable',
+        upstream: 'unknown',
+        reason: 'EACCES: permission denied, open .agents/skills/ddd-tactical/SKILL.md',
+      }),
+    );
+    expect(lines).toEqual([
+      'unreadable        ddd-tactical (1.2.0)',
+      '    could not be read: EACCES: permission denied, open .agents/skills/ddd-tactical/SKILL.md',
+    ]);
   });
 });

@@ -94,6 +94,8 @@ function writeSkillFile(path, file) {
 const STAGING = '.toolbox-staging';
 const SWAPPED_OUT = '.toolbox-old';
 const SWAP_MARKER = '.toolbox-swap';
+// A folder name and its suffix; no file system takes more than 255 bytes in one.
+const LONGEST_MARKER = 255;
 // Best effort, never a throw: this only clears what a write no longer needs,
 // and the new folder is already in place. Returns whether the path is gone,
 // so the caller can say when it is not.
@@ -209,7 +211,9 @@ export function writeSkillTree(dir, tree) {
 // what it says is checked, not followed.
 function setAside(dir) {
     const marker = `${dir}${SWAP_MARKER}`;
-    if (pathKind(marker) !== 'file')
+    // A name, not a document: one of any size can be committed, and it is
+    // never read whole.
+    if (pathKind(marker) !== 'file' || statSync(marker).size > LONGEST_MARKER)
         return undefined;
     const named = readFileSync(marker, 'utf8').trim();
     const aside = join(dirname(dir), named);
@@ -234,8 +238,14 @@ function setAside(dir) {
  */
 export function recoverSkillFolder(dir) {
     const aside = setAside(dir);
+    // The skill's place is empty: the write died between its two renames, and
+    // what it set aside goes back. It is not: the write had finished and died
+    // before removing its marker, and what it set aside is the old folder,
+    // whose SKILL.md agents would otherwise list beside the new one.
     if (aside && pathKind(dir) === 'absent')
         renameSync(aside, dir);
+    else if (aside)
+        discard(aside);
     discard(`${dir}${SWAP_MARKER}`);
     // A staging folder holds a SKILL.md: left there, agents list it as a skill.
     discard(`${dir}${STAGING}`);

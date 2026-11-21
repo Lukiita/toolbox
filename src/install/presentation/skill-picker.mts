@@ -9,6 +9,7 @@
 // a question asked once.
 
 import type { CatalogEntry, SkillSelection } from '../application/skill-selection.mts';
+import { ALL_FLAG } from './command-arguments.mts';
 
 export type PickerKey = 'up' | 'down' | 'toggle' | 'all' | 'confirm' | 'cancel';
 
@@ -133,15 +134,9 @@ function titleOf(version: string): string {
   return `Skills in @lukiita/toolbox ${version}`;
 }
 
-/**
- * The skills the package ships, one per line with a line about each: what a
- * script or an agent is shown when a project has no skill yet and named
- * none. A person at a terminal gets the picker instead.
- *
- * @example
- *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
- */
-export function catalogLines(catalog: readonly CatalogEntry[], version: string): string[] {
+// The skills the package ships, one per line with a line about each: what a
+// script or an agent is shown, inside `selectionRequiredLines`.
+function catalogLines(catalog: readonly CatalogEntry[], version: string): string[] {
   return [`${titleOf(version)}:`, ...listed(catalog, () => '  ')];
 }
 
@@ -158,7 +153,7 @@ export function selectionRequiredLines(
   version: string,
 ): string[] {
   return [
-    'this project has no skill from the toolbox yet: name the ones it gets, or pass --all.',
+    `this project has no skill from the toolbox yet: name the ones it gets, or pass ${ALL_FLAG}.`,
     ...catalogLines(catalog, version),
   ];
 }

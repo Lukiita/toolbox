@@ -18,6 +18,7 @@ import {
 import { describeSkill } from '../domain/skill-catalog.mts';
 import type { SkillManifest, SkillRecord } from '../domain/skill-manifest.mts';
 import type { SkillTree } from '../domain/skill-tree.mts';
+import type { ReleaseNumber } from '../domain/toolbox-version.mts';
 import type { PastReleases, SkillFolders } from './ports.mts';
 import type { SkillSelection } from './skill-selection.mts';
 import { SkillCommandUsageError } from './usage-error.mts';
@@ -27,7 +28,7 @@ export interface InstallSkillsOptions {
   pastReleases: PastReleases;
   mergeText: TextMerge;
   /** The version of the running toolbox, from its package.json. */
-  version: string;
+  version: ReleaseNumber;
   /** Write a merge that left conflicts, markers included where the text can carry them. */
   writeConflicts: boolean;
   select: SkillSelection;
@@ -70,7 +71,11 @@ function assertShipped(names: readonly string[], shipped: readonly string[]): vo
 // A skill about to be added brings the siblings its files reach, or it would
 // arrive with a dead path in it. Only on the way in: a skill the project
 // already has does not bring back a sibling the project deleted.
-function needsOf(name: string, manifest: SkillManifest, folders: SkillFolders): string[] {
+function siblingsToBringAlong(
+  name: string,
+  manifest: SkillManifest,
+  folders: SkillFolders,
+): string[] {
   if (manifest.find(name)) return [];
   try {
     const shipped = folders.readShipped(name);
@@ -91,7 +96,7 @@ function requestedSkills(
   const pending = [...asked];
   for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
     const by = name;
-    const added = needsOf(by, manifest, folders).filter(
+    const added = siblingsToBringAlong(by, manifest, folders).filter(
       (sibling) => shipped.includes(sibling) && !requested.has(sibling),
     );
     added.forEach((sibling) => requested.set(sibling, by));
@@ -235,7 +240,7 @@ function installAll(manifest: SkillManifest, options: InstallSkillsOptions): Ski
  * settled; `select` adds to them. Idempotent.
  *
  * @example
- *   installSkills({ folders, pastReleases, mergeText: gitTextMerge, version: '2.0.0', writeConflicts: false, select: { names: ['code-review'], all: false } })
+ *   installSkills({ folders, pastReleases, mergeText: gitTextMerge, version: parseReleaseNumber('2.0.0'), writeConflicts: false, select: { names: ['code-review'], all: false } })
  *   // => [{ name: 'code-review', status: 'copied', files: [] }, { name: 'sql-quality', status: 'copied', files: [], reason: 'needed by code-review' }, ...]
  */
 export function installSkills(options: InstallSkillsOptions): SkillInstallReport[] {

@@ -1,5 +1,6 @@
 import type { PastReleases } from '../application/ports.mts';
 import type { OriginalLookup } from '../domain/reconcile-skill.mts';
+import type { ReleaseNumber } from '../domain/toolbox-version.mts';
 /**
  * The URL git clones, from package.json's `repository` field.
  *
@@ -27,7 +28,7 @@ export declare class GitPastReleases implements PastReleases {
      * @example
      *   releases.skill('2.0.0', 'ddd-tactical') // => { found: true, tree }
      */
-    skill(version: string, name: string): OriginalLookup;
+    skill(version: ReleaseNumber, name: string): OriginalLookup;
     /** Removes what was downloaded. */
     dispose(): void;
     private clone;

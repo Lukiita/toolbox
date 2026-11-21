@@ -296,6 +296,29 @@ describe('recoverSkillFolder', () => {
     expect(existsSync(join(root, 'retro', 'scripts'))).toBe(false);
   });
 
+  // Killed after the second rename and before the marker went: the new folder
+  // is in place, and the old one beside it still has a SKILL.md agents list.
+  it('clears the old folder a write that had finished left with its marker', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'the new one, in place');
+    put(root, 'retro.toolbox-old/SKILL.md', 'the old one');
+    writeFileSync(join(root, 'retro.toolbox-swap'), 'retro.toolbox-old');
+    recoverSkillFolder(join(root, 'retro'));
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('the new one, in place');
+    expect(readdirSync(root)).toEqual(['retro']);
+  });
+
+  // The marker is a file in the repository: one of any size can be committed.
+  it('ignores a marker too large to be one, without reading it', () => {
+    const root = scratch();
+    put(root, 'retro.toolbox-old/SKILL.md', 'old');
+    put(root, 'retro.toolbox-staging/SKILL.md', 'staging');
+    writeFileSync(join(root, 'retro.toolbox-swap'), `retro.toolbox-old${' '.repeat(5000)}`);
+    recoverSkillFolder(join(root, 'retro'));
+    expect(existsSync(join(root, 'retro'))).toBe(false);
+    expect(existsSync(join(root, 'retro.toolbox-swap'))).toBe(false);
+  });
+
   it('clears a staging folder a dead run left, which agents would list as a skill', () => {
     const root = scratch();
     put(root, 'retro/SKILL.md', 'mine');
