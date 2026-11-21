@@ -21,17 +21,11 @@ export interface InstallArguments extends SkillSelection {
  */
 export declare function parseInstallArguments(args: readonly string[]): InstallArguments;
 /**
- * The list a person picks from, when a project has no skill yet and named none.
+ * The skills the package ships, one per line with a line about each: what a
+ * script or an agent is shown when a project has no skill yet and named none.
+ * (A person at a terminal gets the picker, `skill-picker.mts`.)
  *
  * @example
- *   selectionMenu(catalog, '2.0.0').forEach((line) => console.log(line))
+ *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
  */
-export declare function selectionMenu(catalog: readonly CatalogEntry[], version: string): string[];
-/**
- * Reads the answer to the selection menu.
- *
- * @example
- *   parseSelection('1 retro', ['code-review', 'ddd-tactical', 'retro'])
- *   // => { names: ['code-review', 'retro'], all: false }
- */
-export declare function parseSelection(answer: string, names: readonly string[]): SkillSelection;
+export declare function catalogLines(catalog: readonly CatalogEntry[], version: string): string[];

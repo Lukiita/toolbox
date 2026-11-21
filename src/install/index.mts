@@ -6,8 +6,8 @@
 // Exported: the two commands (`toolbox install`, `toolbox skills`) and what
 // `install` asks before it runs; the adapters each needs wired in by whoever
 // calls it (the CLI is the one place that picks the disk, and git for the
-// merge, the diff and the past releases); how the arguments are read; and
-// the lines the commands print.
+// merge, the diff and the past releases); how the arguments are read; the
+// picker a terminal shows; and the lines the commands print.
 
 export {
   inspectSkills,
@@ -28,9 +28,16 @@ export { gitFileDiff } from './infra/git-file-diff.mts';
 export { GitPastReleases, repositoryCloneUrl } from './infra/git-past-releases.mts';
 export { gitTextMerge } from './infra/git-text-merge.mts';
 export {
+  catalogLines,
   InstallUsageError,
   parseInstallArguments,
-  parseSelection,
-  selectionMenu,
 } from './presentation/install-arguments.mts';
+export {
+  keyOf,
+  pickedSelection,
+  pickerLines,
+  type PickerState,
+  pressKey,
+  startPicker,
+} from './presentation/skill-picker.mts';
 export { availableLine, inspectionLines, installLine } from './presentation/skill-report-lines.mts';

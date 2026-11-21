@@ -9,14 +9,14 @@
 //   toolbox skills [--diff] (which skills the project edited, which are behind the package)
 //
 // Exit codes: 0 ok, 1 the ratchet failed or a skill could not be installed,
-// 2 usage error - whoever reads a CI log needs to tell the last two apart.
+// 2 usage error - whoever reads a CI log needs to tell the last two apart -
+// and 130 when the skill picker was closed without confirming.
 //
 // Ships built (`dist/`, committed): Node refuses to strip types under
 // node_modules, and pnpm 12 refuses a git dependency's build script unless the
 // consumer allowlists it per commit - so nothing runs on install (ADR-0001).
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createInterface } from 'node:readline/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,6 +24,7 @@ import { loadToolboxConfig } from '../config/load-config.mts';
 import type { ResolvedToolboxConfig } from '../config/toolbox-config.mts';
 import {
   availableLine,
+  catalogLines,
   DiskSkillFolders,
   gitFileDiff,
   GitPastReleases,
@@ -35,9 +36,7 @@ import {
   installSkills,
   InstallUsageError,
   parseInstallArguments,
-  parseSelection,
   repositoryCloneUrl,
-  selectionMenu,
   skillCatalog,
   skillDiffs,
   type SkillSelection,
@@ -46,6 +45,7 @@ import { decidePrePush, parsePushedRefs, type PrePushPorts } from '../pre-push/p
 import { type GateOptions, parseArgs, UsageError } from '../quality-gate/args.mts';
 import { runQualityGate } from '../quality-gate/run-gate.mts';
 import * as git from './git-ports.mts';
+import { pickSkills } from './pick-skills.mts';
 
 const USAGE =
   'Usage: toolbox quality [--update-baseline] [--skip-tests] [--baseline-from <rev>] [--out <file>]\n' +
@@ -142,26 +142,21 @@ function skillFolders(root: string): DiskSkillFolders {
   return new DiskSkillFolders({ packageDir: PACKAGE_DIR, projectRoot: root });
 }
 
-// A terminal is asked; a script or an agent is told what to type. Guessing
-// "all of them" for either would undo the point of picking.
+/** The person closed the picker without confirming: nothing is installed, exit 130 like Ctrl+C. */
+class Cancelled extends Error {}
+
+// A terminal gets the picker; a script or an agent is told what to type.
+// Guessing "all of them" for either would undo the point of picking.
 async function askWhichSkills(folders: DiskSkillFolders, version: string): Promise<SkillSelection> {
   const catalog = skillCatalog(folders);
-  const menu = selectionMenu(catalog, version);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new UsageError(
-      `this project has no skill from the toolbox yet: name the ones it gets, or pass --all.\n${menu.slice(0, -1).join('\n')}`,
+      `this project has no skill from the toolbox yet: name the ones it gets, or pass --all.\n${catalogLines(catalog, version).join('\n')}`,
     );
   }
-  for (const line of menu) console.log(line);
-  const terminal = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return parseSelection(
-      await terminal.question('> '),
-      catalog.map((entry) => entry.name),
-    );
-  } finally {
-    terminal.close();
-  }
+  const picked = await pickSkills(catalog, version);
+  if (!picked) throw new Cancelled();
+  return picked;
 }
 
 // Names or --all on the command line, or a project that already has skills:
@@ -239,11 +234,19 @@ async function main(argv: string[]): Promise<number> {
 // A setup error (bad config, missing baseline or coverage json, jscpd not
 // found) is not "the ratchet failed": it exits 2 with its own message, so a
 // CI log never reads a config typo as a quality regression.
+// What to say, and which code to leave with, for a command that did not finish.
+function failure(e: unknown): { message: string; exitCode: number } {
+  // Closed without confirming: the picker already said so on its last line.
+  if (e instanceof Cancelled) return { message: '', exitCode: 130 };
+  const message = e instanceof Error ? e.message : String(e);
+  const usage = e instanceof UsageError || e instanceof InstallUsageError;
+  return { message: usage ? `${message}\n${USAGE}` : `toolbox: ${message}`, exitCode: 2 };
+}
+
 try {
   process.exitCode = await main(process.argv.slice(2));
 } catch (e) {
-  const message = e instanceof Error ? e.message : String(e);
-  const usage = e instanceof UsageError || e instanceof InstallUsageError;
-  console.error(usage ? `${message}\n${USAGE}` : `toolbox: ${message}`);
-  process.exitCode = 2;
+  const { message, exitCode } = failure(e);
+  if (message !== '') console.error(message);
+  process.exitCode = exitCode;
 }

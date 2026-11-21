@@ -4,5 +4,6 @@ export { DiskSkillFolders } from './infra/disk-skill-folders.mts';
 export { gitFileDiff } from './infra/git-file-diff.mts';
 export { GitPastReleases, repositoryCloneUrl } from './infra/git-past-releases.mts';
 export { gitTextMerge } from './infra/git-text-merge.mts';
-export { InstallUsageError, parseInstallArguments, parseSelection, selectionMenu, } from './presentation/install-arguments.mts';
+export { catalogLines, InstallUsageError, parseInstallArguments, } from './presentation/install-arguments.mts';
+export { keyOf, pickedSelection, pickerLines, type PickerState, pressKey, startPicker, } from './presentation/skill-picker.mts';
 export { availableLine, inspectionLines, installLine } from './presentation/skill-report-lines.mts';

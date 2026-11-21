@@ -78,10 +78,13 @@ toolbox install                brings what the project has up to date, adds noth
 ```
 
 Every form also settles the skills already recorded. A project with no skill yet that
-names none is asked which ones, from a numbered list with a line about each, when it runs
-in a terminal; a script or an agent gets the list and exit code 2 instead, because guessing
-"all" for them would undo the point of picking. The links a 1.x install wrote count as the
-selection of that project: each becomes a copy.
+names none gets a picker when it runs in a terminal: the list of skills with a line about
+each, arrows to move, space to pick, `a` for all, enter to confirm; closed without
+confirming, nothing is installed and the command exits 130. A script or an agent gets the
+list and exit code 2 instead, because guessing "all" for them would undo the point of
+picking. The picker is built on Node's own `readline`, not a prompt library: a dependency
+would land in every consumer's `node_modules` for a question asked once. The links a 1.x
+install wrote count as the selection of that project: each becomes a copy.
 
 A skill installed without the sibling it calls has a dead path in it. So a skill on its
 way in brings the siblings its files reach (read from the same `<skill-dir>/../<name>/`

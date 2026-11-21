@@ -6,13 +6,14 @@
 // Exported: the two commands (`toolbox install`, `toolbox skills`) and what
 // `install` asks before it runs; the adapters each needs wired in by whoever
 // calls it (the CLI is the one place that picks the disk, and git for the
-// merge, the diff and the past releases); how the arguments are read; and
-// the lines the commands print.
+// merge, the diff and the past releases); how the arguments are read; the
+// picker a terminal shows; and the lines the commands print.
 export { inspectSkills, skillDiffs, } from "./application/inspect-skills.mjs";
 export { hasInstalledSkills, installSkills, skillCatalog, } from "./application/install-skills.mjs";
 export { DiskSkillFolders } from "./infra/disk-skill-folders.mjs";
 export { gitFileDiff } from "./infra/git-file-diff.mjs";
 export { GitPastReleases, repositoryCloneUrl } from "./infra/git-past-releases.mjs";
 export { gitTextMerge } from "./infra/git-text-merge.mjs";
-export { InstallUsageError, parseInstallArguments, parseSelection, selectionMenu, } from "./presentation/install-arguments.mjs";
+export { catalogLines, InstallUsageError, parseInstallArguments, } from "./presentation/install-arguments.mjs";
+export { keyOf, pickedSelection, pickerLines, pressKey, startPicker, } from "./presentation/skill-picker.mjs";
 export { availableLine, inspectionLines, installLine } from "./presentation/skill-report-lines.mjs";

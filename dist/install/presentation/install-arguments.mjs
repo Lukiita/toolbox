@@ -1,6 +1,6 @@
-// What a person types to `toolbox install`, in one place: the flags, the
-// skill names, and the answer to "which skills?" when a terminal asks. The
-// CLI only reads argv and stdin; what they mean is decided - and tested - here.
+// What a person types to `toolbox install`, in one place: the flags and the
+// skill names. The CLI only reads argv; what it means is decided - and
+// tested - here.
 /** Every skill the package ships. */
 export const ALL_FLAG = '--all';
 /**
@@ -32,37 +32,15 @@ export function parseInstallArguments(args) {
     };
 }
 /**
- * The list a person picks from, when a project has no skill yet and named none.
+ * The skills the package ships, one per line with a line about each: what a
+ * script or an agent is shown when a project has no skill yet and named none.
+ * (A person at a terminal gets the picker, `skill-picker.mts`.)
  *
  * @example
- *   selectionMenu(catalog, '2.0.0').forEach((line) => console.log(line))
+ *   catalogLines(catalog, '2.0.0').forEach((line) => console.error(line))
  */
-export function selectionMenu(catalog, version) {
+export function catalogLines(catalog, version) {
     const width = Math.max(...catalog.map((entry) => entry.name.length));
-    const rows = catalog.map(({ name, summary }, index) => `  ${String(index + 1).padStart(2)}. ${name.padEnd(width)}   ${summary}`.trimEnd());
-    return [
-        `Skills in @lukiita/toolbox ${version}:`,
-        ...rows,
-        'Which ones does this project get? Numbers or names, separated by spaces; or "all".',
-    ];
-}
-function skillOf(token, names) {
-    const byNumber = /^\d+$/.test(token) ? names[Number(token) - 1] : undefined;
-    const name = byNumber ?? names.find((candidate) => candidate === token);
-    if (name !== undefined)
-        return name;
-    throw new InstallUsageError(`not a skill of the list: received ${JSON.stringify(token)}, expected a number from 1 to ${names.length} or one of ${names.join(', ')}`);
-}
-/**
- * Reads the answer to the selection menu.
- *
- * @example
- *   parseSelection('1 retro', ['code-review', 'ddd-tactical', 'retro'])
- *   // => { names: ['code-review', 'retro'], all: false }
- */
-export function parseSelection(answer, names) {
-    const tokens = answer.split(/[\s,]+/).filter((token) => token !== '');
-    if (tokens.includes('all'))
-        return { names: [], all: true };
-    return { names: [...new Set(tokens.map((token) => skillOf(token, names)))], all: false };
+    const rows = catalog.map(({ name, summary }) => `  ${name.padEnd(width)}   ${summary}`.trimEnd());
+    return [`Skills in @lukiita/toolbox ${version}:`, ...rows];
 }
