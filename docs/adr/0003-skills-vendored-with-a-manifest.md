@@ -64,6 +64,15 @@ Copier updates a project from its template).
    it: the record goes with the folder, and the skill is not brought back.
 7. **One skill that cannot be settled does not stop the others.** It is reported `failed`
    with the reason, and the command exits 1.
+8. **Nothing is read or written through a symbolic link.** A project is somebody else's
+   content: a link committed under a name the toolbox uses must never make it touch what
+   the link points at. So every path it owns in a project is looked at without following
+   it. A link where the manifest goes is refused. A link under one of the names a write
+   keeps beside a skill (`<name>.toolbox-staging`, `<name>.toolbox-old`,
+   `<name>.toolbox-swap`) is unlinked. A link in a skill's place is the 1.x install's
+   (replaced by a copy) or the project's own (`pinned`), and is never read through. Only
+   the path itself is not followed: a project whose `.agents/` is a link elsewhere keeps
+   working. One test file plants a link under each of these names.
 
 ### Picking skills
 
@@ -151,11 +160,10 @@ An old folder that could not be deleted is named in the report, never left unsai
 manifest is saved even when the run stops early, so a skill already written is never left
 under a stale record.
 
-The names a write uses beside a skill (`<name>.toolbox-staging`, `<name>.toolbox-old`,
-`<name>.toolbox-swap`) can be committed by anyone as symbolic links. A link under one of
-them is unlinked and never followed, and never moved into the place of a skill. A link the
-1.x install wrote in a skill's place stays until its copy is complete: the same swap
-replaces it.
+While the two renames are under way a marker names what was set aside, and a write that
+dies between them is undone from it: a folder is put back, and so is the link a 1.x
+install wrote, which is then judged like any link in a skill's place. The marker is
+removed only when the swap, or its undoing, succeeded.
 
 ### The original comes from the release's tag
 
