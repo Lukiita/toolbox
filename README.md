@@ -30,34 +30,34 @@ Projects used to copy `skills/`, `hooks/` and `quality-gate/` and adapt them by 
 
 ```bash
 pnpm add -D github:Lukiita/toolbox#v1.2.0     # a tag is a version; no registry, no build step
-pnpm exec toolbox install                      # copies every shipped skill into .agents/skills/
+pnpm exec toolbox install                      # asks which skills this project gets, and copies them into .agents/skills/
 cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 ```
 
-- **Skills** arrive as files in `.agents/skills/` (Claude, Codex and Cursor all read it), versioned in the project and the project's to edit ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)). Commit them together with `.agents/toolbox-skills.json`: the manifest records, per skill, the toolbox version and the hash of the original — that is how the next install tells an edited skill from an intact one. The project's own skills in `.agents/skills/` are never touched.
+- **Skills** are picked per project (`toolbox install <skill>...`, `toolbox install --all`, or the list a plain `toolbox install` shows in a terminal when the project has none yet; a skill brings the siblings it calls) and arrive as files in `.agents/skills/` (Claude, Codex and Cursor all read it), versioned in the project and the project's to edit ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)). Commit them together with `.agents/toolbox-skills.json`: the manifest records, per skill, the toolbox version and the hash of the original — that is how the next install tells an edited skill from an intact one. The project's own skills in `.agents/skills/` are never touched.
 - **Quality ratchet**: `"quality": "toolbox quality"` in the scripts; the rest of the setup (baseline, CI, pre-push hook) is in `templates/quality-gate/README.md`.
 - **Hooks**: wired from `node_modules/@lukiita/toolbox/hooks/` — see `hooks/README.md`.
 - **Config**: one file, `toolbox.config.ts`, holds every value a project used to edit inside a copied file (source window, feature slot, limits, alias prefixes, base branch, protected branches). Empty config = canonical setup. The code is never edited in a project.
 
-**Updating a project** is `pnpm update @lukiita/toolbox && pnpm exec toolbox install`, then a commit of what changed. Per skill, `install` does one of:
+**Updating a project** is `pnpm update @lukiita/toolbox && pnpm exec toolbox install`, then a commit of what changed. A plain `install` settles the skills the project has and adds none; the ones it did not pick are listed as `available`. Per skill it has, `install` does one of:
 
 | The project's copy | The package ships | `install`                                                                                                         |
 | ------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
 | not edited         | a new version     | replaces it (`updated`)                                                                                           |
 | edited             | the same          | keeps it (`altered`)                                                                                              |
 | edited             | a new version     | three-way merge: `merged` when every file settles; otherwise `conflict`, and **nothing is written** in that skill |
-| deleted            | anything          | leaves it deleted (`removed`)                                                                                     |
+| deleted            | anything          | leaves it deleted and drops its record (`removed`): deleting the folder is how a project stops wanting a skill    |
 
 The merge needs the original the project copied, and the project does not keep it: `install` fetches the tag of the recorded release (`git clone` of `v<version>`, into a temp folder), so merging an edited skill needs the network. When the release cannot be fetched the skill is left as it is and reported `no-original` with the reason; run `install` again when it can.
 
-`toolbox install --write-conflicts` writes a conflicting merge with git's conflict markers, to resolve by hand. `toolbox skills` lists, offline, which skills the project edited and which are behind the package, file by file; `toolbox skills --diff` prints the diffs. An edit that is a fix, not an adaptation, comes back here as a pull request. A choice a skill leaves open goes in `.agents/skill-decisions/<skill>.md` instead of an edit (ADR-0002): an unedited skill updates with no merge and no fetch.
+`toolbox install --write-conflicts` writes a conflicting merge for you to settle: git's conflict markers where the text can carry them, the project's side kept for a file deleted on one side or binary. A skill that cannot be read or written is reported `failed` and the others go on; the command then exits 1. `toolbox skills` lists, offline, which skills the project edited and which are behind the package, file by file; `toolbox skills --diff` prints the diffs. An edit that is a fix, not an adaptation, comes back here as a pull request. A choice a skill leaves open goes in `.agents/skill-decisions/<skill>.md` instead of an edit (ADR-0002): an unedited skill updates with no merge and no fetch.
 
-**A repository with no `package.json`** (a Java or Python project that only wants the skills) runs the same command from a cache, and commits the result: `pnpm dlx github:Lukiita/toolbox#v2.0.0 install`. Node is needed where the update is run, not on every clone.
+**A repository with no `package.json`** (a Java or Python project that only wants the skills) runs the same command from a cache, and commits the result: `pnpm dlx github:Lukiita/toolbox#v2.0.0 install --all` (or the names of the skills it wants). Node is needed where the update is run, not on every clone.
 
 **Migrating from 1.x**, where `install` linked the skills ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)):
 
 1. Remove the ignore rule for `.agents/skills/` from `.gitignore`, where there is one — the copies are meant to be committed.
-2. Move the dependency to the 2.x tag and run `pnpm exec toolbox install`: each link `install` wrote becomes a copy (`copied`); a link the project made to somewhere else is kept (`pinned`), and so is the project's own folder with a shipped skill's name (`unmanaged`).
+2. Move the dependency to the 2.x tag and run `pnpm exec toolbox install`: each link `install` wrote becomes a copy (`copied`) and those skills are the project's selection, so delete the folders it does not want; a link the project made to somewhere else is kept (`pinned`), and so is the project's own folder with a shipped skill's name (`unmanaged`).
 3. Drop `"postinstall": "toolbox install"` from the scripts: a clone already has the files, and `install` is now the step after an update.
 4. Commit `.agents/skills/` and `.agents/toolbox-skills.json`.
 
@@ -75,7 +75,7 @@ The same gates run in CI (`.github/workflows/ci.yml`) on every pull request and 
 
 `src/` is TypeScript (`.mts`, tests beside each module), built to `dist/` — and **`dist/` is committed**. Two facts force that: Node refuses to strip types from files under `node_modules`, so `.mts` cannot ship as is; and pnpm 12 refuses a git dependency's build script unless the consumer allowlists it with the commit sha, which breaks on every bump. So nothing runs on install: the tag carries the build. `.githooks/pre-commit` refuses a commit that would carry `src/` and `dist/` out of sync — it fails if `src/` has unstaged changes, then rebuilds and fails if the staged `dist/` differs from the build, or if `dist/` changed but is not in the commit — and tells what to run (`./install.sh` sets `core.hooksPath`); `pnpm build` cleans `dist/` first, so a deleted source drops its orphan; `pnpm build:check` is the release gate — it fails unless `dist/` equals HEAD, run it before a tag. `hooks/` is plain `.mjs`. `skills/` and `templates/` ship as files.
 
-**Code layout.** A feature with rules of its own is layered: `src/install/` has `domain/` (what an install does with a skill: the rule, no disk), `application/` (the two commands), `infra/` (disk and git) and `presentation/` (the lines printed), and code outside it imports only from `src/install/index.mts`. It is the first; `quality-gate/`, `pre-push/` and `config/` are flat tooling from before and move when they are next reworked, not in a sweep. File names carry no type suffix anywhere in this repo: the folder says the layer.
+**Code layout.** A feature with rules of its own is layered: `src/install/` has `domain/` (what an install does with a skill: the rule, no disk), `application/` (the two commands), `infra/` (disk and git) and `presentation/` (the lines printed), and code outside it imports only from `src/install/index.mts`. The use cases take the disk and git through the ports in `application/ports.mts`, implemented in `infra/` and wired by the CLI, so no layer imports one further out. It is the first; `quality-gate/`, `pre-push/` and `config/` are flat tooling from before and move when they are next reworked, not in a sweep. File names carry no type suffix anywhere in this repo: the folder says the layer.
 
 ## Structure
 

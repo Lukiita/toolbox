@@ -30,7 +30,7 @@ treated here as a requirement, not as a note.
 
 ## Decision
 
-`toolbox install` **copies** the skills the package ships into the project, as real files
+`toolbox install` **copies** the skills a project picks into the project, as real files
 the project versions and may edit, and records where each copy came from:
 
 ```
@@ -57,36 +57,71 @@ Copier updates a project from its template).
 4. **A skill reaches a sibling from where it lives.** `<skill-dir>/../<name>/…`, never a
    path into the home directory. A test over the shipped skills holds this.
 5. **A skill never moves backwards.** A toolbox older than the one that wrote a record
-   does not touch that skill (a teammate with a stale `node_modules`).
-6. **What the project deleted stays deleted.** A recorded skill whose folder is gone is
-   not brought back.
+   does not touch that skill, and does not call "retired" a skill a newer one added (a
+   teammate with a stale `node_modules`).
+6. **A project gets the skills it picked, and only those.** A shipped skill it did not ask
+   for is offered, never copied. Deleting a skill's folder is how a project stops wanting
+   it: the record goes with the folder, and the skill is not brought back.
+7. **One skill that cannot be settled does not stop the others.** It is reported `failed`
+   with the reason, and the command exits 1.
+
+### Picking skills
+
+Not every skill fits every repository (a Java backend has no use for the Husky setup), so
+a project installs a selection, and the manifest is that selection: a skill with a record
+is one the project has.
+
+```
+toolbox install <skill>...     adds those skills to the ones the project has
+toolbox install --all          adds every skill the package ships
+toolbox install                brings what the project has up to date, adds nothing
+```
+
+Every form also settles the skills already recorded. A project with no skill yet that
+names none is asked which ones, from a numbered list with a line about each, when it runs
+in a terminal; a script or an agent gets the list and exit code 2 instead, because guessing
+"all" for them would undo the point of picking. The links a 1.x install wrote count as the
+selection of that project: each becomes a copy.
+
+A skill installed without the sibling it calls has a dead path in it. So a skill on its
+way in brings the siblings its files reach (read from the same `<skill-dir>/../<name>/`
+references invariant 4 holds), reported `copied … needed by <skill>`. Only on the way in:
+a skill the project already has does not bring back a sibling the project deleted.
 
 ### What install does with one skill
 
 "Intact" means the folder's hash equals the recorded one; "new version" means the package
 ships content whose hash differs from it.
 
-| The manifest | The project's folder                             | The package   | Install                                                              | Reported          |
-| ------------ | ------------------------------------------------ | ------------- | -------------------------------------------------------------------- | ----------------- |
-| no record    | absent                                           | —             | copies; records                                                      | `copied`          |
-| no record    | a link the link-era install wrote, or a dangling | —             | replaces the link with a copy; records                               | `copied`          |
-| no record    | the project's own link to elsewhere              | —             | nothing                                                              | `pinned`          |
-| no record    | a folder equal to the package's                  | —             | records it, writes no file in it                                     | `adopted`         |
-| no record    | any other folder                                 | —             | nothing: it is the project's own skill                               | `unmanaged`       |
-| a record     | absent                                           | any           | nothing                                                              | `removed`         |
-| a record     | intact                                           | same          | nothing (the record moves to the running version)                    | `unchanged`       |
-| a record     | intact                                           | new version   | replaces the folder                                                  | `updated`         |
-| a record     | edited                                           | same          | nothing (the record moves to the running version)                    | `altered`         |
-| a record     | edited                                           | new version   | fetches the original; three-way merge; every file settled: writes it | `merged`          |
-| a record     | edited                                           | new version   | a file both sides changed in the same place: **writes nothing**      | `conflict`        |
-| a record     | edited                                           | new version   | the same, with `--write-conflicts`: writes the markers               | `conflict-marked` |
-| a record     | edited                                           | new version   | the original cannot be fetched, or is not the recorded one: nothing  | `no-original`     |
-| a record     | any                                              | not shipped   | nothing                                                              | `retired`         |
-| newer record | any                                              | older toolbox | nothing                                                              | `ahead`           |
+| The manifest | The project's folder                        | The package   | Install                                                              | Reported          |
+| ------------ | ------------------------------------------- | ------------- | -------------------------------------------------------------------- | ----------------- |
+| no record    | absent, and the skill was asked for         | —             | copies; records                                                      | `copied`          |
+| no record    | absent, not asked for                       | —             | nothing                                                              | `available`       |
+| any          | a link the 1.x install wrote, or a dangling | —             | replaces the link with a copy; records                               | `copied`          |
+| any          | the project's own link to elsewhere         | —             | nothing                                                              | `pinned`          |
+| no record    | a folder equal to the package's             | —             | records it, writes no file in it                                     | `adopted`         |
+| no record    | any other folder                            | —             | nothing: it is the project's own skill, asked for or not             | `unmanaged`       |
+| a record     | absent                                      | any           | drops the record                                                     | `removed`         |
+| a record     | intact                                      | same          | nothing (the record moves to the running version)                    | `unchanged`       |
+| a record     | already equal to the package's              | new version   | nothing (the record moves): applied by hand, or a run that died      | `unchanged`       |
+| a record     | intact                                      | new version   | replaces the folder                                                  | `updated`         |
+| a record     | edited                                      | same          | nothing (the record moves to the running version)                    | `altered`         |
+| a record     | edited                                      | new version   | fetches the original; three-way merge; every file settled: writes it | `merged`          |
+| a record     | edited                                      | new version   | a file both sides changed in the same place: **writes nothing**      | `conflict`        |
+| a record     | edited                                      | new version   | the same, with `--write-conflicts`: writes the merge, see below      | `conflict-marked` |
+| a record     | edited                                      | new version   | the original cannot be fetched, or is not the recorded one: nothing  | `no-original`     |
+| a record     | present                                     | not shipped   | nothing                                                              | `retired`         |
+| newer record | any                                         | older toolbox | nothing, shipped or not                                              | `ahead`           |
+| any          | cannot be read or written                   | any           | nothing more for this skill; the others go on                        | `failed`          |
 
 A conflict holds back the **whole skill**, not only the conflicting file: half an update is
 a version of the skill nobody wrote. In every row that writes, the record moves to the
 running version and to the hash of what the package ships.
+
+`--write-conflicts` is "write what you have and let me settle it": the merged skill is
+written and the record moves. A file whose text both sides changed carries git's conflict
+markers. A file edited on one side and deleted on the other, added on both, or binary has
+no text to mark: it keeps the project's side, and is named in the report with the others.
 
 ### The merge
 
@@ -97,14 +132,19 @@ merge decides (`git merge-file --diff3`), and what it cannot settle is a conflic
 edited on one side and deleted on the other, or binary on both, is a conflict that keeps
 the project's side.
 
+Text is merged as bytes and compared with LF line endings, the way the hash reads it: no
+byte of a file is rewritten for being outside UTF-8, and a checkout with CRLF
+(`core.autocrlf`) merges like any other and gets its line endings back.
+
 ### Replacing a folder
 
 A skill's folder is never deleted to be rewritten. The new content is written beside it,
 the old folder is renamed aside and the new one renamed into place - two atomic renames,
 the first undone when the second fails - and only then is the old one deleted, best
 effort. A failure at any point leaves a whole folder; a run killed between the renames is
-undone by the next install before it reads anything. The manifest is saved even when a
-later skill fails, so a skill already written is never left under a stale record.
+undone by the next install before it reads anything. An old folder that could not be
+deleted is named in the report, never left unsaid. The manifest is saved even when the run
+stops early, so a skill already written is never left under a stale record.
 
 ### The original comes from the release's tag
 
@@ -132,8 +172,9 @@ A skill's hash is sha256 over `<path>\0<sha256 of the file>\n` for each file, pa
 code-unit order. Left out on purpose, because each would make an unedited skill read as
 edited: the exec bit, CRLF vs LF in text files (`core.autocrlf` rewrites them on checkout),
 and what running a skill's script leaves behind (`__pycache__/`, `*.pyc`, `.DS_Store`).
-Only regular files are read: a symbolic link inside a skill is in no hash and does not
-survive a write of the folder. A known limit - no shipped skill has one.
+Only regular files are read, and no symbolic link is followed: a link inside a skill, to
+a file or to a folder, is in no hash, never pulls outside content into a diff or a merge,
+and does not survive a write of the folder. A known limit - no shipped skill has one.
 A shipped skill is read the same from the installed package, from a checkout and from a
 fetched tag: what `package.json`'s `files` keeps out of the package (`test_*.py`) is left
 out of all three, or a fetched original would never match its record. The format is a
@@ -158,6 +199,10 @@ not on every clone.
 
 ## Alternatives rejected
 
+- **Copy every shipped skill and let the project delete what it does not want.** The
+  first cut. A repository that only wanted three skills got sixteen, reviewed sixteen in
+  its first pull request, and had to know which ones to delete. Picking on the way in
+  costs one question and a list.
 - **Keep the link and copy only the skill a project wants to edit.** Less to merge, but it
   solves neither the content hidden from git nor Node in a non-Node repository, and it
   leaves two delivery modes to keep working.
@@ -196,8 +241,8 @@ what a decisions file cannot express.
 ## Consequences
 
 - **Gained:** the skills are in git and in the pull request; a clone needs nothing
-  installed to have them; a project adapts a skill and still receives its updates; the
-  project carries one extra file, the manifest.
+  installed to have them; a project carries only the skills that fit it, adapts them and
+  still receives their updates; the project carries one extra file, the manifest.
 - **Paid:** merging an edited skill needs the network and the tag of the release it was
   copied from, so `install` now depends on where the package is hosted and on tags named
   `vX.Y.Z` that are never moved or deleted; an update is a commit to review in each
@@ -212,7 +257,8 @@ what a decisions file cannot express.
 ## Migration of a link-era consumer
 
 1. Remove the ignore rule for `.agents/skills/` from `.gitignore`, where there is one.
-2. Move to the new version and run `toolbox install`: each link becomes a copy.
+2. Move to the new version and run `toolbox install`: each link becomes a copy, and
+   the skills the project had linked are its selection. Delete the folders it does not want.
 3. Drop `"postinstall": "toolbox install"`: a clone already has the files. From here
    `toolbox install` is the step after an update of the package.
 4. Commit `.agents/skills/` and `.agents/toolbox-skills.json`.
