@@ -1,7 +1,7 @@
 import { type TextMerge } from './merge-skill-trees.mts';
-import type { SkillRecord } from './skill-manifest.aggregate.mts';
-import type { SkillTree } from './skill-tree.vo.mts';
-/** The base now equals what the package ships; the record moves to the running version. */
+import type { SkillRecord } from './skill-manifest.mts';
+import type { SkillTree } from './skill-tree.mts';
+/** The skill is settled against what the package ships; the record moves to the running version. */
 export type SyncedStatus = 'copied' | 'adopted' | 'updated' | 'merged' | 'conflict-marked' | 'unchanged' | 'altered';
 /** Nothing is written and the record stays where it was. */
 export type KeptStatus = 'unmanaged' | 'removed' | 'conflict' | 'no-original' | 'ahead';

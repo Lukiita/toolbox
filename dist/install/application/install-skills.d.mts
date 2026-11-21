@@ -25,6 +25,11 @@ export interface InstallSkillsOptions extends SkillRoots {
     writeConflicts: boolean;
     mergeText: TextMerge;
     pastReleases: PastReleases;
+    /**
+     * Told about each skill as soon as it is settled. The CLI prints from here,
+     * so a run that fails on a later skill has already said what it did.
+     */
+    onReport?: (report: SkillInstallReport) => void;
 }
 export type InstallStatus = SkillStatus | 'pinned' | 'retired';
 export interface SkillInstallReport {

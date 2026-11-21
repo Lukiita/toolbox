@@ -2,6 +2,7 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -17,12 +18,21 @@ import { scratchDirs } from './scratch-dirs.fixtures.ts';
 import {
   readShippedSkillTree,
   readSkillTree,
+  recoverSkillFolder,
   shippedSkills,
   skillLinkKind,
+  swapSkillFolder,
   writeSkillTree,
 } from './skill-directory.mts';
 
 const scratch = scratchDirs('toolbox-skill-dir-');
+
+/** Gives back write access to every folder a test locked, so the scratch folder can be removed. */
+function unlock(root: string): void {
+  for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
+    if (entry.isDirectory()) chmodSync(join(entry.parentPath, entry.name), 0o755);
+  }
+}
 
 function put(root: string, path: string, text: string): void {
   mkdirSync(join(root, path, '..'), { recursive: true });
@@ -152,12 +162,36 @@ describe('writeSkillTree', () => {
     expect(statSync(join(dir, 'SKILL.md')).mode & 0o111).toBe(0);
   });
 
-  it('leaves no staging folder behind, and clears one left by a run that died', () => {
+  it('leaves nothing beside the folder: no staging, no swapped-out copy', () => {
     const root = scratch();
+    put(root, 'retro/SKILL.md', 'old');
     put(root, 'retro.toolbox-staging/leftover.md', 'from a dead run');
     writeSkillTree(join(root, 'retro'), treeOf({ 'SKILL.md': 'x' }));
-    expect(existsSync(join(root, 'retro.toolbox-staging'))).toBe(false);
+    expect(readdirSync(root)).toEqual(['retro']);
     expect(existsSync(join(root, 'retro', 'leftover.md'))).toBe(false);
+  });
+
+  // A script run as root in a container leaves a __pycache__ the user cannot
+  // delete. The reader does not count it, so the skill reads intact and gets
+  // replaced: the replacement must not stop half-way on it.
+  it('replaces the folder even when part of the old one cannot be deleted', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'old');
+    put(root, 'retro/scripts/__pycache__/run.pyc', 'bytecode');
+    const locked = join(root, 'retro', 'scripts', '__pycache__');
+    chmodSync(locked, 0o555);
+    try {
+      writeSkillTree(join(root, 'retro'), treeOf({ 'SKILL.md': 'new' }));
+      expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('new');
+      // Whatever could not be deleted must not look like a second skill.
+      const beside = readdirSync(root).filter((entry) => entry !== 'retro');
+      expect(beside.filter((entry) => existsSync(join(root, entry, 'SKILL.md')))).toEqual([]);
+      // And it must not block the next write.
+      writeSkillTree(join(root, 'retro'), treeOf({ 'SKILL.md': 'newer' }));
+      expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('newer');
+    } finally {
+      unlock(root);
+    }
   });
 
   it('writes an empty tree as an empty folder', () => {
@@ -171,6 +205,70 @@ describe('writeSkillTree', () => {
     const written = treeOf({ 'SKILL.md': 'x', 'scripts/run.py': 'p' }, ['scripts/run.py']);
     writeSkillTree(join(root, 'retro'), written);
     expect(readSkillTree(join(root, 'retro'))?.hash).toBe(written.hash);
+  });
+});
+
+describe('swapSkillFolder', () => {
+  it('puts the old folder back, whole, when the new one cannot be moved in', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'old');
+    put(root, 'retro/references/a.md', 'a');
+    expect(() => swapSkillFolder(join(root, 'no-such-staging'), join(root, 'retro'))).toThrow(
+      /ENOENT/,
+    );
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('old');
+    expect(readFileSync(join(root, 'retro', 'references', 'a.md'), 'utf8')).toBe('a');
+    expect(readdirSync(root)).toEqual(['retro']);
+  });
+
+  it('moves the new folder in when there was none before', () => {
+    const root = scratch();
+    put(root, 'staging/SKILL.md', 'new');
+    swapSkillFolder(join(root, 'staging'), join(root, 'retro'));
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('new');
+    expect(readdirSync(root)).toEqual(['retro']);
+  });
+});
+
+describe('recoverSkillFolder', () => {
+  // A run killed between the two renames of the swap: the folder is beside
+  // its place, whole. Read as it is, the skill would be "deleted by the
+  // project" and never installed again.
+  it('puts back a folder a dead run left swapped out', () => {
+    const root = scratch();
+    put(root, 'retro.toolbox-old/SKILL.md', 'mine');
+    put(root, 'retro.toolbox-old/references/a.md', 'a');
+    recoverSkillFolder(join(root, 'retro'));
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('mine');
+    expect(readdirSync(root)).toEqual(['retro']);
+  });
+
+  it('clears a staging folder a dead run left, which agents would list as a skill', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'mine');
+    put(root, 'retro.toolbox-staging/SKILL.md', 'half written');
+    recoverSkillFolder(join(root, 'retro'));
+    expect(readdirSync(root)).toEqual(['retro']);
+  });
+
+  it('does not take leftovers of an old folder for the skill', () => {
+    const root = scratch();
+    put(root, 'retro.toolbox-old/scripts/__pycache__/run.pyc', 'what could not be deleted');
+    recoverSkillFolder(join(root, 'retro'));
+    expect(existsSync(join(root, 'retro'))).toBe(false);
+  });
+
+  it('touches nothing when the folder is in place', () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'mine');
+    recoverSkillFolder(join(root, 'retro'));
+    expect(readFileSync(join(root, 'retro', 'SKILL.md'), 'utf8')).toBe('mine');
+  });
+
+  it('has nothing to do in a project with no skills folder yet', () => {
+    const root = scratch();
+    recoverSkillFolder(join(root, '.agents', 'skills', 'retro'));
+    expect(existsSync(join(root, '.agents'))).toBe(false);
   });
 });
 

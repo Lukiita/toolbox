@@ -1,4 +1,4 @@
-import { SkillManifest } from '../domain/skill-manifest.aggregate.mts';
+import { SkillManifest } from '../domain/skill-manifest.mts';
 /**
  * The project's manifest; empty when the project has none yet.
  *

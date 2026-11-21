@@ -23,12 +23,23 @@ export function isBinary(content) {
 function sha256(content) {
     return createHash('sha256').update(content).digest('hex');
 }
+/**
+ * Text as git stores it. One definition for the hash and for the merge: when
+ * the hash alone ignored CRLF, a Windows checkout read as intact and then
+ * conflicted on every line of every merge (found in review).
+ *
+ * @example
+ *   withUnixLineEndings('a\r\nb\r\n') // => 'a\nb\n'
+ */
+export function withUnixLineEndings(text) {
+    return text.replaceAll('\r\n', '\n');
+}
 // latin1 maps every byte to one code unit and back, so the CRLF replacement
 // touches nothing else - utf8 would rewrite invalid sequences on the way.
 function contentDigest(content) {
     if (isBinary(content))
         return sha256(content);
-    return sha256(Buffer.from(content.toString('latin1').replaceAll('\r\n', '\n'), 'latin1'));
+    return sha256(Buffer.from(withUnixLineEndings(content.toString('latin1')), 'latin1'));
 }
 /**
  * Whether two files hold the same content, line endings aside; an absent file

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mergeSkillTrees, type TextMerge, type TextSides } from './merge-skill-trees.mts';
 import { treeOf } from './skill-tree.fixtures.ts';
-import type { SkillTree } from './skill-tree.vo.mts';
+import type { SkillTree } from './skill-tree.mts';
 
 function text(merged: SkillTree, path: string): string | undefined {
   return merged.file(path)?.content.toString('utf8');
@@ -171,6 +171,51 @@ describe('mergeSkillTrees - both sides moved the same file', () => {
     );
     expect(result.conflicts).toEqual(['f.bin']);
     expect(text(result.tree, 'f.bin')).toBe('o\0urs');
+  });
+});
+
+// The hash reads a CRLF checkout as the same content (skill-tree.mts). The
+// merge must read it the same way, or on a Windows checkout every line of
+// the project's file differs from the package's and every merge conflicts.
+describe('mergeSkillTrees - a project checked out with CRLF', () => {
+  const sides = {
+    base: treeOf({ 'a.md': 'one\ntwo\nthree\n' }),
+    ours: treeOf({ 'a.md': 'one, mine\r\ntwo\r\nthree\r\n' }),
+    theirs: treeOf({ 'a.md': 'one\ntwo\nthree, theirs\n' }),
+  };
+
+  it('hands the text merge every side with LF line endings', () => {
+    const { merge, asked } = recordingMerge({ text: 'merged\n', conflicted: false });
+    mergeSkillTrees(sides, merge);
+    expect(asked).toEqual([
+      {
+        base: 'one\ntwo\nthree\n',
+        ours: 'one, mine\ntwo\nthree\n',
+        theirs: 'one\ntwo\nthree, theirs\n',
+      },
+    ]);
+  });
+
+  it("writes the merged file back with the project's line endings", () => {
+    const { merge } = recordingMerge({
+      text: 'one, mine\ntwo\nthree, theirs\n',
+      conflicted: false,
+    });
+    const result = mergeSkillTrees(sides, merge);
+    expect(text(result.tree, 'a.md')).toBe('one, mine\r\ntwo\r\nthree, theirs\r\n');
+  });
+
+  it('leaves LF alone when the project uses LF', () => {
+    const { merge } = recordingMerge({ text: 'x\ny\n', conflicted: false });
+    const result = mergeSkillTrees(
+      {
+        base: treeOf({ 'a.md': 'b\n' }),
+        ours: treeOf({ 'a.md': 'o\n' }),
+        theirs: treeOf({ 'a.md': 't\n' }),
+      },
+      merge,
+    );
+    expect(text(result.tree, 'a.md')).toBe('x\ny\n');
   });
 });
 

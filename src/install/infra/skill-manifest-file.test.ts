@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { SkillManifest, SkillManifestError } from '../domain/skill-manifest.aggregate.mts';
+import { SkillManifest, SkillManifestError } from '../domain/skill-manifest.mts';
 import { scratchDirs } from './scratch-dirs.fixtures.ts';
 import { readSkillManifest, writeSkillManifest } from './skill-manifest-file.mts';
 

@@ -11,33 +11,16 @@
 // without saying whose change each is - `toolbox install` fetches the
 // original and settles it.
 import { join } from 'node:path';
-import { isOlderVersion } from "../domain/toolbox-version.mjs";
+import { classifySkill, } from "../domain/skill-state.mjs";
 import { readShippedSkillTree, readSkillTree, shippedSkills, skillLinkKind, } from "../infra/skill-directory.mjs";
 import { skillPaths } from "../infra/skill-layout.mjs";
 import { readSkillManifest } from "../infra/skill-manifest-file.mjs";
-function recordedState(local, record) {
-    if (!local)
-        return 'removed';
-    return local.hash === record.hash ? 'intact' : 'altered';
-}
-function localState({ record, local }, link) {
-    if (link === 'ours')
-        return 'linked';
-    if (link === 'pinned')
-        return 'pinned';
-    if (record)
-        return recordedState(local, record);
-    return local ? 'unmanaged' : 'not-installed';
-}
-function upstreamState({ record, shipped }, version) {
-    if (!record)
-        return 'untracked';
-    if (!shipped)
-        return 'retired';
-    if (isOlderVersion(version, record.version))
-        return 'ahead';
-    return shipped.hash === record.hash ? 'current' : 'behind';
-}
+// A link is not a folder the manifest describes: it is named for what it is.
+const LINK_STATES = {
+    none: undefined,
+    ours: 'linked',
+    pinned: 'pinned',
+};
 // Each list is the same comparison, project against package; which list it
 // goes in is which side still equals the original.
 const LIST_OF = new Map([
@@ -59,14 +42,16 @@ function inspectOne(name, manifest, options) {
         local: readSkillTree(paths.local),
         shipped: readShippedSkillTree(paths.shipped),
     };
-    const local = localState(sides, skillLinkKind(paths.local, options.packageDir));
-    const upstream = upstreamState(sides, options.version);
+    // The same classification `toolbox install` acts on: the two commands
+    // cannot disagree about a skill.
+    const state = classifySkill(sides, options.version);
+    const local = LINK_STATES[skillLinkKind(paths.local, options.packageDir)] ?? state.local;
     return {
         name,
         version: sides.record?.version,
         local,
-        upstream,
-        ...differingFiles(sides, local, upstream),
+        upstream: state.upstream,
+        ...differingFiles(sides, local, state.upstream),
         paths,
     };
 }

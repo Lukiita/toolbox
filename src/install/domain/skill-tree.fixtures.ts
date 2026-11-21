@@ -1,4 +1,4 @@
-import { type SkillFile, SkillTree } from './skill-tree.vo.mts';
+import { type SkillFile, SkillTree } from './skill-tree.mts';
 
 /**
  * A tree from `{ path: text }`; the paths listed in `executable` carry the exec bit.

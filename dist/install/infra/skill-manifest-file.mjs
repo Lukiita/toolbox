@@ -2,7 +2,7 @@
 // the next install - on any machine - which skills the project edited.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { SkillManifest, SkillManifestError } from "../domain/skill-manifest.aggregate.mjs";
+import { SkillManifest, SkillManifestError } from "../domain/skill-manifest.mjs";
 import { MANIFEST_FILE } from "./skill-layout.mjs";
 /**
  * The project's manifest; empty when the project has none yet.

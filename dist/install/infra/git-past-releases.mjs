@@ -15,8 +15,9 @@
 //   install run from a script fails at once instead of waiting on a terminal.
 // - several skills on the same release: one clone, kept for the run.
 // - a failure: kept for the run too. No retry, on purpose: the command is
-//   re-run by a person, and ten edited skills with no network must cost one
-//   failed fetch, not ten timeouts in a row.
+//   re-run by a person, and the edited skills copied from one release (the
+//   usual case: they move together) must cost one failed fetch, not one
+//   timeout each.
 // A fetched release is not trusted either: the domain checks its hash against
 // the record before merging (`reconcile-skill.mts`).
 import { spawnSync } from 'node:child_process';

@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   readlinkSync,
+  renameSync,
   readdirSync,
   rmSync,
   statSync,
@@ -23,12 +24,23 @@ import { scratchProject, SKILL_V1, statuses, writeFiles } from './install.fixtur
 const scratch = scratchDirs('toolbox-install-');
 
 const read = (path: string): string => readFileSync(path, 'utf8');
-// sha256sum of "SKILL.md\0<sha256 of 'hello\n'>\n" - see skill-tree.vo.test.ts.
+// sha256sum of "SKILL.md\0<sha256 of 'hello\n'>\n" - see skill-tree.test.ts.
 const RETRO_HASH = 'sha256:c9a89a84ba57e7d9f7da6fce928f625d9d5705f00cfdb8aa6117dbd8d6d9122a';
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
 
 const IN_JAVA = SKILL_V1.replace('first rule', 'first rule, in Java');
 const REVISED = SKILL_V1.replace('last rule', 'last rule, revised');
+/** The lines of SKILL_V1 with the project's edit and the package's, merged. */
+const BOTH_EDITS = [
+  '# Skill',
+  '',
+  'first rule, in Java',
+  '',
+  'middle',
+  '',
+  'last rule, revised',
+  '',
+];
 
 describe('installSkills - first install', () => {
   it('copies every shipped skill into .agents/skills as real files, not links', () => {
@@ -138,6 +150,50 @@ describe('installSkills - installing again, same version', () => {
   });
 });
 
+describe('installSkills - a run that does not finish', () => {
+  // A write killed between swapping the old folder out and the new one in.
+  it('does not read a folder a dead run left swapped out as deleted by the project', () => {
+    const project = scratchProject(scratch());
+    project.install();
+    renameSync(project.local('retro'), project.local('retro.toolbox-old'));
+
+    const reports = project.install();
+
+    expect(statuses(reports).retro).toBe('unchanged');
+    expect(read(project.local('retro/SKILL.md'))).toBe('hello\n');
+    expect(existsSync(project.local('retro.toolbox-old'))).toBe(false);
+  });
+
+  // `retro` cannot be read (a file name no tree accepts), after `code-review`
+  // was already replaced on disk.
+  it('keeps the records and the reports of the skills settled before a later one failed', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    project.ship('code-review', { 'SKILL.md': REVISED });
+    project.ship('retro', { 'SKILL.md': 'hello\n', 'bad\\name.md': 'x' });
+    project.reported.length = 0;
+
+    expect(() => project.install('1.3.0')).toThrow(/skill file path/);
+
+    expect(read(project.local('code-review/SKILL.md'))).toBe(REVISED);
+    expect(project.records()['code-review'].version).toBe('1.3.0');
+    expect(project.records().retro.version).toBe('1.2.0');
+    expect(project.reported).toEqual([{ name: 'code-review', status: 'updated', files: [] }]);
+  });
+
+  it('hands over each report as the skill is settled, the retired ones last', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    rmSync(join(project.packageDir, 'skills', 'retro'), { recursive: true });
+    project.reported.length = 0;
+
+    const reports = project.install('1.3.0');
+
+    expect(project.reported).toEqual(reports);
+    expect(project.reported.map((report) => report.status)).toEqual(['unchanged', 'retired']);
+  });
+});
+
 describe('installSkills - the package moved to a new version', () => {
   it('updates a skill the project did not edit, dropped files included', () => {
     const project = scratchProject(scratch());
@@ -171,15 +227,27 @@ describe('installSkills - the package moved to a new version', () => {
     const reports = project.install('1.3.0');
 
     expect(reports[0]).toEqual({ name: 'code-review', status: 'merged', files: ['SKILL.md'] });
-    expect(read(project.local('code-review/SKILL.md'))).toBe(
-      ['# Skill', '', 'first rule, in Java', '', 'middle', '', 'last rule, revised', ''].join('\n'),
-    );
+    expect(read(project.local('code-review/SKILL.md'))).toBe(BOTH_EDITS.join('\n'));
     expect(read(project.local('code-review/references/smells.md'))).toBe('smells v2\n');
     expect(project.records()['code-review'].version).toBe('1.3.0');
     // The original came from the release the manifest named, and only that one.
     expect(project.releases.asked).toEqual(['1.2.0']);
     // The edit is still an edit against the new original.
     expect(statuses(project.install('1.3.0'))['code-review']).toBe('altered');
+  });
+
+  // git's `core.autocrlf` on Windows: the project's files are CRLF, the
+  // package's and the fetched release's are LF.
+  it('merges into a skill checked out with CRLF, and keeps its line endings', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA.replaceAll('\n', '\r\n'));
+    project.ship('code-review', { 'SKILL.md': REVISED, 'references/smells.md': 'smells v1\n' });
+
+    const reports = project.install('1.3.0');
+
+    expect(statuses(reports)['code-review']).toBe('merged');
+    expect(read(project.local('code-review/SKILL.md'))).toBe(BOTH_EDITS.join('\r\n'));
   });
 
   it('leaves an edited skill exactly as it was when the new version conflicts with the edit', () => {

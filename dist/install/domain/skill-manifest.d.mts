@@ -1,5 +1,5 @@
 export interface SkillRecord {
-    /** The toolbox release whose copy of the skill the project holds as base. */
+    /** The toolbox release the project copied the skill from: where a merge fetches the original. */
     version: string;
     /** `SkillTree.hash` of that original. */
     hash: string;

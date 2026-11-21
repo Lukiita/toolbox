@@ -11,6 +11,15 @@ export interface SkillFile {
  */
 export declare function isBinary(content: Buffer): boolean;
 /**
+ * Text as git stores it. One definition for the hash and for the merge: when
+ * the hash alone ignored CRLF, a Windows checkout read as intact and then
+ * conflicted on every line of every merge (found in review).
+ *
+ * @example
+ *   withUnixLineEndings('a\r\nb\r\n') // => 'a\nb\n'
+ */
+export declare function withUnixLineEndings(text: string): string;
+/**
  * Whether two files hold the same content, line endings aside; an absent file
  * equals only another absent one.
  *

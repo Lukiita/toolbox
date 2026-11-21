@@ -10,7 +10,7 @@
 // says why. The outcome type carries that rule: a kept outcome has no tree
 // to write, so no caller can write one by mistake.
 import { mergeSkillTrees } from "./merge-skill-trees.mjs";
-import { isOlderVersion } from "./toolbox-version.mjs";
+import { classifySkill } from "./skill-state.mjs";
 function synced(status, local, files = []) {
     return local ? { synced: true, status, local, files } : { synced: true, status, files };
 }
@@ -49,15 +49,12 @@ function mergeIntoEdited(sides, options) {
         ? synced('conflict-marked', tree, conflicts)
         : kept('conflict', conflicts);
 }
-function reconcileRecorded(sides, options) {
-    const { record, local, shipped } = sides;
-    // Equal to the package: a plain re-run, the new version applied by hand, or
-    // an install that died after writing the folder and before saving the manifest.
-    if (local.equals(shipped))
-        return synced('unchanged');
-    if (shipped.hash === record.hash)
-        return synced('altered');
-    return local.hash === record.hash ? synced('updated', shipped) : mergeIntoEdited(sides, options);
+function reconcileRecorded(state, sides, options) {
+    if (state.upstream === 'current')
+        return synced(state.local === 'intact' ? 'unchanged' : 'altered');
+    return state.local === 'intact'
+        ? synced('updated', sides.shipped)
+        : mergeIntoEdited(sides, options);
 }
 /**
  * Decides what an install does with one skill. It reads the sides and returns
@@ -71,9 +68,12 @@ export function reconcileSkill(sides, options) {
     const { record, local } = sides;
     if (!record)
         return reconcileUnrecorded(sides);
-    if (isOlderVersion(options.version, record.version))
+    // Whether the skill is edited, behind or ahead is `classifySkill`'s to say,
+    // for `toolbox skills` too; this function only maps the state to an action.
+    const state = classifySkill(sides, options.version);
+    if (state.upstream === 'ahead')
         return kept('ahead');
     if (!local)
         return kept('removed');
-    return reconcileRecorded({ ...sides, record, local }, options);
+    return reconcileRecorded(state, { ...sides, record, local }, options);
 }

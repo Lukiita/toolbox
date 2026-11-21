@@ -1,13 +1,12 @@
+import { type LocalState, type UpstreamState } from '../domain/skill-state.mts';
 import { type SkillPaths, type SkillRoots } from '../infra/skill-layout.mts';
-/** The project's side, against the recorded original. */
-export type LocalState = 'intact' | 'altered' | 'removed' | 'not-installed' | 'unmanaged' | 'pinned' | 'linked';
-/** The package's side, against the recorded original. */
-export type UpstreamState = 'current' | 'behind' | 'ahead' | 'retired' | 'untracked';
+/** The project's side: the domain's states, plus the two a symlink in the skill's place adds. */
+export type InspectedLocal = LocalState | 'pinned' | 'linked';
 export interface SkillInspection {
     name: string;
     /** The recorded toolbox version; undefined when the manifest does not know the skill. */
     version: string | undefined;
-    local: LocalState;
+    local: InspectedLocal;
     upstream: UpstreamState;
     /** Files the project changed, for an edited skill the package did not move. */
     alteredFiles: string[];

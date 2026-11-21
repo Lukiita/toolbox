@@ -17,12 +17,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadToolboxConfig } from "../config/load-config.mjs";
-import { inspectSkills, skillDiffs } from "../install/application/inspect-skills.mjs";
-import { installSkills } from "../install/application/install-skills.mjs";
-import { gitFileDiff } from "../install/infra/git-file-diff.mjs";
-import { GitPastReleases, repositoryCloneUrl } from "../install/infra/git-past-releases.mjs";
-import { gitTextMerge } from "../install/infra/git-text-merge.mjs";
-import { inspectionLines, installLine } from "../install/presentation/skill-report-lines.mjs";
+import { gitFileDiff, GitPastReleases, gitTextMerge, inspectionLines, inspectSkills, installLine, installSkills, repositoryCloneUrl, skillDiffs, } from "../install/index.mjs";
 import { decidePrePush, parsePushedRefs } from "../pre-push/pre-push.mjs";
 import { parseArgs, UsageError } from "../quality-gate/args.mjs";
 import { runQualityGate } from "../quality-gate/run-gate.mjs";
@@ -105,7 +100,7 @@ function assertKnownFlags(args, known) {
 function install(root, args) {
     assertKnownFlags(args, ['--write-conflicts']);
     const { version, repository } = packageManifest();
-    const reports = installSkills({
+    installSkills({
         packageDir: PACKAGE_DIR,
         projectRoot: root,
         version,
@@ -114,9 +109,9 @@ function install(root, args) {
         // The original of an edited skill comes from the tag of the release it
         // was copied from, in the package's own repository (ADR-0003).
         pastReleases: new GitPastReleases(repositoryCloneUrl(repository)),
+        // Printed skill by skill: a run that fails later has already said what it wrote.
+        onReport: (report) => console.log(installLine(report)),
     });
-    for (const report of reports)
-        console.log(installLine(report));
     return 0;
 }
 function skills(root, args) {

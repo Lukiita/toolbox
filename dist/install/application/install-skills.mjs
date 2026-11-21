@@ -9,7 +9,7 @@
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { reconcileSkill, } from "../domain/reconcile-skill.mjs";
-import { readShippedSkillTree, readSkillTree, shippedSkills, skillLinkKind, writeSkillTree, } from "../infra/skill-directory.mjs";
+import { readShippedSkillTree, readSkillTree, recoverSkillFolder, shippedSkills, skillLinkKind, writeSkillTree, } from "../infra/skill-directory.mjs";
 import { skillPaths } from "../infra/skill-layout.mjs";
 import { readSkillManifest, writeSkillManifest } from "../infra/skill-manifest-file.mjs";
 // The skill as the release the record names shipped it.
@@ -47,6 +47,7 @@ function installOne(name, context) {
     // link never touches what it points at.
     if (link === 'ours')
         rmSync(paths.local);
+    recoverSkillFolder(paths.local);
     const sides = readSides(paths, name, context);
     const outcome = reconcileSkill(sides, options);
     if (outcome.synced) {
@@ -55,6 +56,16 @@ function installOne(name, context) {
         manifest.record(name, { version: options.version, hash: sides.shipped.hash });
     }
     return reportOf(name, outcome);
+}
+function installAll(manifest, options) {
+    const shipped = shippedSkills(options.packageDir);
+    const settled = (report) => {
+        options.onReport?.(report);
+        return report;
+    };
+    const reports = shipped.map((name) => settled(installOne(name, { manifest, options })));
+    const retired = manifest.names().filter((name) => !shipped.includes(name));
+    return [...reports, ...retired.map((name) => settled({ name, status: 'retired', files: [] }))];
 }
 /**
  * Brings the project's `.agents/skills/` up to what the package ships,
@@ -67,14 +78,15 @@ function installOne(name, context) {
 export function installSkills(options) {
     try {
         const manifest = readSkillManifest(options.projectRoot);
-        const shipped = shippedSkills(options.packageDir);
-        const reports = shipped.map((name) => installOne(name, { manifest, options }));
-        const retired = manifest.names().filter((name) => !shipped.includes(name));
-        writeSkillManifest(options.projectRoot, manifest);
-        return [
-            ...reports,
-            ...retired.map((name) => ({ name, status: 'retired', files: [] })),
-        ];
+        try {
+            return installAll(manifest, options);
+        }
+        finally {
+            // Also when a later skill throws: the skills already written keep their
+            // records. Saved only at the end of a clean run, a failure left folders
+            // at the new version under records of the old one (found in review).
+            writeSkillManifest(options.projectRoot, manifest);
+        }
     }
     finally {
         options.pastReleases.dispose();

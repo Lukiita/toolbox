@@ -13,9 +13,13 @@
 
 import { join } from 'node:path';
 
-import type { SkillManifest, SkillRecord } from '../domain/skill-manifest.aggregate.mts';
-import type { SkillTree } from '../domain/skill-tree.vo.mts';
-import { isOlderVersion } from '../domain/toolbox-version.mts';
+import type { SkillManifest } from '../domain/skill-manifest.mts';
+import {
+  classifySkill,
+  type LocalState,
+  type SkillSnapshot,
+  type UpstreamState,
+} from '../domain/skill-state.mts';
 import {
   readShippedSkillTree,
   readSkillTree,
@@ -26,29 +30,17 @@ import {
 import { type SkillPaths, skillPaths, type SkillRoots } from '../infra/skill-layout.mts';
 import { readSkillManifest } from '../infra/skill-manifest-file.mts';
 
-/** The project's side, against the recorded original. */
-export type LocalState =
-  | 'intact'
-  | 'altered'
-  | 'removed' // recorded, and the project deleted the folder
-  | 'not-installed' // shipped, never copied here
-  | 'unmanaged' // the project's own folder under a shipped skill's name
+/** The project's side: the domain's states, plus the two a symlink in the skill's place adds. */
+export type InspectedLocal =
+  | LocalState
   | 'pinned' // the project's own symlink
   | 'linked'; // a symlink from the link-era install: `toolbox install` replaces it
-
-/** The package's side, against the recorded original. */
-export type UpstreamState =
-  | 'current'
-  | 'behind' // the package ships other content: `toolbox install` would act
-  | 'ahead' // recorded by a newer toolbox than the one running
-  | 'retired' // recorded, no longer shipped
-  | 'untracked'; // no record to compare against
 
 export interface SkillInspection {
   name: string;
   /** The recorded toolbox version; undefined when the manifest does not know the skill. */
   version: string | undefined;
-  local: LocalState;
+  local: InspectedLocal;
   upstream: UpstreamState;
   /** Files the project changed, for an edited skill the package did not move. */
   alteredFiles: string[];
@@ -67,30 +59,12 @@ export interface InspectSkillsOptions extends SkillRoots {
 /** Diffs two files; a path that does not exist reads as an empty file. */
 export type FileDiff = (from: string, to: string) => string;
 
-interface Sides {
-  record: SkillRecord | undefined;
-  local: SkillTree | undefined;
-  shipped: SkillTree | undefined;
-}
-
-function recordedState(local: SkillTree | undefined, record: SkillRecord): LocalState {
-  if (!local) return 'removed';
-  return local.hash === record.hash ? 'intact' : 'altered';
-}
-
-function localState({ record, local }: Sides, link: SkillLinkKind): LocalState {
-  if (link === 'ours') return 'linked';
-  if (link === 'pinned') return 'pinned';
-  if (record) return recordedState(local, record);
-  return local ? 'unmanaged' : 'not-installed';
-}
-
-function upstreamState({ record, shipped }: Sides, version: string): UpstreamState {
-  if (!record) return 'untracked';
-  if (!shipped) return 'retired';
-  if (isOlderVersion(version, record.version)) return 'ahead';
-  return shipped.hash === record.hash ? 'current' : 'behind';
-}
+// A link is not a folder the manifest describes: it is named for what it is.
+const LINK_STATES: Record<SkillLinkKind, InspectedLocal | undefined> = {
+  none: undefined,
+  ours: 'linked',
+  pinned: 'pinned',
+};
 
 interface DifferingFiles {
   alteredFiles: string[];
@@ -106,7 +80,11 @@ const LIST_OF = new Map<string, keyof DifferingFiles>([
   ['altered/behind', 'divergedFiles'],
 ]);
 
-function differingFiles(sides: Sides, local: LocalState, upstream: UpstreamState): DifferingFiles {
+function differingFiles(
+  sides: SkillSnapshot,
+  local: InspectedLocal,
+  upstream: UpstreamState,
+): DifferingFiles {
   const lists: DifferingFiles = { alteredFiles: [], behindFiles: [], divergedFiles: [] };
   const list = LIST_OF.get(`${local}/${upstream}`);
   if (!list || !sides.local || !sides.shipped) return lists;
@@ -119,19 +97,21 @@ function inspectOne(
   options: InspectSkillsOptions,
 ): SkillInspection {
   const paths = skillPaths(options, name);
-  const sides: Sides = {
+  const sides: SkillSnapshot = {
     record: manifest.find(name),
     local: readSkillTree(paths.local),
     shipped: readShippedSkillTree(paths.shipped),
   };
-  const local = localState(sides, skillLinkKind(paths.local, options.packageDir));
-  const upstream = upstreamState(sides, options.version);
+  // The same classification `toolbox install` acts on: the two commands
+  // cannot disagree about a skill.
+  const state = classifySkill(sides, options.version);
+  const local = LINK_STATES[skillLinkKind(paths.local, options.packageDir)] ?? state.local;
   return {
     name,
     version: sides.record?.version,
     local,
-    upstream,
-    ...differingFiles(sides, local, upstream),
+    upstream: state.upstream,
+    ...differingFiles(sides, local, state.upstream),
     paths,
   };
 }

@@ -95,6 +95,25 @@ describe('inspectSkills', () => {
     });
   });
 
+  // The case the two commands once answered differently: the project already
+  // holds the new version, the manifest still names the old one.
+  it('agrees with install about a skill the project already brought to the new version', () => {
+    const project = scratchProject(scratch());
+    project.install('1.2.0');
+    const revised = SKILL_V1.replace('last rule', 'last rule, revised');
+    project.ship('code-review', { 'SKILL.md': revised, 'references/smells.md': 'smells v1\n' });
+    writeFileSync(project.local('code-review/SKILL.md'), revised);
+
+    expect(inspect(project, '1.3.0')['code-review']).toMatchObject({
+      local: 'intact',
+      upstream: 'current',
+      alteredFiles: [],
+      behindFiles: [],
+      divergedFiles: [],
+    });
+    expect(project.install('1.3.0')[0]).toMatchObject({ name: 'code-review', status: 'unchanged' });
+  });
+
   it('reads a deleted skill as removed', () => {
     const project = scratchProject(scratch());
     project.install();

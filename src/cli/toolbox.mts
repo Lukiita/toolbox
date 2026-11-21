@@ -20,12 +20,17 @@ import { fileURLToPath } from 'node:url';
 
 import { loadToolboxConfig } from '../config/load-config.mts';
 import type { ResolvedToolboxConfig } from '../config/toolbox-config.mts';
-import { inspectSkills, skillDiffs } from '../install/application/inspect-skills.mts';
-import { installSkills } from '../install/application/install-skills.mts';
-import { gitFileDiff } from '../install/infra/git-file-diff.mts';
-import { GitPastReleases, repositoryCloneUrl } from '../install/infra/git-past-releases.mts';
-import { gitTextMerge } from '../install/infra/git-text-merge.mts';
-import { inspectionLines, installLine } from '../install/presentation/skill-report-lines.mts';
+import {
+  gitFileDiff,
+  GitPastReleases,
+  gitTextMerge,
+  inspectionLines,
+  inspectSkills,
+  installLine,
+  installSkills,
+  repositoryCloneUrl,
+  skillDiffs,
+} from '../install/index.mts';
 import { decidePrePush, parsePushedRefs, type PrePushPorts } from '../pre-push/pre-push.mts';
 import { type GateOptions, parseArgs, UsageError } from '../quality-gate/args.mts';
 import { runQualityGate } from '../quality-gate/run-gate.mts';
@@ -125,7 +130,7 @@ function assertKnownFlags(args: readonly string[], known: readonly string[]): vo
 function install(root: string, args: string[]): number {
   assertKnownFlags(args, ['--write-conflicts']);
   const { version, repository } = packageManifest();
-  const reports = installSkills({
+  installSkills({
     packageDir: PACKAGE_DIR,
     projectRoot: root,
     version,
@@ -134,8 +139,9 @@ function install(root: string, args: string[]): number {
     // The original of an edited skill comes from the tag of the release it
     // was copied from, in the package's own repository (ADR-0003).
     pastReleases: new GitPastReleases(repositoryCloneUrl(repository)),
+    // Printed skill by skill: a run that fails later has already said what it wrote.
+    onReport: (report) => console.log(installLine(report)),
   });
-  for (const report of reports) console.log(installLine(report));
   return 0;
 }
 

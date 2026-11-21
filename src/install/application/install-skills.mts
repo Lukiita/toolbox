@@ -18,11 +18,12 @@ import {
   type SkillSides,
   type SkillStatus,
 } from '../domain/reconcile-skill.mts';
-import type { SkillManifest } from '../domain/skill-manifest.aggregate.mts';
-import type { SkillTree } from '../domain/skill-tree.vo.mts';
+import type { SkillManifest } from '../domain/skill-manifest.mts';
+import type { SkillTree } from '../domain/skill-tree.mts';
 import {
   readShippedSkillTree,
   readSkillTree,
+  recoverSkillFolder,
   shippedSkills,
   skillLinkKind,
   writeSkillTree,
@@ -51,6 +52,11 @@ export interface InstallSkillsOptions extends SkillRoots {
   writeConflicts: boolean;
   mergeText: TextMerge;
   pastReleases: PastReleases;
+  /**
+   * Told about each skill as soon as it is settled. The CLI prints from here,
+   * so a run that fails on a later skill has already said what it did.
+   */
+  onReport?: (report: SkillInstallReport) => void;
 }
 
 export type InstallStatus =
@@ -105,6 +111,7 @@ function installOne(name: string, context: InstallContext): SkillInstallReport {
   // A link from the link-era install: the copy takes its place. Removing the
   // link never touches what it points at.
   if (link === 'ours') rmSync(paths.local);
+  recoverSkillFolder(paths.local);
   const sides = readSides(paths, name, context);
   const outcome = reconcileSkill(sides, options);
   if (outcome.synced) {
@@ -112,6 +119,17 @@ function installOne(name: string, context: InstallContext): SkillInstallReport {
     manifest.record(name, { version: options.version, hash: sides.shipped.hash });
   }
   return reportOf(name, outcome);
+}
+
+function installAll(manifest: SkillManifest, options: InstallSkillsOptions): SkillInstallReport[] {
+  const shipped = shippedSkills(options.packageDir);
+  const settled = (report: SkillInstallReport): SkillInstallReport => {
+    options.onReport?.(report);
+    return report;
+  };
+  const reports = shipped.map((name) => settled(installOne(name, { manifest, options })));
+  const retired = manifest.names().filter((name) => !shipped.includes(name));
+  return [...reports, ...retired.map((name) => settled({ name, status: 'retired', files: [] }))];
 }
 
 /**
@@ -125,14 +143,14 @@ function installOne(name: string, context: InstallContext): SkillInstallReport {
 export function installSkills(options: InstallSkillsOptions): SkillInstallReport[] {
   try {
     const manifest = readSkillManifest(options.projectRoot);
-    const shipped = shippedSkills(options.packageDir);
-    const reports = shipped.map((name) => installOne(name, { manifest, options }));
-    const retired = manifest.names().filter((name) => !shipped.includes(name));
-    writeSkillManifest(options.projectRoot, manifest);
-    return [
-      ...reports,
-      ...retired.map((name): SkillInstallReport => ({ name, status: 'retired', files: [] })),
-    ];
+    try {
+      return installAll(manifest, options);
+    } finally {
+      // Also when a later skill throws: the skills already written keep their
+      // records. Saved only at the end of a clean run, a failure left folders
+      // at the new version under records of the old one (found in review).
+      writeSkillManifest(options.projectRoot, manifest);
+    }
   } finally {
     options.pastReleases.dispose();
   }

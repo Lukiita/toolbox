@@ -4,8 +4,9 @@
 
 import { join } from 'node:path';
 
-import type { SkillInspection, UpstreamState } from '../application/inspect-skills.mts';
+import type { SkillInspection } from '../application/inspect-skills.mts';
 import type { InstallStatus, SkillInstallReport } from '../application/install-skills.mts';
+import type { UpstreamState } from '../domain/skill-state.mts';
 import { SKILLS_DIR } from '../infra/skill-layout.mts';
 
 // Empty = the status says it all. A line that asks something of the reader

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isBinary, sameContent, type SkillFile, SkillTree } from './skill-tree.vo.mts';
+import { isBinary, sameContent, type SkillFile, SkillTree } from './skill-tree.mts';
 
 function file(text: string, executable = false): SkillFile {
   return { content: Buffer.from(text), executable };

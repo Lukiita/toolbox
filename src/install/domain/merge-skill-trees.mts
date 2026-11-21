@@ -12,7 +12,13 @@
 // wrote them. Whether a tree with conflicts is written at all is the
 // caller's call (`reconcile-skill.mts`).
 
-import { isBinary, sameContent, type SkillFile, SkillTree } from './skill-tree.vo.mts';
+import {
+  isBinary,
+  sameContent,
+  type SkillFile,
+  SkillTree,
+  withUnixLineEndings,
+} from './skill-tree.mts';
 
 export interface TextSides {
   base: string;
@@ -60,17 +66,28 @@ function isText(file: SkillFile | undefined): file is SkillFile {
   return file !== undefined && !isBinary(file.content);
 }
 
+function unixText(file: SkillFile): string {
+  return withUnixLineEndings(file.content.toString('utf8'));
+}
+
+// Merged as LF, written back the way the project keeps the file: a CRLF
+// checkout (`core.autocrlf`) stays CRLF, or git would show every line changed.
+function inLineEndingsOf(file: SkillFile, text: string): Buffer {
+  const crlf = file.content.includes('\r\n');
+  return Buffer.from(crlf ? text.replaceAll('\n', '\r\n') : text, 'utf8');
+}
+
 // Reached only when the three sides differ. A side that is absent (edited
 // here, deleted there; or added on both sides) or binary has no line-level
 // answer: the project's side stays and a person decides.
 function mergeDiverged({ base, ours, theirs }: FileSides, mergeText: TextMerge): FileMerge {
   if (!isText(base) || !isText(ours) || !isText(theirs)) return { file: ours, outcome: 'conflict' };
   const result = mergeText({
-    base: base.content.toString('utf8'),
-    ours: ours.content.toString('utf8'),
-    theirs: theirs.content.toString('utf8'),
+    base: unixText(base),
+    ours: unixText(ours),
+    theirs: unixText(theirs),
   });
-  const file = { content: Buffer.from(result.text, 'utf8'), executable: ours.executable };
+  const file = { content: inLineEndingsOf(ours, result.text), executable: ours.executable };
   return { file, outcome: result.conflicted ? 'conflict' : 'merged' };
 }
 

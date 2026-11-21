@@ -1,4 +1,4 @@
-import { SkillTree } from './skill-tree.vo.mts';
+import { SkillTree } from './skill-tree.mts';
 export interface TextSides {
     base: string;
     ours: string;

@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { SkillManifest, SkillManifestError } from '../domain/skill-manifest.aggregate.mts';
+import { SkillManifest, SkillManifestError } from '../domain/skill-manifest.mts';
 import { MANIFEST_FILE } from './skill-layout.mts';
 
 /**

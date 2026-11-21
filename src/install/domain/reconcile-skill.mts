@@ -11,11 +11,11 @@
 // to write, so no caller can write one by mistake.
 
 import { mergeSkillTrees, type TextMerge } from './merge-skill-trees.mts';
-import type { SkillRecord } from './skill-manifest.aggregate.mts';
-import type { SkillTree } from './skill-tree.vo.mts';
-import { isOlderVersion } from './toolbox-version.mts';
+import type { SkillRecord } from './skill-manifest.mts';
+import type { SkillTree } from './skill-tree.mts';
+import { classifySkill, type SkillState } from './skill-state.mts';
 
-/** The base now equals what the package ships; the record moves to the running version. */
+/** The skill is settled against what the package ships; the record moves to the running version. */
 export type SyncedStatus =
   | 'copied' // first install
   | 'adopted' // the project's folder already equalled the package's: recorded, not written
@@ -118,13 +118,16 @@ function mergeIntoEdited(sides: Recorded, options: ReconcileOptions): Reconcilia
     : kept('conflict', conflicts);
 }
 
-function reconcileRecorded(sides: Recorded, options: ReconcileOptions): Reconciliation {
-  const { record, local, shipped } = sides;
-  // Equal to the package: a plain re-run, the new version applied by hand, or
-  // an install that died after writing the folder and before saving the manifest.
-  if (local.equals(shipped)) return synced('unchanged');
-  if (shipped.hash === record.hash) return synced('altered');
-  return local.hash === record.hash ? synced('updated', shipped) : mergeIntoEdited(sides, options);
+function reconcileRecorded(
+  state: SkillState,
+  sides: Recorded,
+  options: ReconcileOptions,
+): Reconciliation {
+  if (state.upstream === 'current')
+    return synced(state.local === 'intact' ? 'unchanged' : 'altered');
+  return state.local === 'intact'
+    ? synced('updated', sides.shipped)
+    : mergeIntoEdited(sides, options);
 }
 
 /**
@@ -138,7 +141,10 @@ function reconcileRecorded(sides: Recorded, options: ReconcileOptions): Reconcil
 export function reconcileSkill(sides: SkillSides, options: ReconcileOptions): Reconciliation {
   const { record, local } = sides;
   if (!record) return reconcileUnrecorded(sides);
-  if (isOlderVersion(options.version, record.version)) return kept('ahead');
+  // Whether the skill is edited, behind or ahead is `classifySkill`'s to say,
+  // for `toolbox skills` too; this function only maps the state to an action.
+  const state = classifySkill(sides, options.version);
+  if (state.upstream === 'ahead') return kept('ahead');
   if (!local) return kept('removed');
-  return reconcileRecorded({ ...sides, record, local }, options);
+  return reconcileRecorded(state, { ...sides, record, local }, options);
 }

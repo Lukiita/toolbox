@@ -60,6 +60,8 @@ export interface ScratchProject {
   /** (Re)writes what the package ships for one skill, replacing the folder. */
   ship: (name: string, files: Record<string, string>) => void;
   install: (version?: string, writeConflicts?: boolean) => SkillInstallReport[];
+  /** Every report `onReport` was handed, in order, across the installs of this project. */
+  reported: SkillInstallReport[];
   /** The `skills` object of the manifest on disk. */
   records: () => Record<string, { version: string; hash: string }>;
 }
@@ -83,6 +85,7 @@ export function scratchProject(root: string): ScratchProject {
   const projectRoot = join(root, 'project');
   const packageDir = join(projectRoot, 'node_modules', '@lukiita', 'toolbox');
   const releases = new FolderPastReleases(join(root, 'releases'));
+  const reported: SkillInstallReport[] = [];
   const ship = (name: string, files: Record<string, string>): void => {
     rmSync(join(packageDir, 'skills', name), { recursive: true, force: true });
     writeFiles(join(packageDir, 'skills', name), files);
@@ -94,6 +97,7 @@ export function scratchProject(root: string): ScratchProject {
     projectRoot,
     packageDir,
     releases,
+    reported,
     ship,
     local: (path) => join(projectRoot, '.agents', 'skills', path),
     install: (version = '1.2.0', writeConflicts = false) => {
@@ -105,6 +109,7 @@ export function scratchProject(root: string): ScratchProject {
         writeConflicts,
         mergeText: gitTextMerge,
         pastReleases: releases,
+        onReport: (report) => reported.push(report),
       });
     },
     records: () =>

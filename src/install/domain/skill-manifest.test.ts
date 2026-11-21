@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SkillManifest, SkillManifestError } from './skill-manifest.aggregate.mts';
+import { SkillManifest, SkillManifestError } from './skill-manifest.mts';
 
 const HASH_A = `sha256:${'a'.repeat(64)}`;
 const HASH_B = `sha256:${'b'.repeat(64)}`;
@@ -51,7 +51,7 @@ describe('SkillManifest', () => {
     );
   });
 
-  // A name becomes a folder under .agents/skills/ and under the base.
+  // A name becomes a folder under .agents/skills/, and a path inside a fetched release.
   it.each(['../x', 'a/b', '', '.'])('refuses the name %j, which is not a folder name', (name) => {
     expect(() => SkillManifest.empty().record(name, { version: '1.2.0', hash: HASH_A })).toThrow(
       new SkillManifestError(
