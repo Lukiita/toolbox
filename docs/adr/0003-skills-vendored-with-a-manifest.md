@@ -76,7 +76,7 @@ ships content whose hash differs from it.
 | a record     | absent                                           | any           | nothing                                                              | `removed`         |
 | a record     | intact                                           | same          | nothing (the record moves to the running version)                    | `unchanged`       |
 | a record     | intact                                           | new version   | replaces the folder                                                  | `updated`         |
-| a record     | edited                                           | same          | nothing                                                              | `altered`         |
+| a record     | edited                                           | same          | nothing (the record moves to the running version)                    | `altered`         |
 | a record     | edited                                           | new version   | fetches the original; three-way merge; every file settled: writes it | `merged`          |
 | a record     | edited                                           | new version   | a file both sides changed in the same place: **writes nothing**      | `conflict`        |
 | a record     | edited                                           | new version   | the same, with `--write-conflicts`: writes the markers               | `conflict-marked` |
@@ -97,6 +97,15 @@ merge decides (`git merge-file --diff3`), and what it cannot settle is a conflic
 edited on one side and deleted on the other, or binary on both, is a conflict that keeps
 the project's side.
 
+### Replacing a folder
+
+A skill's folder is never deleted to be rewritten. The new content is written beside it,
+the old folder is renamed aside and the new one renamed into place - two atomic renames,
+the first undone when the second fails - and only then is the old one deleted, best
+effort. A failure at any point leaves a whole folder; a run killed between the renames is
+undone by the next install before it reads anything. The manifest is saved even when a
+later skill fails, so a skill already written is never left under a stale record.
+
 ### The original comes from the release's tag
 
 `install` clones the tag `v<recorded version>` of the package's own repository
@@ -110,7 +119,8 @@ This is the one step that leaves the machine, and it never fails the install. No
 a deleted tag, a remote that hangs (cut at 60 s) or one that asks for credentials (git is
 told not to prompt): the skill is left exactly as it is and reported `no-original` with
 git's own reason; every other skill is still installed. There is no retry: the command is
-re-run by a person, and ten edited skills with no network must cost one failed fetch.
+re-run by a person, and the edited skills copied from one release must cost one failed
+fetch, not one timeout each.
 
 When a release can never be fetched again, the way out is by hand: delete the skill's
 folder and its entry in the manifest, run `install` (it is `copied` anew) and re-apply the
@@ -122,6 +132,8 @@ A skill's hash is sha256 over `<path>\0<sha256 of the file>\n` for each file, pa
 code-unit order. Left out on purpose, because each would make an unedited skill read as
 edited: the exec bit, CRLF vs LF in text files (`core.autocrlf` rewrites them on checkout),
 and what running a skill's script leaves behind (`__pycache__/`, `*.pyc`, `.DS_Store`).
+Only regular files are read: a symbolic link inside a skill is in no hash and does not
+survive a write of the folder. A known limit - no shipped skill has one.
 A shipped skill is read the same from the installed package, from a checkout and from a
 fetched tag: what `package.json`'s `files` keeps out of the package (`test_*.py`) is left
 out of all three, or a fetched original would never match its record. The format is a
