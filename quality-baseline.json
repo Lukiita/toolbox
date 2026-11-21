@@ -8,7 +8,7 @@
       "label": "Line coverage",
       "mode": "baseline",
       "direction": "higher-is-better",
-      "value": 97.41,
+      "value": 97.67,
       "unit": "%",
       "note": "Covered lines / instrumented lines over the wide slice (vitest.quality.config.ts). Catches dilution; the per-file ratchet catches local regressions."
     },
