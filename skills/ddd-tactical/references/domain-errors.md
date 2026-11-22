@@ -26,7 +26,7 @@ export class DomainError {
   constructor(
     /** Stable, greppable code: '<concept>.<violation>' - e.g. 'subscription.canceled'. */
     public readonly code: string,
-    /** Human message carrying the offending value and the expected shape (AGENTS.md rule). */
+    /** Human message carrying the offending value and the expected shape. */
     public readonly message: string,
   ) {}
 }
@@ -87,7 +87,7 @@ export class InfrastructureError extends Error {
 
 **Why a class, if it is only thrown.** A bare `throw error` from an adapter leaks the SDK's error type upward, and the global filter would need `instanceof Stripe.errors.X` to pick a status — the same leak the mapper exists to prevent, on the error channel. Wrapping at the boundary keeps SDK types inside `infra/`, and lets the filter separate **503 (infrastructure — page on-call, client may retry)** from **500 (a bug — fix the code)**. In logs and alerts that split is the whole game. Think of it as the throw-side twin of the mapper: translate at the boundary, in both directions.
 
-**Why thrown, not returned.** `Result` exists for outcomes the caller **routes** on. A handler does not route on "database down" — it aborts. The defensive layer AGENTS.md demands (retry with backoff, circuit breaker, timeout) lives *inside the adapter*, around the SDK call: the adapter absorbs the transient failure, and what escapes is terminal. Putting infra failures in `Result` would force every handler to write `if (saved.isFail()) return saved;` for an outcome it can do nothing with — ceremony that documents nothing.
+**Why thrown, not returned.** `Result` exists for outcomes the caller **routes** on. A handler does not route on "database down" — it aborts. The defensive layer every external call gets (retry with backoff, circuit breaker, timeout) lives *inside the adapter*, around the SDK call: the adapter absorbs the transient failure, and what escapes is terminal. Putting infra failures in `Result` would force every handler to write `if (saved.isFail()) return saved;` for an outcome it can do nothing with — ceremony that documents nothing.
 
 ## `Result`
 
@@ -135,7 +135,7 @@ Minimal on purpose: no `map`/`flatMap`/monad tower until the project actually fe
 
 **No `extends Error` on the returned types.** In this house a `DomainError` or `ApplicationError` is never thrown — it travels inside `Result` as a value. Extending `Error` would signal "throwable" and invite exactly the use the table forbids; with the types disjoint, the rule stays mechanical: **what extends Error gets thrown (`InfrastructureError`, bugs), what doesn't gets returned (rules, application outcomes).** It also skips two real costs: capturing a stack trace on every expected refusal (rule refusals are normal, sometimes hot flow — a stack answers "where did the programmer err", not "what did the business refuse"), and Error's non-enumerable fields serializing as `{}` in JSON logs while a plain object serializes clean. `InfrastructureError` pays both costs on purpose: a stack and a `cause` are exactly what you want when the database went away.
 
-**No timestamp.** The edge logger already stamps every structured log line (AGENTS.md: JSON logging) — a timestamp inside the error duplicates it. Worse, a `new Date()` inside the error breaks the house rule that time enters as an argument: error equality in tests turns non-deterministic. When the moment of refusal is genuinely business data (an audit of attempts), model it explicitly in that flow — a field on the aggregate, or a domain event, whose `occurredAt` exists precisely because a *fact of the domain* deserves its time.
+**No timestamp.** The edge logger already stamps every structured log line (structured JSON logging) — a timestamp inside the error duplicates it. Worse, a `new Date()` inside the error breaks the house rule that time enters as an argument: error equality in tests turns non-deterministic. When the moment of refusal is genuinely business data (an audit of attempts), model it explicitly in that flow — a field on the aggregate, or a domain event, whose `occurredAt` exists precisely because a *fact of the domain* deserves its time.
 
 **Extend when a real case appears, not before.** The natural first additions: a structured `details?: Record<string, unknown>` on `DomainError` (current balance vs required, for a UI that must show the numbers) — today the message carries that in text; and a `retryable: boolean` on `InfrastructureError` when a consumer such as a queue worker must choose between re-enqueue and dead-letter — until then the code says enough.
 
