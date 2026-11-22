@@ -27,7 +27,7 @@ export interface RenewSubscriptionCommand {
 }
 
 export class RenewSubscriptionHandler {
-  // Ports injected through the constructor (AGENTS.md) - the handler never
+  // Ports injected through the constructor - the handler never
   // knows which database implements them.
   constructor(
     private readonly subscriptions: SubscriptionRepository,
@@ -206,7 +206,7 @@ export class ThrownErrorFilter implements ExceptionFilter {
     }
 
     if (exception instanceof InfrastructureError) {
-      // Structured JSON (AGENTS.md): `code` is the greppable field, `cause` is the SDK error.
+      // Structured JSON: `code` is the greppable field, `cause` is the SDK error.
       this.logger.error({ code: exception.code, message: exception.message, cause: exception.cause });
       response.status(HttpStatus.SERVICE_UNAVAILABLE).json({ code: exception.code, message: 'service temporarily unavailable' });
       return;

@@ -1,6 +1,6 @@
 ---
 name: ddd-tactical
-description: Tactical domain-driven design in TypeScript — model aggregates, entities, value objects, domain errors and repositories with private constructors, static create/restore factories and framework-free base classes. Use whenever the user models a domain concept, creates or refactors an aggregate, entity or value object, adds a business rule or invariant, or mentions DDD, domain layer, rich vs anemic model — and also when they just say "model X", "create the Y aggregate", "add a Z rule" without naming DDD. Reach for it too when deciding WHERE a new business rule should live, whether a failure should be returned or thrown (domain vs application vs infrastructure error), or when reviewing code where logic sits in services/SQL instead of the domain.
+description: Tactical domain-driven design in TypeScript — model aggregates, entities, value objects, typed ids, domain errors and repositories with private constructors, static create/restore factories and framework-free base classes. Use whenever the user models a domain concept in code, creates or refactors an aggregate, entity or value object, adds a business rule or invariant, or applies DDD, a domain layer or a rich (vs anemic) model to code — and also when they just say "model X", "create the Y aggregate", "add a Z rule" without naming DDD. Reach for it too when deciding WHERE a new business rule should live, whether a failure should be returned or thrown (domain vs application vs infrastructure error), or when reviewing code where business rules hide in services or SQL instead of the domain.
 ---
 
 # Tactical DDD
@@ -13,7 +13,15 @@ Before any reference below, read `.agents/skill-decisions/ddd-tactical.md` in th
 
 ## The three questions (answer before writing any code)
 
-The global `AGENTS.md` (§ How I build software) fixes them — **what is the aggregate**, **what invariant does it protect**, **what illegal state becomes unrepresentable** — together with the rule that ceremony scales with the problem while the questions don't, and the money rule. They are always loaded, so this skill does not restate them; it adds the step: write the three answers as one short paragraph before coding — in the task, the design doc, or a comment. If you cannot answer them, the modeling conversation is not over; ask, don't guess.
+1. **What is the aggregate?** Who is the root, and what lives inside its consistency boundary?
+2. **What invariant does it protect?** The rule that can never be violated lives INSIDE the aggregate. The database (constraint, trigger, RLS) may enforce it as a second line of defense, but the domain owns the rule — never the other way around.
+3. **What illegal state becomes unrepresentable?** Model with types that make invalid states impossible to construct, instead of scattering validation across callers.
+
+Write the three answers as one short paragraph before coding — in the task, the design doc, or a comment. If you cannot answer them, the modeling conversation is not over; ask, don't guess.
+
+Ceremony scales with the problem; the questions don't. An entity guarding its own invariant is already a single-element aggregate — that costs nothing and is often all a small project needs.
+
+**Money is never a floating-point `number`**: an integer in the currency's minor unit (cents), inside a `Money` value object that carries the currency — [value-object.md](references/value-object.md).
 
 ## The building blocks
 
@@ -86,7 +94,7 @@ The write/read asymmetry is deliberate — commands pay the port ceremony becaus
 
 **What "pure" means for imports** — the domain never imports frameworks, ORMs, I/O clients or anything with runtime wiring. It MAY import **pure computation libraries** (date-fns, decimal.js, big.js): deterministic functions with no I/O are the standard library JavaScript forgot to ship, and rewriting month arithmetic or decimal math by hand to satisfy a diagram trades real correctness for fake purity. Two conditions keep this honest: the library does computation only, and its types never cross a public domain signature (compute inside, emerge holding your own types — `Money` in, `Money` out).
 
-**File naming** — the `AGENTS.md` rule (kebab-case, the type as a suffix, so the structure itself is greppable), instantiated per block:
+**File naming** — kebab-case with the type as a suffix, so the structure itself is greppable (`**/*.vo.ts`) and a case-only rename never breaks on a case-sensitive filesystem; per block:
 
 | block | file |
 |---|---|

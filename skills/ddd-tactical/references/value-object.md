@@ -11,7 +11,7 @@ A value object is a concept defined entirely by its value: two instances with th
 
 ## Canonical example: `Money`
 
-The AGENTS.md rule made concrete — integer minor units, currency attached, no floats anywhere:
+The money rule (SKILL.md) made concrete — integer minor units, currency attached, no floats anywhere:
 
 The INTERNAL state is integer minor units, always — that invariant never softens. But the *conversion* from what the outside world speaks (forms send `10.50`, APIs send `"10.50"`) is the VO's responsibility, not the caller's: making every caller multiply by 100 scatters the conversion — and its bugs — across the codebase, which is exactly what a VO exists to centralize. So there are two named doors instead of one ambiguous `create(number)`: the name carries the unit (connascence of meaning resolved by connascence of name).
 
@@ -95,7 +95,7 @@ export class Money extends ValueObject<MoneyProps> {
 
 Notice what the type just made unrepresentable: a float amount stored, a sum across currencies, a "money" with no currency, a silent loss of sub-cent precision. Every caller that receives a `Money` inherits those guarantees for free — that is the return on the ceremony.
 
-**When the math itself gets heavy** — pro-rata splits, compound interest, chained percentages — integer cents plus `Math.round` stops being enough. Do that arithmetic with a decimal library (decimal.js, big.js) **inside** the VO or a domain service, and emerge holding a `Money`: pure computation libraries are welcome in the domain (see the import rule in SKILL.md), but their types never cross a public signature — `Money` in, `Money` out, `Decimal` never seen by callers. The VO itself is the thin interface AGENTS.md asks for.
+**When the math itself gets heavy** — pro-rata splits, compound interest, chained percentages — integer cents plus `Math.round` stops being enough. Do that arithmetic with a decimal library (decimal.js, big.js) **inside** the VO or a domain service, and emerge holding a `Money`: pure computation libraries are welcome in the domain (see the import rule in SKILL.md), but their types never cross a public signature — `Money` in, `Money` out, `Decimal` never seen by callers. The VO itself is the thin interface that keeps the library swappable.
 
 ## When NOT to make one
 
