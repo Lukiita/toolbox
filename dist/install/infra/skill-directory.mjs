@@ -25,12 +25,14 @@ export function shippedSkills(packageDir) {
 // leaves in the project's copy. Counted, every skill with a script would
 // read as edited by the project the first time the script ran.
 const LEFTOVER = /(^|\/)__pycache__\/|\.pyc$|(^|\/)\.DS_Store$/;
-// What package.json's `files` keeps out of the package (`!skills/**/test_*.py`).
-// A release fetched by git still has them, and so does a checkout of this
-// repo: left in, the same skill would hash differently depending on where it
-// was read from, and a fetched original would never match its record. A test
-// holds this list to package.json's.
-const NOT_PACKAGED = /(^|\/)test_[^/]*\.py$/;
+// What package.json's `files` keeps out of the package: test files
+// (`!skills/**/test_*.py`) and a skill's evals at its root (`!skills/*/evals`,
+// the skill-creator layout; maintainer tooling, not something the skill needs
+// to work). A release fetched by git still has them, and so does a checkout of
+// this repo: left in, the same skill would hash differently depending on where
+// it was read from, and a fetched original would never match its record. A
+// test holds this list to package.json's.
+const NOT_PACKAGED = /(^|\/)test_[^/]*\.py$|^evals\//;
 function readSkillFile(path) {
     return { content: readFileSync(path), executable: (statSync(path).mode & 0o111) !== 0 };
 }

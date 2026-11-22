@@ -199,7 +199,7 @@ Only regular files are read, and no symbolic link is followed: a link inside a s
 a file or to a folder, is in no hash, never pulls outside content into a diff or a merge,
 and does not survive a write of the folder. A known limit - no shipped skill has one.
 A shipped skill is read the same from the installed package, from a checkout and from a
-fetched tag: what `package.json`'s `files` keeps out of the package (`test_*.py`) is left
+fetched tag: what `package.json`'s `files` keeps out of the package (`test_*.py`, a skill's root `evals/`) is left
 out of all three, or a fetched original would never match its record. The format is a
 contract with every manifest already written; a test pins it to values computed with
 `sha256sum`.
