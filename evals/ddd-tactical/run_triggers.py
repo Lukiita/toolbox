@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Trigger eval for ddd-tactical's description, against the skills really installed.
 
+Maintainer tooling: it lives outside skills/ so no project install carries it; a skill
+folder holds only what the skill needs to work.
+
 Each query runs in `claude -p` inside a throwaway copy of a small TypeScript project
 (trigger-fixture.json) and the run records every skill the agent loads. The installed
 skills compete as they do in daily use, so a miss can be a neighbour winning: the
@@ -14,8 +17,8 @@ eval measures the skill in daily use, so a score is tied to that setup.
 Why the fixture, not an empty folder: a query like "the rule is scattered in the billing
 service" makes the agent look for that service first; in an empty folder it asks where
 the code is and never reaches the skill (5 of 6 false misses, 2026-11-21). It is packed
-as JSON, not as .ts files, because this folder is installed into projects, where real
-.ts files would fall into the project's tsc, lint and prettier globs.
+as one JSON, not as .ts files, so the fake project stays out of the toolbox's own
+prettier and lint runs, and its deliberately anemic code is never mistaken for real code.
 Why Sonnet by default: Haiku barely loads any skill, neighbours included, so it measures
 the model, not the description (same date).
 
