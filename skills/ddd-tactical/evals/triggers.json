@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "should_trigger": true,
+    "query": "cria o value object Percentual pro rateio de frete — entre 0 e 100, duas casas decimais"
+  },
+  {
+    "id": 2,
+    "should_trigger": true,
+    "query": "modela o agregado Assinatura com Plano: assinatura cancelada não renova"
+  },
+  {
+    "id": 3,
+    "should_trigger": true,
+    "query": "pedido enviado não pode mais ser cancelado, implementa essa regra"
+  },
+  {
+    "id": 4,
+    "should_trigger": true,
+    "query": "a regra de saldo negativo tá espalhada no service de cobrança, onde ela deveria morar?"
+  },
+  {
+    "id": 5,
+    "should_trigger": true,
+    "query": "no handler de renovar eu devolvo DomainError quando não acha a assinatura no banco, tá certo isso?"
+  },
+  {
+    "id": 6,
+    "should_trigger": true,
+    "query": "cria a entidade Paciente com CPF validado"
+  },
+  {
+    "id": 7,
+    "should_trigger": true,
+    "query": "o usuário só pode ter 3 convites pendentes ao mesmo tempo — onde eu coloco isso no código?"
+  },
+  {
+    "id": 8,
+    "should_trigger": true,
+    "query": "meu modelo tá anêmico, os services fazem tudo e as classes são só getters. refatora o Pedido"
+  },
+  {
+    "id": 9,
+    "should_trigger": true,
+    "query": "adiciona um id tipado pra Organizacao, não quero trocar com UserId por engano"
+  },
+  {
+    "id": 10,
+    "should_trigger": true,
+    "query": "cria o repositório da Assinatura com o mapper pro Supabase"
+  },
+  {
+    "id": 11,
+    "should_trigger": false,
+    "query": "vamos fechar o glossário: o que 'assinatura' e 'plano' significam nesse projeto?"
+  },
+  {
+    "id": 12,
+    "should_trigger": false,
+    "query": "registra um ADR sobre usar Supabase em vez de Postgres puro"
+  },
+  {
+    "id": 13,
+    "should_trigger": false,
+    "query": "qual a diferença entre DDD estratégico e tático?"
+  },
+  {
+    "id": 14,
+    "should_trigger": false,
+    "query": "explica o que é bounded context"
+  },
+  {
+    "id": 15,
+    "should_trigger": false,
+    "query": "revisa esse diff, mexi no SQL do relatório de vendas e adicionei um GROUP BY"
+  },
+  {
+    "id": 16,
+    "should_trigger": false,
+    "query": "essa query de listagem de pedidos tá lenta, por quê?"
+  },
+  {
+    "id": 17,
+    "should_trigger": false,
+    "query": "o módulo de pagamento tem uma interface rasa demais, onde eu coloco a seam pra testar?"
+  },
+  {
+    "id": 18,
+    "should_trigger": false,
+    "query": "cria um componente React de botão com variante primária"
+  },
+  {
+    "id": 19,
+    "should_trigger": false,
+    "query": "adiciona um índice na coluna email da tabela users"
+  },
+  {
+    "id": 20,
+    "should_trigger": false,
+    "query": "configura o husky com lint-staged nesse repo"
+  }
+]
