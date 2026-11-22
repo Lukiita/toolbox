@@ -23,6 +23,7 @@
     "skills",
     "!skills/**/test_*.py",
     "!skills/**/__pycache__",
+    "!skills/*/evals",
     "templates",
     "toolbox.config.example.ts"
   ],

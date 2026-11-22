@@ -48,7 +48,7 @@ export class FolderPastReleases implements PastReleases {
     if (!existsSync(release)) {
       return { found: false, reason: `could not fetch v${version}: no network` };
     }
-    const tree = readShippedSkillTree(join(release, 'skills', name));
+    const tree = readShippedSkillTree(join(release, 'skills', name), parseReleaseNumber(version));
     if (tree) return { found: true, tree };
     return { found: false, reason: `the ${version} release has no skill named ${name}` };
   }

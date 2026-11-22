@@ -1,5 +1,6 @@
 import type { SkillLinkKind } from '../application/ports.mts';
 import { SkillTree } from '../domain/skill-tree.mts';
+import { type ReleaseNumber } from '../domain/toolbox-version.mts';
 /**
  * Every folder under the package's `skills/` that has a SKILL.md.
  *
@@ -16,12 +17,15 @@ export declare function shippedSkills(packageDir: string): string[];
 export declare function readSkillTree(dir: string): SkillTree | undefined;
 /**
  * Reads a skill as a release ships it - from the installed package, a
- * checkout or a fetched tag, always the same files.
+ * checkout or a fetched tag, always the same files. `release` names the tag a
+ * folder was fetched from, so it is read as that release packed it; without
+ * it, as the package running now does.
  *
  * @example
  *   readShippedSkillTree('/p/node_modules/@lukiita/toolbox/skills/retro')?.hash
+ *   readShippedSkillTree('/tmp/toolbox-release-x/skills/retro', parseReleaseNumber('2.0.0'))
  */
-export declare function readShippedSkillTree(dir: string): SkillTree | undefined;
+export declare function readShippedSkillTree(dir: string, release?: ReleaseNumber): SkillTree | undefined;
 /**
  * Moves `staging` into the place of `dir`. What is there is renamed aside,
  * never deleted first: until 2.0's review this was "delete, then rename", and

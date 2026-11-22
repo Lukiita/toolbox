@@ -94,7 +94,7 @@ export class GitPastReleases {
         const release = this.fetch(version);
         if (!release.fetched)
             return { found: false, reason: release.reason };
-        const tree = readShippedSkillTree(join(release.packageDir, PACKAGE_SKILLS_DIR, name));
+        const tree = readShippedSkillTree(join(release.packageDir, PACKAGE_SKILLS_DIR, name), version);
         if (tree)
             return { found: true, tree };
         return { found: false, reason: `the ${version} release has no skill named ${name}` };

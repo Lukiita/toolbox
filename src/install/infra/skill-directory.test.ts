@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { treeOf } from '../domain/skill-tree.fixtures.ts';
+import { parseReleaseNumber } from '../domain/toolbox-version.mts';
 import { scratchDirs } from './scratch-dirs.fixtures.ts';
 import {
   readShippedSkillTree,
@@ -129,6 +130,49 @@ describe('readShippedSkillTree', () => {
     expect(tree?.hash).toBe(readShippedSkillTree(join(root, 'packed'))?.hash);
   });
 
+  // A skill's evals (the Anthropic skill-creator layout: evals/ at the skill
+  // root) are maintainer tooling: kept in the repo, left out of the package.
+  it('reads a skill the same from a package and from a git tree that still has its evals', () => {
+    const root = scratch();
+    put(root, 'packed/SKILL.md', 'x');
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/evals/evals.json', '{}');
+    const tree = readShippedSkillTree(join(root, 'tree'));
+    expect(tree?.paths()).toEqual(['SKILL.md']);
+    expect(tree?.hash).toBe(readShippedSkillTree(join(root, 'packed'))?.hash);
+  });
+
+  // 2.0.0 packed each skill's evals/, and the manifests it wrote hashed them:
+  // its tag must be read as 2.0.0 packed it, or no record of it would match.
+  it('reads a release as that release packed it: 2.0.0 still had its evals', () => {
+    const root = scratch();
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/evals/evals.json', '{}');
+    const dir = join(root, 'tree');
+    expect(readShippedSkillTree(dir, parseReleaseNumber('2.0.0'))?.paths()).toEqual([
+      'SKILL.md',
+      'evals/evals.json',
+    ]);
+    expect(readShippedSkillTree(dir, parseReleaseNumber('2.1.0'))?.paths()).toEqual(['SKILL.md']);
+  });
+
+  it('leaves out a file named evals at the skill root, as the package pattern does', () => {
+    const root = scratch();
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/evals', 'a file, not a folder');
+    expect(readShippedSkillTree(join(root, 'tree'))?.paths()).toEqual(['SKILL.md']);
+  });
+
+  it('keeps a folder named evals below the skill root', () => {
+    const root = scratch();
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/references/evals/rubric.md', 'r');
+    expect(readShippedSkillTree(join(root, 'tree'))?.paths()).toEqual([
+      'SKILL.md',
+      'references/evals/rubric.md',
+    ]);
+  });
+
   it('leaves out exactly what package.json keeps out of the package', () => {
     const manifest = JSON.parse(
       readFileSync(join(import.meta.dirname, '..', '..', '..', 'package.json'), 'utf8'),
@@ -137,7 +181,15 @@ describe('readShippedSkillTree', () => {
     expect(manifest.files.filter((entry) => entry.startsWith('!skills/'))).toEqual([
       '!skills/**/test_*.py',
       '!skills/**/__pycache__',
+      '!skills/*/evals',
     ]);
+  });
+
+  it("keeps an evals folder in the project's own copy: there it is the project's file", () => {
+    const root = scratch();
+    put(root, 'retro/SKILL.md', 'x');
+    put(root, 'retro/evals/evals.json', '{}');
+    expect(readSkillTree(join(root, 'retro'))?.paths()).toEqual(['SKILL.md', 'evals/evals.json']);
   });
 
   it("keeps a test file in the project's own copy: there it is the project's file", () => {
