@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { treeOf } from '../domain/skill-tree.fixtures.ts';
+import { parseReleaseNumber } from '../domain/toolbox-version.mts';
 import { scratchDirs } from './scratch-dirs.fixtures.ts';
 import {
   readShippedSkillTree,
@@ -139,6 +140,27 @@ describe('readShippedSkillTree', () => {
     const tree = readShippedSkillTree(join(root, 'tree'));
     expect(tree?.paths()).toEqual(['SKILL.md']);
     expect(tree?.hash).toBe(readShippedSkillTree(join(root, 'packed'))?.hash);
+  });
+
+  // 2.0.0 packed each skill's evals/, and the manifests it wrote hashed them:
+  // its tag must be read as 2.0.0 packed it, or no record of it would match.
+  it('reads a release as that release packed it: 2.0.0 still had its evals', () => {
+    const root = scratch();
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/evals/evals.json', '{}');
+    const dir = join(root, 'tree');
+    expect(readShippedSkillTree(dir, parseReleaseNumber('2.0.0'))?.paths()).toEqual([
+      'SKILL.md',
+      'evals/evals.json',
+    ]);
+    expect(readShippedSkillTree(dir, parseReleaseNumber('2.1.0'))?.paths()).toEqual(['SKILL.md']);
+  });
+
+  it('leaves out a file named evals at the skill root, as the package pattern does', () => {
+    const root = scratch();
+    put(root, 'tree/SKILL.md', 'x');
+    put(root, 'tree/evals', 'a file, not a folder');
+    expect(readShippedSkillTree(join(root, 'tree'))?.paths()).toEqual(['SKILL.md']);
   });
 
   it('keeps a folder named evals below the skill root', () => {

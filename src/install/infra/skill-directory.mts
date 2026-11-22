@@ -20,6 +20,11 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import type { SkillLinkKind } from '../application/ports.mts';
 import { PACKAGE_SKILLS_DIR } from '../application/skill-layout.mts';
 import { type SkillFile, SkillTree } from '../domain/skill-tree.mts';
+import {
+  isOlderVersion,
+  parseReleaseNumber,
+  type ReleaseNumber,
+} from '../domain/toolbox-version.mts';
 import { pathKind } from './path-kind.mts';
 
 /**
@@ -49,7 +54,28 @@ const LEFTOVER = /(^|\/)__pycache__\/|\.pyc$|(^|\/)\.DS_Store$/;
 // this repo: left in, the same skill would hash differently depending on where
 // it was read from, and a fetched original would never match its record. A
 // test holds this list to package.json's.
-const NOT_PACKAGED = /(^|\/)test_[^/]*\.py$|^evals\//;
+//
+// The list has a history, and a fetched tag is read with the list of ITS
+// release: 2.0.0 packed evals/, and the manifests it wrote hashed them. Read
+// with today's list, its tag never matched those records, and an edited skill
+// they recorded could never be merged again (found in review).
+interface PackageExclusion {
+  pattern: RegExp;
+  /** The last release that still packed what the pattern matches. */
+  packedUpTo?: ReleaseNumber;
+}
+
+const NOT_PACKAGED: readonly PackageExclusion[] = [
+  { pattern: /(^|\/)test_[^/]*\.py$/ },
+  { pattern: /^evals(\/|$)/, packedUpTo: parseReleaseNumber('2.0.0', 'NOT_PACKAGED') },
+];
+
+// Without a release, the list in force: the package running now, or a checkout.
+function notPackagedIn(release?: ReleaseNumber): RegExp[] {
+  return NOT_PACKAGED.filter(
+    ({ packedUpTo }) => !release || !packedUpTo || isOlderVersion(packedUpTo, release),
+  ).map(({ pattern }) => pattern);
+}
 
 function readSkillFile(path: string): SkillFile {
   return { content: readFileSync(path), executable: (statSync(path).mode & 0o111) !== 0 };
@@ -96,13 +122,16 @@ export function readSkillTree(dir: string): SkillTree | undefined {
 
 /**
  * Reads a skill as a release ships it - from the installed package, a
- * checkout or a fetched tag, always the same files.
+ * checkout or a fetched tag, always the same files. `release` names the tag a
+ * folder was fetched from, so it is read as that release packed it; without
+ * it, as the package running now does.
  *
  * @example
  *   readShippedSkillTree('/p/node_modules/@lukiita/toolbox/skills/retro')?.hash
+ *   readShippedSkillTree('/tmp/toolbox-release-x/skills/retro', parseReleaseNumber('2.0.0'))
  */
-export function readShippedSkillTree(dir: string): SkillTree | undefined {
-  return readTree(dir, [LEFTOVER, NOT_PACKAGED]);
+export function readShippedSkillTree(dir: string, release?: ReleaseNumber): SkillTree | undefined {
+  return readTree(dir, [LEFTOVER, ...notPackagedIn(release)]);
 }
 
 function writeSkillFile(path: string, file: SkillFile): void {

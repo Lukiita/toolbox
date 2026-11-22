@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { scratchDirs } from '../infra/scratch-dirs.fixtures.ts';
+import { readSkillTree } from '../infra/skill-directory.mts';
 
 import type { SkillInstallReport } from './install-skills.mts';
 import { SkillCommandUsageError } from './usage-error.mts';
@@ -40,6 +41,16 @@ const LONG_AGO = new Date('2020-01-01T00:00:00Z');
 function linkAsV1(project: ScratchProject, name: string): void {
   mkdirSync(project.local('.'), { recursive: true });
   symlinkSync(`../../node_modules/@lukiita/toolbox/skills/${name}`, project.local(name), 'dir');
+}
+
+// What a 2.0.0 install wrote: the skill's hash as 2.0.0 read it, evals/ included.
+function recordAs2_0_0(project: ScratchProject, name: string): void {
+  const path = join(project.projectRoot, '.agents', 'toolbox-skills.json');
+  const manifest = JSON.parse(read(path));
+  const released = join(project.projectRoot, '..', 'releases', '2.0.0', 'skills', name);
+  // Every file of the tagged folder: no filter of today's code decides the expected record.
+  manifest.skills[name].hash = readSkillTree(released)?.hash;
+  writeFileSync(path, JSON.stringify(manifest, null, 2));
 }
 
 const IN_JAVA = SKILL_V1.replace('first rule', 'first rule, in Java');
@@ -486,6 +497,28 @@ describe('installSkills - the package moved to a new version', () => {
 
     expect(statuses(project.install('1.3.0'))['code-review']).toBe('merged');
     expect(existsSync(project.local('code-review/scripts/test_validate.py'))).toBe(false);
+  });
+
+  // A project on 2.0.0, whose package still carried evals/: the copy has them
+  // and the manifest's hash counts them. Read with today's rules, the fetched
+  // 2.0.0 original would never match that record, and an edited skill could
+  // never be merged again (found in review).
+  it('merges an edited skill recorded by 2.0.0, which packed its evals', () => {
+    const project = scratchProject(scratch());
+    project.ship('code-review', {
+      'SKILL.md': SKILL_V1,
+      'references/smells.md': 'smells v1\n',
+      'evals/evals.json': '{}\n',
+    });
+    project.install('2.0.0');
+    writeFiles(project.local('code-review'), { 'evals/evals.json': '{}\n' });
+    recordAs2_0_0(project, 'code-review');
+    writeFileSync(project.local('code-review/SKILL.md'), IN_JAVA);
+    project.ship('code-review', { 'SKILL.md': REVISED, 'references/smells.md': 'smells v1\n' });
+
+    expect(statuses(project.install('2.1.0'))['code-review']).toBe('merged');
+    expect(read(project.local('code-review/SKILL.md'))).toBe(BOTH_EDITS.join('\n'));
+    expect(existsSync(project.local('code-review/evals/evals.json'))).toBe(false);
   });
 
   it('does not merge against a release that is not the one the manifest recorded', () => {
