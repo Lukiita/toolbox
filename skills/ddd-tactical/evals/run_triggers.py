@@ -3,15 +3,19 @@
 
 Each query runs in `claude -p` inside a throwaway copy of a small TypeScript project
 (trigger-fixture.json) and the run records every skill the agent loads. The installed
-skills compete as they do in daily use, so a miss can be a neighbour winning — the
+skills compete as they do in daily use, so a miss can be a neighbour winning: the
 report prints which skill each run loaded.
 
-It measures the ddd-tactical that `claude` loads (the global install or the project's
-copy), not this folder: install the description under test first.
+What it measures: the GLOBAL install (`~/.claude/skills`), since every run starts in a
+fresh temporary folder that holds no project copy. Install the description under test
+there first. The runs also load the user's global CLAUDE.md/AGENTS.md, on purpose: the
+eval measures the skill in daily use, so a score is tied to that setup.
 
-Why the fixture, not an empty folder: a query like "the rule is scattered in the
-billing service" makes the agent look for that service first; in an empty folder it
-asks where the code is and never reaches the skill (5 of 6 false misses, 2026-11-21).
+Why the fixture, not an empty folder: a query like "the rule is scattered in the billing
+service" makes the agent look for that service first; in an empty folder it asks where
+the code is and never reaches the skill (5 of 6 false misses, 2026-11-21). It is packed
+as JSON, not as .ts files, because this folder is installed into projects, where real
+.ts files would fall into the project's tsc, lint and prettier globs.
 Why Sonnet by default: Haiku barely loads any skill, neighbours included, so it measures
 the model, not the description (same date).
 
@@ -30,6 +34,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, TypedDict
 
@@ -39,6 +44,11 @@ QUERIES_FILE = HERE / "triggers.json"
 FIXTURE_FILE = HERE / "trigger-fixture.json"
 # Writing tools are removed so no run edits the fixture; the trigger decision comes first anyway.
 DISALLOWED_TOOLS = ["Bash", "Write", "Edit", "NotebookEdit"]
+# Reaching --max-turns is an answer (the agent explored and never loaded the skill);
+# any other error result (rate limit, overload, auth) measured nothing.
+MAX_TURNS_SUBTYPE = "error_max_turns"
+
+Event = dict[str, object]
 
 
 class TriggerQuery(TypedDict):
@@ -54,31 +64,36 @@ class QueryResult(TypedDict):
     hits: int
     runs: int
     invalid: int
+    inconclusive: bool
     passed: bool
     loaded: list[list[str]]
 
 
+@dataclass(frozen=True)
+class RunSettings:
+    model: str
+    timeout: int
+
+
 def load_queries(ids: set[int]) -> list[TriggerQuery]:
-    queries: list[TriggerQuery] = json.loads(QUERIES_FILE.read_text())
-    if not ids:
-        return queries
-    unknown = ids - {q["id"] for q in queries}
+    queries: list[TriggerQuery] = json.loads(QUERIES_FILE.read_text(encoding="utf-8"))
+    unknown = ids - {query["id"] for query in queries}
     if unknown:
         sys.exit(f"unknown query ids {sorted(unknown)}, expected ids from {QUERIES_FILE.name}")
-    return [q for q in queries if q["id"] in ids]
+    return [query for query in queries if not ids or query["id"] in ids]
 
 
 def materialize_fixture(target: Path) -> None:
-    files: dict[str, str] = json.loads(FIXTURE_FILE.read_text())
+    files: dict[str, str] = json.loads(FIXTURE_FILE.read_text(encoding="utf-8"))
     for relative, content in files.items():
         path = target / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        path.write_text(content, encoding="utf-8")
 
 
-def claude_command(query: str, model: str) -> list[str]:
+def claude_command(query: str, settings: RunSettings) -> list[str]:
     return [
-        "claude", "-p", query, "--model", model,
+        "claude", "-p", query, "--model", settings.model,
         "--output-format", "stream-json", "--verbose",
         "--max-turns", "5",
         "--disallowedTools", *DISALLOWED_TOOLS,
@@ -88,91 +103,122 @@ def claude_command(query: str, model: str) -> list[str]:
     ]
 
 
-def stream_events(proc: subprocess.Popen[bytes], timeout: int) -> Iterator[dict[str, object]]:
-    """Yield each JSON event `claude -p` prints until it exits or the timeout passes."""
+def read_chunk(proc: subprocess.Popen[bytes]) -> str | None:
+    """The next piece of output: "" while none arrived yet, None once the output ended."""
+    assert proc.stdout is not None  # Popen below always sets stdout=PIPE
+    ready, _, _ = select.select([proc.stdout], [], [], 1.0)
+    if not ready:
+        return None if proc.poll() is not None else ""
+    chunk = os.read(proc.stdout.fileno(), 65536)
+    return chunk.decode("utf-8", errors="replace") if chunk else None
+
+
+def parse_event(line: str) -> Event | None:
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return None  # claude -p can print non-JSON noise; only events matter here
+    return event if isinstance(event, dict) else None
+
+
+def stream_events(proc: subprocess.Popen[bytes], timeout: int) -> Iterator[Event]:
+    """Yield each JSON event `claude -p` prints until its output ends or the timeout passes."""
     buffer = ""
     deadline = time.time() + timeout
-    while time.time() < deadline:
-        ready, _, _ = select.select([proc.stdout], [], [], 1.0)
-        if not ready:
-            if proc.poll() is not None:
-                return
-            continue
-        chunk = os.read(proc.stdout.fileno(), 65536)  # type: ignore[union-attr]
-        if not chunk:
-            return
-        buffer += chunk.decode("utf-8", errors="replace")
-        lines = buffer.split("\n")
+    while time.time() < deadline and (chunk := read_chunk(proc)) is not None:
+        lines = (buffer + chunk).split("\n")
         buffer = lines.pop()
-        for line in lines:
-            try:
-                yield json.loads(line)
-            except json.JSONDecodeError:
-                continue  # claude -p can print non-JSON noise; only events matter here
+        yield from (event for event in map(parse_event, lines) if event is not None)
 
 
-def skills_in_event(event: dict[str, object]) -> list[str]:
-    """Skills an assistant event loads: a Skill call, or a Read of some SKILL.md."""
+def skill_of_tool_call(item: object) -> str:
+    """The skill a tool call loads (a Skill call, or a Read of some SKILL.md), else ""."""
+    if not isinstance(item, dict) or item.get("type") != "tool_use":
+        return ""
+    tool_input = item.get("input") if isinstance(item.get("input"), dict) else {}
+    if item.get("name") == "Skill":
+        return str(tool_input.get("skill", ""))
+    file_path = str(tool_input.get("file_path", ""))
+    return Path(file_path).parent.name if item.get("name") == "Read" and file_path.endswith("SKILL.md") else ""
+
+
+def skills_in_event(event: Event) -> list[str]:
     message = event.get("message")
-    content = message.get("content", []) if isinstance(message, dict) else []
-    found: list[str] = []
-    for item in (c for c in content if c.get("type") == "tool_use"):
-        tool_input = item.get("input", {})
-        if item.get("name") == "Skill":
-            found.append(str(tool_input.get("skill", "")))
-        elif item.get("name") == "Read" and str(tool_input.get("file_path", "")).endswith("SKILL.md"):
-            found.append(Path(tool_input["file_path"]).parent.name)
-    return found
+    if event.get("type") != "assistant" or not isinstance(message, dict):
+        return []
+    return [skill for skill in map(skill_of_tool_call, message.get("content", [])) if skill]
 
 
-def skills_loaded(query: str, model: str, timeout: int) -> list[str] | None:
-    """Skills one run loaded, or None when the run never got a model answer (invalid).
+def run_measured_something(result_event: Event) -> bool:
+    return not result_event.get("is_error") or result_event.get("subtype") == MAX_TURNS_SUBTYPE
 
-    A run killed during `claude`'s startup (slow on WSL, ~50 s) proves nothing, so it is
-    reported apart instead of counting as a miss.
+
+def watch_run(proc: subprocess.Popen[bytes], timeout: int) -> list[str] | None:
+    """Skills the run loaded, or None when it never reached a usable answer.
+
+    A hit is final as soon as it shows up. Otherwise the run counts only once its
+    `result` event arrives and is not an API error; a run killed by the timeout (a slow
+    startup on WSL takes ~50 s) proves nothing either way.
     """
-    workdir = Path(tempfile.mkdtemp(prefix="ddd-trigger-"))
-    materialize_fixture(workdir)
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
-    proc = subprocess.Popen(claude_command(query, model), stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=workdir, env=env)
     loaded: list[str] = []
-    answered = False
+    for event in stream_events(proc, timeout):
+        loaded += skills_in_event(event)
+        if TARGET_SKILL in loaded:
+            return loaded
+        if event.get("type") == "result":
+            return loaded if run_measured_something(event) else None
+    return None
+
+
+def stop_process(proc: subprocess.Popen[bytes] | None) -> None:
+    if proc is None:
+        return
+    if proc.poll() is None:
+        proc.kill()
+    proc.wait()
+
+
+def skills_loaded(query: str, settings: RunSettings) -> list[str] | None:
+    workdir = Path(tempfile.mkdtemp(prefix="ddd-trigger-"))
+    proc: subprocess.Popen[bytes] | None = None
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     try:
-        for event in stream_events(proc, timeout):
-            answered = answered or event.get("type") in ("assistant", "result")
-            loaded += skills_in_event(event) if event.get("type") == "assistant" else []
-            if TARGET_SKILL in loaded:
-                break
+        materialize_fixture(workdir)
+        proc = subprocess.Popen(claude_command(query, settings), stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=workdir, env=env)
+        return watch_run(proc, settings.timeout)
+    except OSError as error:  # e.g. `claude` not on PATH: one invalid run, not a crashed eval
+        print(f"run could not start: {error}", file=sys.stderr)
+        return None
     finally:
-        if proc.poll() is None:
-            proc.kill()
-        proc.wait()
+        stop_process(proc)
         shutil.rmtree(workdir, ignore_errors=True)
-    return loaded if answered else None
 
 
 def summarize(query: TriggerQuery, outcomes: list[list[str] | None]) -> QueryResult:
-    valid = [o for o in outcomes if o is not None]
-    hits = sum(TARGET_SKILL in o for o in valid)
-    triggered = bool(valid) and hits / len(valid) >= 0.5
+    """Majority vote over the valid runs; a tie (or no valid run) is inconclusive, never a pass."""
+    valid = [loaded for loaded in outcomes if loaded is not None]
+    hits = sum(TARGET_SKILL in loaded for loaded in valid)
+    misses = len(valid) - hits
+    inconclusive = hits == misses
+    passed = not inconclusive and (hits > misses) == query["should_trigger"]
     return {**query, "hits": hits, "runs": len(valid), "invalid": len(outcomes) - len(valid),
-            "passed": bool(valid) and triggered == query["should_trigger"], "loaded": valid}
+            "inconclusive": inconclusive, "passed": passed, "loaded": valid}
 
 
 def print_report(results: list[QueryResult]) -> None:
-    for r in results:
-        verdict = "PASS" if r["passed"] else "FAIL"
-        expect = "yes" if r["should_trigger"] else "no "
-        print(f"[{verdict}] {r['id']:>2} {r['hits']}/{r['runs']} invalid={r['invalid']} "
-              f"expect={expect} {r['query'][:60]} | {r['loaded']}")
-    print(f"passed {sum(r['passed'] for r in results)}/{len(results)}")
+    for result in results:
+        verdict = "TIE " if result["inconclusive"] else "PASS" if result["passed"] else "FAIL"
+        expect = "yes" if result["should_trigger"] else "no "
+        print(f"[{verdict}] {result['id']:>2} {result['hits']}/{result['runs']} invalid={result['invalid']} "
+              f"expect={expect} {result['query'][:60]} | {result['loaded']}")
+    print(f"passed {sum(result['passed'] for result in results)}/{len(results)}")
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ids", default="", help="comma-separated query ids (default: all)")
-    parser.add_argument("--runs", type=int, default=3, help="runs per query")
+    parser.add_argument("--runs", type=int, default=3, help="runs per query; odd avoids ties")
     parser.add_argument("--model", default="sonnet", help="model alias for claude -p")
     parser.add_argument("--timeout", type=int, default=300, help="seconds per run, startup included")
     parser.add_argument("--workers", type=int, default=3, help="parallel runs; more slows each startup")
@@ -182,15 +228,16 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_arguments()
+    settings = RunSettings(model=args.model, timeout=args.timeout)
     queries = load_queries({int(i) for i in args.ids.split(",") if i})
-    jobs = [q for q in queries for _ in range(args.runs)]
+    jobs = [query for query in queries for _ in range(args.runs)]
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        outcomes = list(pool.map(lambda q: skills_loaded(q["query"], args.model, args.timeout), jobs))
-    results = [summarize(q, [o for j, o in zip(jobs, outcomes) if j is q]) for q in queries]
+        outcomes = list(pool.map(lambda job: skills_loaded(job["query"], settings), jobs))
+    results = [summarize(query, [o for job, o in zip(jobs, outcomes) if job is query]) for query in queries]
     print_report(results)
     if args.out:
-        Path(args.out).write_text(json.dumps(results, indent=2, ensure_ascii=False))
-    sys.exit(0 if all(r["passed"] for r in results) else 1)
+        Path(args.out).write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    sys.exit(0 if all(result["passed"] for result in results) else 1)
 
 
 if __name__ == "__main__":
