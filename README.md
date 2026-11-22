@@ -29,7 +29,7 @@ Whatever existed before becomes a `*.pre-toolbox.<timestamp>` backup next to it.
 Projects used to copy `skills/`, `hooks/` and `quality-gate/` and adapt them by hand; the copies drifted (issues #1 and #2 were fixes born in a copy). Now a project depends on the package and configures it:
 
 ```bash
-pnpm add -D github:Lukiita/toolbox#v2.0.0     # a tag is a version; no registry, no build step
+pnpm add -D github:Lukiita/toolbox#v2.0.1     # a tag is a version; no registry, no build step
 pnpm exec toolbox install                      # asks which skills this project gets, and copies them into .agents/skills/
 cp node_modules/@lukiita/toolbox/toolbox.config.example.ts toolbox.config.ts
 ```
@@ -52,7 +52,7 @@ The merge needs the original the project copied, and the project does not keep i
 
 `toolbox install --write-conflicts` writes a conflicting merge for you to settle: git's conflict markers where the text can carry them, the project's side kept for a file deleted on one side or binary. A skill that cannot be read or written is reported `failed` and the others go on; the command then exits 1. `toolbox skills` lists, offline, which skills the project edited and which are behind the package, file by file; `toolbox skills --diff` prints the diffs. An edit that is a fix, not an adaptation, comes back here as a pull request. A choice a skill leaves open goes in `.agents/skill-decisions/<skill>.md` instead of an edit (ADR-0002): an unedited skill updates with no merge and no fetch.
 
-**A repository with no `package.json`** (a Java or Python project that only wants the skills) runs the same command from a cache, and commits the result: `pnpm dlx github:Lukiita/toolbox#v2.0.0 install --all` (or the names of the skills it wants). Node is needed where the update is run, not on every clone.
+**A repository with no `package.json`** (a Java or Python project that only wants the skills) runs the same command from a cache, and commits the result: `pnpm dlx github:Lukiita/toolbox#v2.0.1 install --all` (or the names of the skills it wants). Node is needed where the update is run, not on every clone.
 
 **Migrating from 1.x**, where `install` linked the skills ([ADR-0003](docs/adr/0003-skills-vendored-with-a-manifest.md)):
 
