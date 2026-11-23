@@ -142,7 +142,7 @@ mutant to be killed; the fixtures are also a worked example of a passing artifac
 | Needs | For | Without it |
 | --- | --- | --- |
 | Python 3.8+ (standard library only) | every script | the gates do not run; the phases still apply |
-| git | `check_proofs.py` (HEAD, clean tree) | no HEAD check: say so in the report |
+| git | `check_proofs.py` (HEAD, clean tree); the Verifier's mutants (a worktree) | no HEAD check, and `None - no git: mutants need a worktree` under `## Mutants`: say so in the report |
 | Git for Windows (on Windows) | `check_proofs.py` runs proofs in its bash, because proofs are POSIX shell | proofs run in `cmd.exe` and the script warns |
 | sub-agents | the Verifier and the screens sub-agent | run their file in a new session and write `self-verified`; the gate warns |
 | a model that reads images | the screens sub-agent | hand the pictures and the captures to the user |

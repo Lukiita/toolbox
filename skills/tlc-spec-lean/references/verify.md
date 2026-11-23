@@ -28,9 +28,10 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
    sub-agent for round 2 (it is the last), writes the closing commit into each finding, and runs the gate.
    There is no second Verifier: the script shows the proofs green at the new `HEAD`, the fixed tests
    among them. A `survived` mutant, or one `not run`, is closed by running it at the fix commit with
-   "Mutants" steps 1-5 below and writing the test that goes red in its `Killed by` cell. What still
-   fails goes to the user. A survivor no test can kill, because no caller sees the fault, is one of
-   those: the user, not the builder, replaces its row with another fault on the same rule.
+   the "Mutants" procedure below and writing the test that goes red in its `Killed by` cell. What
+   still fails goes to the user. A survivor no test can kill, because no caller sees the fault, is one
+   of those: the user, not the builder, replaces its row with another fault on the same rule, and the
+   builder runs that one the same way.
 
 ## What the Verifier does
 
@@ -59,29 +60,36 @@ where a wrong decision costs most: the comparison shifted by one (`>` to `>=`), 
 flipped, the value or error code returned, a normalisation or side effect removed, the bound moved
 one unit inside (a coupon that expires one millisecond early). Pick faults a caller can see: one
 that changes nothing a caller can reach measures nothing, so drop it and pick another on the same
-rule. Mutate in a scratch, never the real tree - the isolation of tlc-spec-driven's discrimination
-sensor:
+rule. Mutate in a scratch git worktree, never the real tree - the isolation of tlc-spec-driven's
+discrimination sensor. Finish and remove your throwaway examples first.
 
-1. Record the real tree's `git status --porcelain`; it must read the same after step 5.
+1. Record the real tree outside `.specs/`, where the flow's own files and the screens sub-agent's
+   change meanwhile: `git status --porcelain -- . ':!.specs'` and
+   `git diff HEAD -- . ':!.specs' | git hash-object --stdin`.
 2. Run `mktemp -d` and write down the path it prints; every later step names that path literally,
    written here as `<scratch>` - a shell variable does not survive between tool calls, and
-   `git -C ""` acts on the real tree. `git worktree add <scratch> HEAD`; if the add fails, stop and
-   remove nothing. Without git worktrees, copy only the files you will mutate into `<scratch>`,
-   mutate the copies and point the run at them. `git stash` is never the scratch.
-3. Run the `Run` group that covers the rule against `<scratch>`, unmutated: it must pass, because a
-   red baseline makes every mutant read killed. When it cannot pass, every planned mutant reads
+   `git -C ""` acts on the real tree. `git worktree add <scratch> HEAD`; if the add fails, stop,
+   remove nothing and say so in chat. `git stash` is never the scratch. Without git there is no
+   worktree: write `None - no git: mutants need a worktree` and say so in the report.
+3. Run the `Run` group that covers the rule in `<scratch>`, unmutated, and write down its time: it
+   must pass, because a red baseline makes every mutant read killed. Then make the rule's file fail
+   to load in `<scratch>` and run the group: it must go red, or the run reads the real tree and every
+   mutant would read survived; restore the file. When either check fails, every planned mutant reads
    `not run - baseline red` and the setup is a finding, with what the scratch lacks; the builder
    makes it run and runs those mutants.
-4. One mutant at a time: change the line, run the group, note the test that went red, restore with
-   `git -C <scratch> checkout -- .` (or a fresh copy of the file) before the next. Stop a run that
-   takes three times the baseline's time: the test it hung in killed the mutant.
-5. `git worktree remove --force <scratch>` (or delete the copies), also when a run failed or hung.
-   Compare `git status --porcelain` with step 1: if it differs, stop, restore the real tree, and
-   treat the mutant runs as invalid. Then write the `## Mutants` rows.
+4. One mutant at a time: change the line, run the group, note the test that went red, then restore
+   with `git -C <scratch> checkout -- .` and stop whatever the run started before the next. Stop a
+   run that takes three times the baseline's time: the test it hung in killed the mutant - rerun the
+   group with the runner's verbose output when it does not name that test.
+5. `git worktree remove --force <scratch>`, also when a run failed or hung, and run step 1's two
+   commands again. When either differs, stop: show the user the difference and restore nothing
+   yourself - a checkout or a clean erases their work and the screens sub-agent's - and run the
+   mutants again once the user has the tree back. Then write the `## Mutants` rows.
 
-Each mutant gets a `## Mutants` row. `Killed by` is the test that went red, named as `## Checks`
-names one - `` `<file>` `<name>` `` and nothing after; a mutant no test kills reads `survived` and is
-a finding. A `|` inside a cell is written `\|`. A diff that touches no such rule writes
+Each mutant gets a `## Mutants` row. `Killed by` names the test that went red: its file, class or
+node id, then its name when apart - `` `test/x_test.rb` `test_y` ``, `` `t.py::A::test_b` ``,
+`` `TransferTest` `shouldX` `` - and nothing after; a mutant no test kills reads `survived` and is a
+finding. A `|` inside a cell is written `\|`. A diff that touches no such rule writes
 `None - <why>`.
 
 **Assertions that do not hold the value.** Across the `## Checks` rows, report the tests whose
@@ -153,7 +161,8 @@ that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
 passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (each
-row's `Killed by` a test named `` `<file>` `<name>` ``, or one `None - <why>` line). `0` the feature
+row's `Killed by` naming a test as "Mutants" says, no `|` line outside a table, or one
+`None - <why>` line). `0` the feature
 is done. A feature verified before the `## Mutants` section
 existed owes it too: `None - verified before mutants`.
 
