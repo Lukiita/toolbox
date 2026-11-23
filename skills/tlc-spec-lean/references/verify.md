@@ -27,15 +27,20 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
    the fix changed code re-saves every picture at the new `HEAD` and resumes the round-1 screens
    sub-agent for round 2 (it is the last), writes the closing commit into each finding, and runs the gate.
    There is no second Verifier: the script shows the proofs green at the new `HEAD`, the fixed tests
-   among them. What still fails goes to the user.
+   among them. A `survived` or `not run` mutant is closed by running it at the fix commit with the
+   "Mutants" procedure below and writing `killed` with the test that goes red. What still fails goes
+   to the user, who decides: a survivor no test can kill, because no caller sees the fault, gets
+   another fault on the same rule from the user, and the builder runs it; mutants the scratch cannot
+   run at all are run once the user fixes the setup, or the user writes `None - <why>` in their
+   place and owns that they did not run.
 
 ## What the Verifier does
 
 It receives `plan.md`, `checks.md`, `proofs.md`, `.specs/capabilities/` when it exists, the diff
-range and this file. It does not rerun the
-proofs; `proofs.md` already says which tests ran and passed, with the output that shows it. It
-works over the real tree and fixes nothing; its writes are `verification.md` and throwaway examples
-it does not commit.
+range and this file. It does not rerun the proofs at `HEAD`; `proofs.md` already says which tests
+ran and passed, with the output that shows it. It fixes nothing: in the real tree its writes are
+`verification.md` and throwaway examples it does not commit, and the only suites it runs are the
+mutants', in a scratch worktree it removes before it returns.
 
 **Each check's test.** For every check, open the test its proof selects - the one whose line the
 `run` proof names, or the one a lone proof's filter picks - and judge whether it would fail if the
@@ -48,6 +53,53 @@ check names: a rule on the web with no test is still a rule.
 **Own examples.** For two rules the plan states with examples, try a value neither the plan nor the
 checks name - the other side of a boundary, an empty set, a large one. Run each at `HEAD` as a
 throwaway test or a request. A rule that breaks on yours is a finding.
+
+**Mutants.** Reading a test judges it; a mutant measures it. For every rule that changes an outcome
+the diff touched - the list in [checks.md](checks.md) "The level of each proof": a boundary, a
+guard, a state transition, a dispatch, a mapping, an order - inject one to three behaviour faults
+where a wrong decision costs most: the comparison shifted by one (`>` to `>=`), the condition
+flipped, the value or error code returned, a normalisation or side effect removed, the bound moved
+one unit inside (a coupon that expires one millisecond early). Pick faults a caller can see: one
+that changes nothing a caller can reach measures nothing, so drop it and pick another on the same
+rule. Mutate in a scratch git worktree, never the real tree. Finish and remove your throwaway
+examples first.
+
+1. From the repo root (`git rev-parse --show-toplevel`), take a fingerprint of the real tree outside
+   `.specs/`, where the flow's own files and the screens sub-agent's change meanwhile; untracked files
+   count:
+
+   ```bash
+   { git status --porcelain -- . ':!.specs'
+     git diff HEAD -- . ':!.specs' | git hash-object --stdin
+     git ls-files -o --exclude-standard -- . ':!.specs' | git hash-object --stdin-paths
+   } | git hash-object --stdin
+   ```
+
+2. Run `mktemp -d` and write down the path it prints; every later step names that path literally,
+   written here as `<scratch>` - a shell variable does not survive between tool calls, and
+   `git -C ""` acts on the real tree. `git worktree add <scratch> HEAD`; `git stash` is never the
+   scratch. Without git there is no worktree: write `None - no git: mutants need a worktree` and say
+   so in the report.
+3. Run the `Run` group that covers the rule in `<scratch>`, unmutated, and write down its time: it
+   must pass, because a red baseline makes every mutant read killed. Then make the rule's file fail
+   to load in `<scratch>` and run the group: it must go red, or the run reads the real tree and every
+   mutant would read survived; restore the file.
+4. One mutant at a time: change the line, run the group, note the test that went red, then restore
+   with `git -C <scratch> checkout -- .` and stop whatever the run started before the next. Stop a
+   run that takes three times the baseline's time: the test it hung in killed the mutant - rerun the
+   group with the runner's verbose output when it does not name that test.
+5. `git worktree remove --force <scratch>`, also when a run failed or hung, and take the fingerprint
+   again. Restore nothing in the real tree yourself: a checkout or a clean erases the user's work and
+   the screens sub-agent's.
+
+When a step cannot be done - the worktree add fails (remove nothing), the baseline is red, the canary
+stays green, or the fingerprint differs - every planned mutant reads `not run`, and a finding says
+which step stopped and what it showed; the builder resolves it and runs those mutants.
+
+Each mutant gets a `## Mutants` row. `Status` is `killed`, `survived` or `not run`; a `survived`
+mutant is a finding. `Killed by` names the test that went red, in backticks and in the runner's own
+form - `` `test/x_test.rb` `test_y` ``, `` `t.py::A::test_b` ``, `` `TransferIT` `shouldX` ``. A `|`
+inside a cell is written `\|`. A diff that touches no such rule writes `None - <why>`.
 
 **Assertions that do not hold the value.** Across the `## Checks` rows, report the tests whose
 assertion is looser than the value the criterion fixes, that prove a rule on two cases out of nine,
@@ -85,18 +137,27 @@ Write `.specs/features/<feature>/verification.md`:
 | C7 | `stock-map.service.test.ts` `counts items at zero` | no - `toBeDefined()` |
 | C9 | `transfers.e2e.test.ts` `rejects a transfer to the same location` | yes |
 
+## Mutants
+
+| Rule | Mutant | Status | Killed by |
+| --- | --- | --- | --- |
+| same-location guard | `transfer.aggregate.ts:31` `from === to` -> `false` | killed | `transfers.e2e.test.ts` `rejects a transfer to the same location` |
+| Transfer in sign | `stock-map.service.ts:54` `+qty` -> `-qty` | survived | - |
+
 ## Findings
 
 | Finding | Evidence | Fix | Closed |
 | --- | --- | --- | --- |
-| Transfer in is counted as out and no test fails | C1's test asserts the count, not the sign | assert the sign of a Transfer in on its destination | |
+| Transfer in is counted as out and no test fails | C1's test asserts the count, not the sign; mutant `+qty` -> `-qty` survived | assert the sign of a Transfer in on its destination | |
 | C7 asserts the count exists, not that it is 5 | `stock-map.service.test.ts:88` - `toBeDefined()` | assert `atZero` is 5 on the capture's data | |
 ```
 
 Every check gets a `## Checks` row with the test named; the gate refuses a missing row or an empty
 `Test`. With nothing to report, write `None - <one line on what was probed>` under `## Findings` and
 `**Verdict**: PASS`. Return the findings in chat. The builder fills `Closed` with the commit that
-fixes each one and the check that now proves it; the gate refuses an empty `Closed`.
+fixes each one and the check that now proves it, and turns each `survived` or `not run` mutant to
+`killed` with the test that kills it at that commit; the gate refuses an empty `Closed` and a
+mutant left `survived` or `not run`.
 
 ## The gate
 
@@ -108,8 +169,10 @@ It reads `proofs.md` (every check and run has a passing row, written at `HEAD` o
 that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
-passed), the plan's `**Approved**:` line, and every finding closed. `0`
-the feature is done.
+passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (every
+row `killed` with its test in `Killed by`, no `|` line outside a table, or one `None - <why>` line). `0` the feature
+is done. A feature verified before the `## Mutants` section
+existed owes it too: `None - verified before mutants`.
 
 ## Distill lessons
 

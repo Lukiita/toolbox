@@ -89,10 +89,11 @@ For each finding in `verification.md`, record one lesson:
 
 | Finding | `--signal` |
 | --- | --- |
-| A check whose test passes without holding its criterion - a `no` in `## Checks`, an assertion looser than the value, a rule proven on too few cases | `weak_test` |
+| A check whose test passes without holding its criterion - a `no` in `## Checks`, an assertion looser than the value, a rule proven on too few cases, a mutant that `survived` | `weak_test` |
 | A criterion that fixed no precise outcome, so no test could hold it | `spec_precision_gap` |
 | An example of the Verifier's own that broke a rule | `ac_gap` |
 | A check or criterion that contradicts a binding capture | `spec_deviation` |
+| A step of the mutants could not be done - no worktree, a red baseline, a canary that stays green, a changed fingerprint - so they did not run | `gate_fail` |
 
 ```bash
 python3 <skill-dir>/scripts/lessons.py add \

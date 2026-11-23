@@ -45,8 +45,9 @@ These hold even if no reference file is read. Each one lives here; the reference
    and passing at `HEAD`, the build, the pictures, the walk - and the Verifier spends its time on
    judgement: it opens the test each check's proof selects and says whether that test would fail
    if the claim were false, then tries examples nobody named and assertions looser than their
-   criterion. The work is done when every finding is closed by a commit and `proofs.md` is green
-   at `HEAD`.
+   criterion, and mutates every rule that changes an outcome the diff touched, in a scratch
+   worktree: a mutant no test kills is a finding. The work is done when every finding is closed by
+   a commit, every mutant is killed by a named test, and `proofs.md` is green at `HEAD`.
 6. A proof is the project's own test command; the skill knows no test runner. Tests that run
    together go on one `Run <name>: <command>` line, run once, and each check that reads it writes
    `Proof: run <name> | <the line the run prints when its test passes>`, pass marker included, so
@@ -81,7 +82,7 @@ These hold even if no reference file is read. Each one lives here; the reference
 | Part | Runs | Cannot catch |
 | --- | --- | --- |
 | `check_proofs.py` (always) | every `Run` group and lone proof once at `HEAD`, one at a time, each check's line found in its run's output, the build, pictures and walk checked | a test that passes for the wrong reason |
-| The Verifier (always) | each check's test read against its criterion, two examples nobody named, assertions looser than their criterion, checks that contradict a binding capture ([verify.md](references/verify.md)) | a wrong rule whose test reads as right |
+| The Verifier (always) | each check's test read against its criterion, two examples nobody named, assertions looser than their criterion, one to three mutants per rule the diff touched, checks that contradict a binding capture ([verify.md](references/verify.md)) | a wrong rule whose test reads as right and that no mutant reaches |
 | The screens sub-agent (a criterion cites a capture) | an inventory of each capture against the author's picture, every row `same` or `differs`, at a named `HEAD` ([verify-screens.md](references/verify-screens.md)) | spacing, colour and type weight; detail smaller than a screenshot shows; screens no capture draws |
 
 ## Artifacts
@@ -141,7 +142,7 @@ mutant to be killed; the fixtures are also a worked example of a passing artifac
 | Needs | For | Without it |
 | --- | --- | --- |
 | Python 3.8+ (standard library only) | every script | the gates do not run; the phases still apply |
-| git | `check_proofs.py` (HEAD, clean tree) | no HEAD check: say so in the report |
+| git | `check_proofs.py` (HEAD, clean tree); the Verifier's mutants (a worktree) | no HEAD check, and `None - no git: mutants need a worktree` under `## Mutants`: say so in the report |
 | Git for Windows (on Windows) | `check_proofs.py` runs proofs in its bash, because proofs are POSIX shell | proofs run in `cmd.exe` and the script warns |
 | sub-agents | the Verifier and the screens sub-agent | run their file in a new session and write `self-verified`; the gate warns |
 | a model that reads images | the screens sub-agent | hand the pictures and the captures to the user |
