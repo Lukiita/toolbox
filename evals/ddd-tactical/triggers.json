@@ -98,5 +98,65 @@
     "id": 20,
     "should_trigger": false,
     "query": "configura o husky com lint-staged nesse repo"
+  },
+  {
+    "id": 21,
+    "should_trigger": true,
+    "fixture": "java",
+    "query": "cria o value object Money como record Java, com centavos em long"
+  },
+  {
+    "id": 22,
+    "should_trigger": true,
+    "fixture": "java",
+    "query": "modela o agregado Assinatura no Spring Boot: assinatura cancelada não renova"
+  },
+  {
+    "id": 23,
+    "should_trigger": true,
+    "fixture": "java",
+    "query": "no RenovarAssinaturaService eu lanço RuntimeException quando não acho a assinatura, qual exceção devia ser?"
+  },
+  {
+    "id": 24,
+    "should_trigger": true,
+    "fixture": "java",
+    "query": "adiciona um id tipado OrganizacaoId em Java pra não trocar com o UUID do Usuario"
+  },
+  {
+    "id": 25,
+    "should_trigger": true,
+    "fixture": "java",
+    "query": "cria o repositório da Assinatura com Spring Data JDBC"
+  },
+  {
+    "id": 26,
+    "should_trigger": true,
+    "fixture": "java",
+    "query": "o Pedido é só getter e setter e o PedidoService faz tudo, refatora pra um modelo rico"
+  },
+  {
+    "id": 27,
+    "should_trigger": false,
+    "fixture": "java",
+    "query": "configura o Flyway com a primeira migration do Postgres"
+  },
+  {
+    "id": 28,
+    "should_trigger": false,
+    "fixture": "java",
+    "query": "escreve um teste de integração com Testcontainers pro PostgreSQL"
+  },
+  {
+    "id": 29,
+    "should_trigger": false,
+    "fixture": "java",
+    "query": "configura o Checkstyle e o Spotless no pom"
+  },
+  {
+    "id": 30,
+    "should_trigger": false,
+    "fixture": "java",
+    "query": "a query de listagem de pedidos no PedidoService tá lenta, por quê?"
   }
 ]

@@ -8,3 +8,5 @@ node_modules/
 coverage-quality/
 # Claude Code writes its synced skill buckets into ~/.claude/skills, which is a link into skills/
 skills/synced/
+# Trigger-eval transcripts (run_triggers.py --transcripts) quote the agent's text and local paths
+runs/
