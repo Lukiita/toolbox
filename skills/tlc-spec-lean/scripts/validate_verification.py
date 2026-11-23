@@ -15,8 +15,9 @@ What it checks:
   ERROR  - no `## Checks` table in verification.md, a check with no row in it, or a row with no test
   ERROR  - no `## Findings` section in verification.md, or a finding with no commit in `Closed`
   ERROR  - no `## Mutants` section in verification.md (a table, or `None - <why>`), a mutant whose
-           `Killed by` is not the test that went red as `## Checks` names one (`<file>` `<name>`), or
-           a mutant row with more cells than its header (a `|` inside a cell is written `\|`)
+           `Killed by` does not name a test (a test file, class or node id, then its name if apart),
+           a mutant row with more cells than its header (a `|` inside a cell is written `\|`), or a
+           `|` line outside a table
   ERROR  - pictures owed (a criterion cites a capture, or a check is proven in the browser) and no
            screens.md, a row in it that does not read `matches`, a cited capture with no
            `<capture>.running.png`, or a picture at another size than its capture (1x, 2x, 3x pass)
@@ -298,11 +299,14 @@ def _browser_shots(fdir, name, running):
     return errors
 
 
-# Local patch (toolbox UPSTREAM.md item 7): what settles a mutant. `Killed by` is the test that went
-# red, named as `## Checks` names one - `<file>` `<name>`, the file with its extension (and line), and
-# nothing after. The form is the rule, not a list of refused words: a status in code font (`not run`,
-# `survived - why`) has no file and fails. Without a table the section is one `None - <why>` line.
-KILLED_BY_TEST_RE = re.compile(r"^`[^`\s]+\.[A-Za-z0-9]+(?::\d+)?`\s+`[^`]*\w[^`]*`$")
+# Local patch (toolbox UPSTREAM.md item 7): what settles a mutant. `Killed by` names the test that went
+# red: a first code span that locates a test - its file, class or node id, no spaces, "test" or "spec" in
+# it (`t.py::A::test_b`, `login.spec.ts:12:5`, `TransferTest`, `x_test.go`) - then, when the name is
+# apart, a second span with it that is not a status word; nothing after. The gate checks this form, not
+# that the test went red: a status word, a source file or a report in its place fails.
+TEST_LOCATOR = r"`[^`\s]*(?i:test|spec)[^`\s]*`"
+STATUS_WORD = r"(?i:survived|not run|equivalent|killed|none|pending|skipped|todo|n/?a)\b"
+KILLED_BY_TEST_RE = re.compile(rf"^{TEST_LOCATOR}(?:\s+`(?!\s*{STATUS_WORD})[^`]*\w[^`]*`)?$")
 NONE_WITH_REASON_RE = re.compile(r"^[*_\s]*none[*_\s]*[-–—:]\s*\S", re.IGNORECASE)
 CHECK_ID_RE = re.compile(r"^\**\s*(C\d+)\s*\**\s*[-–—:]")
 SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
@@ -399,15 +403,39 @@ def _mutants_settled(lines, name):
     passed three tests that a one-millisecond, a removed-trim and a swapped-code mutant all
     survived."""
     section = _section(lines, "Mutants")
-    tables = find_tables(section)  # blank lines kept: they are what keeps two tables apart
-    if not tables and not any(NONE_WITH_REASON_RE.match(ln) for ln in section if ln):
+    blocks = _pipe_blocks(section)
+    if not blocks and not any(NONE_WITH_REASON_RE.match(ln) for ln in section if ln):
         return [f"{name}: verification.md has no `## Mutants` section - mutate each rule that changes an outcome "
                 f"the diff touched and write a row per mutant, or `None - <why>` when the diff touches none "
                 f"(`None - verified before mutants` for a feature verified before this gate)"]
     errors = []
-    for header, rows in tables:
-        errors += _mutant_rows_settled(header, rows, name)
+    for block in blocks:
+        errors += _mutant_block_settled(block, name)
     return errors
+
+
+def _pipe_blocks(lines):
+    """Runs of consecutive `|` lines; a blank or any other line ends a run - as GFM reads tables."""
+    blocks, run = [], []
+    for ln in lines + [""]:
+        if ln.strip().startswith("|"):
+            run.append(ln.strip())
+        elif run:
+            blocks, run = blocks + [run], []
+    return blocks
+
+
+def _mutant_block_settled(block, name):
+    """A block is a table only when its second line is the separator; any other `|` line is a mutant row no
+    table reads, which the gate must not skip."""
+    if len(block) < 2 or not is_separator(block[1]):
+        return [f"{name}: `## Mutants` line '{ln[:50]}' is outside a table - every mutant row sits under the "
+                f"`Mutant` / `Killed by` header" for ln in block]
+    header = [c.lower() for c in split_row(block[0])]
+    rows = [split_row(r) for r in block[2:] if not is_separator(r)]
+    if not rows:
+        return [f"{name}: verification.md `## Mutants` table has no rows - write a row per mutant, or `None - <why>`"]
+    return _mutant_rows_settled(header, rows, name)
 
 
 def _mutant_rows_settled(header, rows, name):
@@ -423,13 +451,13 @@ def _mutant_rows_settled(header, rows, name):
                           f"write a `|` inside a cell as `\\|`")
         elif not _killed_by_settles(cell):
             errors.append(f"{name}: mutant '{label}' reads '{cell or 'empty'}' and no test kills it - `Killed by` "
-                          f"is the test that went red, `<file>` `<name>` as in `## Checks`; run a survivor, or a "
-                          f"mutant not run, at the fix commit and write the test that goes red")
+                          f"names the test that went red - its file, class or node id, then its name if apart; run a "
+                          f"survivor, or a mutant not run, at the fix commit and write the test that goes red")
     return errors
 
 
 def _killed_by_settles(cell):
-    """True for `<file>` `<name>` and nothing else; bold and italics aside."""
+    """True for a test named in the form KILLED_BY_TEST_RE describes; bold and italics aside."""
     return bool(KILLED_BY_TEST_RE.match(cell.strip().strip("*_ ")))
 
 

@@ -232,6 +232,18 @@ CASES = [
     ("validate_verification", "verification.md", "a test named and then marked survived",
      killed_by("`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` - survived"),
      1, "no test kills it"),
+    ("validate_verification", "verification.md", "a status word where the test name goes",
+     killed_by("`test/billing/transitions_test.rb` `survived`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a mutant not run, written after a test file",
+     killed_by("`test/billing/transitions_test.rb` `not run - baseline red`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "the mutated source line where the test goes",
+     killed_by("`app/billing/transitions.rb:14` `guard removed`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a report file where the test goes",
+     killed_by("`proofs.md` `n/a`"), 1, "no test kills it"),
+    # A row no table reads - after a blank line, with no header of its own - is still a mutant.
+    ("validate_verification", "verification.md", "a survived row after a blank line",
+     lambda s: s.replace("\n\n## Findings", "\n\n| sign | `app/billing/dunning.rb:30` `+q` -> `-q` | survived |"
+                         "\n\n## Findings", 1), 1, "outside a table"),
     # An unescaped `|` in the Mutant cell shifts the columns: `Killed by` would be read off the mutant.
     ("validate_verification", "verification.md", "a survivor whose mutant holds an unescaped pipe",
      lambda s: s.replace("`app/billing/transitions.rb:14` guard removed | `test/billing/transitions_test.rb` "
@@ -534,6 +546,14 @@ NEGATIVE_CONTROLS = [
                                              "`app/billing/transitions.rb:14` `a \\|\\| b` -> `a && b`", 1)}),
     ("validate_verification", "a test name in bold backticks kills the mutant",
      {"verification.md": killed_by("**`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected`**")}),
+    ("validate_verification", "a pytest node id kills the mutant",
+     {"verification.md": killed_by("`tests/billing/test_transitions.py::TestSuspended::test_trialing_is_rejected`")}),
+    ("validate_verification", "a Playwright file, line and column with the test title kills the mutant",
+     {"verification.md": killed_by("`e2e/billing.spec.ts:12:5` `rejects trialing after suspension`")}),
+    ("validate_verification", "a JUnit class and method kill the mutant",
+     {"verification.md": killed_by("`TransitionsTest` `suspendedToTrialingIsRejected`")}),
+    ("validate_verification", "a Go test file and function kill the mutant",
+     {"verification.md": killed_by("`billing/transitions_test.go` `TestSuspendedToTrialingIsRejected`")}),
     ("validate_verification", "a test file with its line kills the mutant",
      {"verification.md": killed_by("`test/billing/transitions_test.rb:14` `test_suspended_to_trialing_is_rejected`")}),
     ("validate_verification", "two mutant tables apart are read as two tables",
