@@ -40,12 +40,14 @@ def shipped(script):
 
 
 # Local patch (toolbox UPSTREAM.md item 7): the fixture's `## Mutants` section, rewritten per case.
-SECOND_MUTANT_KILLED_BY = "| `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |\n| unknown"
+SECOND_MUTANT = ("| suspended blocks trialing | `app/billing/transitions.rb:14` guard removed | killed | "
+                 "`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |")
 
 
-def killed_by(cell):
-    """The fixture with its second mutant's `Killed by` cell replaced by `cell`."""
-    return lambda s: s.replace(SECOND_MUTANT_KILLED_BY, f"| {cell} |\n| unknown", 1)
+def second_mutant(status, killed_by):
+    """The fixture with its second mutant's `Status` and `Killed by` cells replaced."""
+    row = f"| suspended blocks trialing | `app/billing/transitions.rb:14` guard removed | {status} | {killed_by} |"
+    return lambda s: s.replace(SECOND_MUTANT, row, 1)
 
 
 def mutants_section(body):
@@ -192,67 +194,47 @@ CASES = [
                          "**Open questions:** what happens on a chargeback?"),
      0, "do not read as resolved"),
 
-    # Local patch (toolbox UPSTREAM.md item 7): the Verifier mutates the rules the diff touched.
+    # Local patch (toolbox UPSTREAM.md item 7): the Verifier mutates the rules the diff touched. A mutant's state is
+    # its own column - killed, survived or not run - so the gate reads it instead of guessing it from free text.
     ("validate_verification", "verification.md", "a report with no Mutants section",
      lambda s: re.sub(r"## Mutants\n.*?\n## Findings", "## Findings", s, flags=re.S),
      1, "no `## Mutants` section"),
     ("validate_verification", "verification.md", "a mutant left survived",
-     lambda s: s.replace("| `test/billing/dunning_test.rb` `test_failed_charge_suspends` |\n| suspended", "| survived |\n| suspended", 1),
-     1, "no test kills it"),
-    ("validate_verification", "verification.md", "a mutant with no test in Killed by",
-     killed_by("-"), 1, "no test kills it"),
-    # Every mutant is killed by a test: a fault no caller can see is dropped for another, never written down.
-    ("validate_verification", "verification.md", "an equivalent mutant",
-     killed_by("equivalent"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "an equivalent mutant with its reason",
-     killed_by("equivalent - the state machine refuses the transition again before saving"), 1, "no test kills it"),
-    # A red baseline in the fresh worktree is a finding, and its mutants stay open until they run.
-    ("validate_verification", "verification.md", "a mutant not run because the baseline was red",
-     killed_by("not run - baseline red"), 1, "no test kills it"),
-    # A survivor dressed as markdown, or a word where the test should be, is still a survivor.
-    ("validate_verification", "verification.md", "a survived mutant in backticks",
-     killed_by("`survived`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a survived mutant in bold",
-     killed_by("**survived**"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a mutant marked killed with no test named",
-     killed_by("killed"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a survivor that names a test after the word",
-     killed_by("survived - `test/billing/transitions_test.rb` is too weak"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a status word in backticks where the test goes",
-     killed_by("`n/a`"), 1, "no test kills it"),
-    # A test is named as `## Checks` names it - `<file>` `<name>`, nothing after - so a status in code font fails.
-    ("validate_verification", "verification.md", "a mutant not run, in code font as verify.md prints it",
-     killed_by("`not run - baseline red`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a survivor with its reason in code font",
-     killed_by("`survived - asserts the count, not the sign`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "an equivalent claim in code font",
-     killed_by("`equivalent - no caller sees it`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "an empty code span where the test goes",
-     killed_by("` `"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a test named and then marked survived",
-     killed_by("`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` - survived"),
-     1, "no test kills it"),
-    ("validate_verification", "verification.md", "a status word where the test name goes",
-     killed_by("`test/billing/transitions_test.rb` `survived`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a mutant not run, written after a test file",
-     killed_by("`test/billing/transitions_test.rb` `not run - baseline red`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "the mutated source line where the test goes",
-     killed_by("`app/billing/transitions.rb:14` `guard removed`"), 1, "no test kills it"),
-    ("validate_verification", "verification.md", "a report file where the test goes",
-     killed_by("`proofs.md` `n/a`"), 1, "no test kills it"),
-    # A class named without test or spec (Maven Failsafe's `*IT`) is written with its path; the error says so.
-    ("validate_verification", "verification.md", "a Failsafe IT class named without its path",
-     killed_by("`TransitionsIT` `suspendedToTrialingIsRejected`"), 1, "write its path"),
-    # A row no table reads - after a blank line, with no header of its own - is still a mutant.
+     second_mutant("survived", "-"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a mutant not run",
+     second_mutant("not run", "-"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a survived status in bold is still survived",
+     second_mutant("**survived**", "-"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a status outside the three words",
+     second_mutant("equivalent", "-"), 1, "write killed, survived or not run"),
+    ("validate_verification", "verification.md", "an empty status",
+     second_mutant("", "`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected`"), 1, "write killed, survived or not run"),
+    ("validate_verification", "verification.md", "a killed mutant with no test in Killed by",
+     second_mutant("killed", "-"), 1, "names no test"),
+    ("validate_verification", "verification.md", "a killed mutant whose test is not in a code span",
+     second_mutant("killed", "the transitions test"), 1, "names no test"),
+    ("validate_verification", "verification.md", "a three-column table from before the Status column",
+     lambda s: s.replace("| Rule | Mutant | Status | Killed by |\n| --- | --- | --- | --- |",
+                         "| Rule | Mutant | Killed by |\n| --- | --- | --- |", 1),
+     1, "needs `Mutant`, `Status` and `Killed by` columns"),
+    # An unescaped `|` in the Mutant cell shifts the columns.
+    ("validate_verification", "verification.md", "a mutant holding an unescaped pipe",
+     lambda s: s.replace("guard removed | killed |", "`a | b` -> `a & b` | killed |", 1), 1, "\\|"),
+    # Every `|` line under the section is read: a GFM table, or an error - never skipped.
     ("validate_verification", "verification.md", "a survived row after a blank line",
-     lambda s: s.replace("\n\n## Findings", "\n\n| sign | `app/billing/dunning.rb:30` `+q` -> `-q` | survived |"
+     lambda s: s.replace("\n\n## Findings", "\n\n| sign | `app/billing/dunning.rb:30` `+q` -> `-q` | survived | - |"
                          "\n\n## Findings", 1), 1, "outside a table"),
-    # An unescaped `|` in the Mutant cell shifts the columns: `Killed by` would be read off the mutant.
-    ("validate_verification", "verification.md", "a survivor whose mutant holds an unescaped pipe",
-     lambda s: s.replace("`app/billing/transitions.rb:14` guard removed | `test/billing/transitions_test.rb` "
-                         "`test_suspended_to_trialing_is_rejected` |",
-                         "`app/billing/transitions.rb:14` `a | b` -> `a & b` | survived |", 1),
-     1, "\\|"),
+    ("validate_verification", "verification.md", "a header with no separator line",
+     mutants_section("| Rule | Mutant | Status | Killed by |\n| r | `x.rb:3` `>` -> `>=` | survived | - |"),
+     1, "outside a table"),
+    ("validate_verification", "verification.md", "a table with no rows",
+     mutants_section("| Rule | Mutant | Status | Killed by |\n| --- | --- | --- | --- |"), 1, "no rows"),
+    ("validate_verification", "verification.md", "a survived row with no leading pipe under the table",
+     lambda s: s.replace("\n\n## Findings", "\nsign | `app/billing/dunning.rb:30` `+q` -> `-q` | survived | - |"
+                         "\n\n## Findings", 1), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a table with no leading pipes beside a None line",
+     mutants_section("None - nothing to mutate\n\nRule | Mutant | Status | Killed by\n--- | --- | --- | ---\n"
+                     "sign | `x.rb:3` `+q` -> `-q` | survived | -"), 1, "no test kills it"),
     ("validate_verification", "verification.md", "a bare None under Mutants",
      mutants_section("None"), 1, "no `## Mutants` section"),
     ("validate_verification", "verification.md", "a line that only starts with none",
@@ -539,32 +521,26 @@ NEGATIVE_CONTROLS = [
       RUNNING: lambda s: png(1024, 839)}),
     ("validate_verification", "a screen no capture draws owes no picture and no screens.md",
      {"plan.md": with_screen}),
-    # Local patch (toolbox UPSTREAM.md item 7): what the mutants gate must accept.
+    # Local patch (toolbox UPSTREAM.md item 7): what the mutants gate must accept - any runner's test name.
     ("validate_verification", "a diff with no rule to mutate writes None under Mutants",
      {"verification.md": mutants_section("None - the diff only renames a log field")}),
     ("validate_verification", "a feature verified before mutants owes only the legacy None line",
      {"verification.md": mutants_section("None - verified before mutants")}),
     ("validate_verification", "a killed mutant whose cell holds an escaped pipe is read in its columns",
-     {"verification.md": lambda s: s.replace("`app/billing/transitions.rb:14` guard removed",
-                                             "`app/billing/transitions.rb:14` `a \\|\\| b` -> `a && b`", 1)}),
-    ("validate_verification", "a test name in bold backticks kills the mutant",
-     {"verification.md": killed_by("**`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected`**")}),
+     {"verification.md": lambda s: s.replace("guard removed | killed |", "`a \\|\\| b` -> `a && b` | killed |", 1)}),
+    ("validate_verification", "a status in another case and in bold is read",
+     {"verification.md": second_mutant(
+         "**Killed**", "`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected`")}),
+    ("validate_verification", "a Java Failsafe IT class kills the mutant by its name",
+     {"verification.md": second_mutant("killed", "`TransitionsIT` `suspendedToTrialingIsRejected`")}),
     ("validate_verification", "a pytest node id kills the mutant",
-     {"verification.md": killed_by("`tests/billing/test_transitions.py::TestSuspended::test_trialing_is_rejected`")}),
-    ("validate_verification", "a Playwright file, line and column with the test title kills the mutant",
-     {"verification.md": killed_by("`e2e/billing.spec.ts:12:5` `rejects trialing after suspension`")}),
-    ("validate_verification", "a JUnit class and method kill the mutant",
-     {"verification.md": killed_by("`TransitionsTest` `suspendedToTrialingIsRejected`")}),
-    ("validate_verification", "a Failsafe IT class named by its path kills the mutant",
-     {"verification.md": killed_by("`src/test/java/com/loja/billing/TransitionsIT.java` `suspendedToTrialingIsRejected`")}),
-    ("validate_verification", "a Go test file and function kill the mutant",
-     {"verification.md": killed_by("`billing/transitions_test.go` `TestSuspendedToTrialingIsRejected`")}),
-    ("validate_verification", "a test file with its line kills the mutant",
-     {"verification.md": killed_by("`test/billing/transitions_test.rb:14` `test_suspended_to_trialing_is_rejected`")}),
+     {"verification.md": second_mutant("killed", "`tests/billing/test_transitions.py::TestSuspended::test_trialing`")}),
+    ("validate_verification", "a Cypress spec and a title that opens with pending kill the mutant",
+     {"verification.md": second_mutant("killed", "`cypress/e2e/billing.cy.ts` `pending charge is retried`")}),
     ("validate_verification", "two mutant tables apart are read as two tables",
      {"verification.md": lambda s: s.replace(
          "| unknown status recorded |",
-         "\n| Rule | Mutant | Killed by |\n| --- | --- | --- |\n| unknown status recorded |", 1)}),
+         "\n| Rule | Mutant | Status | Killed by |\n| --- | --- | --- | --- |\n| unknown status recorded |", 1)}),
     ("validate_verification", "proofs.md green and no finding is accepted",
      {"verification.md": lambda s: s.split("## Findings")[0] + "## Findings\n\nNone - every rule probed held\n"}),
     ("validate_verification", "a browser proof whose screenshot exists is accepted",
