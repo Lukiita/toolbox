@@ -42,6 +42,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import select
 import shutil
 import subprocess
@@ -311,16 +312,30 @@ def summarize(query: TriggerQuery, traces: list[RunTrace]) -> QueryResult:
             "inconclusive": inconclusive, "passed": passed, "loaded": valid}
 
 
-def save_transcripts(folder: Path, jobs: list[RunJob], traces: list[RunTrace]) -> None:
-    """One JSON per run, q<id>-run<n>.json; a folder reused by a later eval is overwritten, not mixed."""
+# The names transcript_name() writes; the cleanup removes these and nothing else in the folder.
+TRANSCRIPT_NAME = re.compile(r"q\d+-run\d+\.json")
+
+
+def transcript_name(job: RunJob) -> str:
+    return f"q{job.query['id']:02d}-run{job.run}.json"
+
+
+def prepare_transcripts(folder: Path) -> None:
+    """Make the folder ready before any paid run: a bad path fails here, not after the
+    runs, and an earlier eval's transcripts are cleared so a reused folder never mixes two."""
     folder.mkdir(parents=True, exist_ok=True)
-    for stale in folder.glob("q*-run*.json"):
-        stale.unlink()
+    for stale in folder.iterdir():
+        if TRANSCRIPT_NAME.fullmatch(stale.name):
+            stale.unlink()
+
+
+def save_transcripts(folder: Path, jobs: list[RunJob], traces: list[RunTrace]) -> None:
+    """One JSON per run, into a folder prepare_transcripts() made ready."""
     for job, trace in zip(jobs, traces):
         transcript = {"id": job.query["id"], "fixture": fixture_of(job.query), "query": job.query["query"],
                       "run": job.run, **asdict(trace)}
-        path = folder / f"q{job.query['id']:02d}-run{job.run}.json"
-        path.write_text(json.dumps(transcript, indent=2, ensure_ascii=False), encoding="utf-8")
+        text = json.dumps(transcript, indent=2, ensure_ascii=False)
+        (folder / transcript_name(job)).write_text(text, encoding="utf-8")
 
 
 def print_report(results: list[QueryResult]) -> None:
@@ -348,15 +363,18 @@ def main() -> None:
     args = parse_arguments()
     settings = RunSettings(model=args.model, timeout=args.timeout)
     queries = load_queries({int(i) for i in args.ids.split(",") if i})
+    transcripts = Path(args.transcripts) if args.transcripts else None
+    if transcripts:
+        prepare_transcripts(transcripts)
     jobs = [RunJob(query, run) for query in queries for run in range(1, args.runs + 1)]
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         traces = list(pool.map(lambda job: run_query(job.query, settings), jobs))
     results = [summarize(query, [trace for job, trace in zip(jobs, traces) if job.query is query]) for query in queries]
     print_report(results)
-    if args.transcripts:
-        save_transcripts(Path(args.transcripts), jobs, traces)
-    if args.out:
+    if args.out:  # before the transcripts: the paid result is written first
         Path(args.out).write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    if transcripts:
+        save_transcripts(transcripts, jobs, traces)
     sys.exit(0 if all(result["passed"] for result in results) else 1)
 
 
