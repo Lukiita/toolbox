@@ -27,9 +27,10 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
    the fix changed code re-saves every picture at the new `HEAD` and resumes the round-1 screens
    sub-agent for round 2 (it is the last), writes the closing commit into each finding, and runs the gate.
    There is no second Verifier: the script shows the proofs green at the new `HEAD`, the fixed tests
-   among them. A `survived` mutant, or one `not run`, is closed by running it, the same way, at the
-   fix commit and writing the test that goes red in its `Killed by` cell. What still fails goes to the
-   user.
+   among them. A `survived` mutant, or one `not run`, is closed by running it at the fix commit with
+   "Mutants" steps 1-4 below and writing the test that goes red in its `Killed by` cell. What still
+   fails goes to the user. A survivor no test can kill, because no caller sees the fault, is one of
+   those: the user, not the builder, replaces its row with another fault on the same rule.
 
 ## What the Verifier does
 
@@ -60,21 +61,26 @@ one unit inside (a coupon that expires one millisecond early). Pick faults a cal
 that changes nothing a caller can reach measures nothing, so drop it and pick another on the same
 rule. Mutate in a scratch git worktree, never the real tree:
 
-1. `tmp=$(mktemp -d)` and `git worktree add "$tmp" HEAD`. If the add fails, stop: remove only a
-   path this step created.
+1. Run `mktemp -d` and write down the path it prints; every later step names that path literally,
+   written here as `<scratch>`. A shell variable does not survive between tool calls, and `git -C ""`
+   acts on the real tree. `git worktree add <scratch> HEAD`; if the add fails, stop and remove
+   nothing.
 2. Make it runnable the way a fresh clone is - the project's install command, the ignored config
    its docs name - and run the `Run` group that covers the rule, unmutated: it must pass. A red
    baseline makes every mutant read killed. When it cannot pass, write each planned mutant's row
    with `Killed by` reading `not run - baseline red`, and a finding: the `Run` group does not pass
    in a fresh worktree, with what it lacks. The builder makes the setup work and runs those mutants.
-3. One mutant at a time: change the line, run the group, write the row, restore with
-   `git -C "$tmp" checkout -- .` before the next.
-4. `git worktree remove --force "$tmp"` at the end, also when a run failed or hung. The real tree's
-   `git status --porcelain` is the same before and after, and `git stash` is never the scratch.
+3. One mutant at a time: change the line under `<scratch>`, run the group, write the row, restore
+   with `git -C <scratch> checkout -- .` before the next. Stop a run that takes three times the
+   baseline's time: the test it hung in killed the mutant.
+4. `git worktree remove --force <scratch>` at the end, also when a run failed or hung. In the real
+   tree `git status --porcelain` shows nothing new but `verification.md` and the throwaway examples,
+   and `git stash` is never the scratch.
 
-Each mutant gets a `## Mutants` row. `Killed by` opens with the test that went red, in backticks as
-`## Checks` names it; a mutant no test kills reads `survived` and is a finding. A `|` inside a cell
-is written `\|`. A diff that touches no such rule writes `None - <why>`.
+Each mutant gets a `## Mutants` row. `Killed by` is the test that went red, named as `## Checks`
+names one - `` `<file>` `<name>` `` and nothing after; a mutant no test kills reads `survived` and is
+a finding. A `|` inside a cell is written `\|`. A diff that touches no such rule writes
+`None - <why>`.
 
 **Assertions that do not hold the value.** Across the `## Checks` rows, report the tests whose
 assertion is looser than the value the criterion fixes, that prove a rule on two cases out of nine,
@@ -145,7 +151,7 @@ that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
 passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (each
-row's `Killed by` opening with a test in backticks, or one `None - <why>` line). `0` the feature
+row's `Killed by` a test named `` `<file>` `<name>` ``, or one `None - <why>` line). `0` the feature
 is done. A feature verified before the `## Mutants` section
 existed owes it too: `None - verified before mutants`.
 

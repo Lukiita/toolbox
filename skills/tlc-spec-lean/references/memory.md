@@ -93,6 +93,7 @@ For each finding in `verification.md`, record one lesson:
 | A criterion that fixed no precise outcome, so no test could hold it | `spec_precision_gap` |
 | An example of the Verifier's own that broke a rule | `ac_gap` |
 | A check or criterion that contradicts a binding capture | `spec_deviation` |
+| The `Run` group does not pass in a fresh worktree, so the mutants could not run | `gate_fail` |
 
 ```bash
 python3 <skill-dir>/scripts/lessons.py add \
