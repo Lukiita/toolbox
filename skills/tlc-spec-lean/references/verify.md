@@ -33,10 +33,10 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
 ## What the Verifier does
 
 It receives `plan.md`, `checks.md`, `proofs.md`, `.specs/capabilities/` when it exists, the diff
-range and this file. It does not rerun the
-proofs; `proofs.md` already says which tests ran and passed, with the output that shows it. It
-works over the real tree and fixes nothing; its writes are `verification.md` and throwaway examples
-it does not commit.
+range and this file. It does not rerun the proofs at `HEAD`; `proofs.md` already says which tests
+ran and passed, with the output that shows it. It fixes nothing: in the real tree its writes are
+`verification.md` and throwaway examples it does not commit, and the only suites it runs are the
+mutants', in a scratch worktree it removes before it returns.
 
 **Each check's test.** For every check, open the test its proof selects - the one whose line the
 `run` proof names, or the one a lone proof's filter picks - and judge whether it would fail if the
@@ -55,13 +55,24 @@ the diff touched - the list in [checks.md](checks.md) "The level of each proof":
 guard, a state transition, a dispatch, a mapping, an order - inject one to three behaviour faults
 where a wrong decision costs most: the comparison shifted by one (`>` to `>=`), the condition
 flipped, the value or error code returned, a normalisation or side effect removed, the bound moved
-one unit inside (a coupon that expires one millisecond early). Mutate in a scratch git worktree
-outside the project (`git worktree add <tmp> HEAD`), run the `Run` group that covers the rule
-there, then `git worktree remove --force <tmp>`; the real tree's `git status --porcelain` is the same
-before and after, and `git stash` is never the scratch. Each mutant gets a `## Mutants` row: `Killed
-by` names the test that went red; a mutant no test kills reads `survived` and is a finding; one that
-changes no behaviour a caller can reach reads `equivalent - <why>`. A diff that touches no such rule
-writes `None - <why>`.
+one unit inside (a coupon that expires one millisecond early). Mutate in a scratch git worktree,
+never the real tree:
+
+1. `tmp=$(mktemp -d)` and `git worktree add "$tmp" HEAD`. If the add fails, stop: remove only a
+   path this step created.
+2. Make it runnable the way a fresh clone is - the project's install command, the ignored config
+   its docs name - and run the `Run` group that covers the rule, unmutated: it must pass. A red
+   baseline makes every mutant read killed; when it cannot pass, write `None - the Run group does
+   not pass in a fresh worktree: <why>` and say so in chat.
+3. One mutant at a time: change the line, run the group, write the row, restore with
+   `git -C "$tmp" checkout -- .` before the next.
+4. `git worktree remove --force "$tmp"` at the end, also when a run failed or hung. The real tree's
+   `git status --porcelain` is the same before and after, and `git stash` is never the scratch.
+
+Each mutant gets a `## Mutants` row. `Killed by` opens with the test that went red, in backticks as
+`## Checks` names it; a mutant no test kills reads `survived` and is a finding; one that changes no
+behaviour a caller can reach reads `equivalent - <why>`. A `|` inside a cell is written `\|`. A diff
+that touches no such rule writes `None - <why>`.
 
 **Assertions that do not hold the value.** Across the `## Checks` rows, report the tests whose
 assertion is looser than the value the criterion fixes, that prove a rule on two cases out of nine,
@@ -133,7 +144,9 @@ that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
 passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (each
-row killed by a named test or `equivalent`, or `None - <why>`). `0` the feature is done.
+row's `Killed by` opening with a test in backticks or reading `equivalent - <why>`, or one
+`None - <why>` line). `0` the feature is done. A feature verified before the `## Mutants` section
+existed owes it too: `None - verified before mutants`.
 
 ## Distill lessons
 
