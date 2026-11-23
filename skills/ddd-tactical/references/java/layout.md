@@ -1,6 +1,6 @@
 # Java — the stack, the line, the packages, the names
 
-Read this page first in a Java project, then the Java page of the block you are writing (the Java column of the table in [SKILL.md](../../SKILL.md)). The pages target **Java 25 and Spring Boot 4.2** (Spring Framework 7.1, Spring Data JDBC 4.2, JUnit 6). Every sample on them compiled and passed its tests against PostgreSQL 18 under Testcontainers (2026-11-22).
+Read this page first in a Java project, then the Java page of the block you are writing (the Java column of the table in [SKILL.md](../../SKILL.md)). The pages target **Java 25 and Spring Boot 4.2** (Spring Framework 7.1, Spring Data JDBC 4.2, JUnit 6). Every full Java file on them is a copy of code that compiled and passed its tests against PostgreSQL 18 under Testcontainers, and each behavior marked *verified* has a test of its own there (2026-11-22).
 
 ## Where Java differs from the TypeScript pages, on purpose
 
@@ -16,40 +16,76 @@ The domain may carry **persistence mapping labels**; it never reaches **HTTP, tr
 
 | The domain may import | The domain never imports |
 |---|---|
-| `java.*` — `java.time` and `java.math` are the computation libraries the TypeScript side takes from npm | `org.springframework.web..`, `..http..`, `..transaction..`, `..jdbc..` |
+| `java.lang`, `java.util`, `java.time`, `java.math` — the last two are the computation libraries the TypeScript side takes from npm | `org.springframework.web..`, `..http..`, `..transaction..`, `..jdbc..`; `java.sql`, `java.net`, `java.io` |
 | its own feature, `shared.domain`, and another feature's **root package** (that feature's public API) | `jakarta.persistence..` (JPA: see [repository.md](repository.md)), `jakarta.servlet..` |
 | Spring Data labels: `org.springframework.data.annotation`, `..data.relational.core.mapping`, `..data.domain` (events), `..data.repository` (the port's marker) | stereotypes and injection (`@Component`, `@Service`, `@Autowired`): a domain service is a plain class the handler builds or receives |
 
-The rule is an allow-list, so a new library fails the build until someone decides it belongs (archunit-junit5 1.5.1):
+Two ArchUnit rules hold the line and the feature boundary (archunit-junit5 1.5.1). The first is an allow-list, so a library nobody named fails the build until someone decides it belongs:
 
 ```java
 package com.example;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 
-@AnalyzeClasses(packages = "com.example", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(packages = ArchitectureTest.ROOT, importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureTest {
-    // An allow-list: anything not named here - web, transactions, JDBC, a new library - fails the build.
+    static final String ROOT = "com.example";
+
+    // The line: persistence labels yes; web, transactions, JDBC, java.sql, java.net, java.io never.
+    // An allow-list, so a library nobody named fails the build until someone decides it belongs.
     @ArchTest
     static final ArchRule domainCarriesOnlyPersistenceLabels = classes()
-            .that().resideInAPackage("..domain..")
+            .that().resideInAPackage(ROOT + ".*.domain..")
             .should().onlyDependOnClassesThat().resideInAnyPackage(
-                    "java..",
-                    "com.example.*",
-                    "..domain..",
+                    "java.lang..", "java.util..", "java.time..", "java.math..",
+                    ROOT + ".*",           // a feature's root package: its public API
+                    ROOT + ".*.domain..",  // domain packages - the rule below keeps each feature in its own
                     "org.springframework.data.annotation..",
                     "org.springframework.data.relational.core.mapping..",
                     "org.springframework.data.domain..",
                     "org.springframework.data.repository..");
+
+    // Package by feature: another feature is reached only through its root package.
+    @ArchTest
+    static final ArchRule featuresMeetOnlyAtTheirRoot = classes()
+            .that().resideInAPackage(ROOT + "..")
+            .should(reachAnotherFeatureOnlyAtItsRoot());
+
+    private static ArchCondition<JavaClass> reachAnotherFeatureOnlyAtItsRoot() {
+        return new ArchCondition<>("reach another feature only through its root package") {
+            @Override
+            public void check(JavaClass origin, ConditionEvents events) {
+                origin.getDirectDependenciesFromSelf().stream()
+                        .filter(dependency -> intoAnotherFeature(origin, dependency.getTargetClass()))
+                        .forEach(dependency -> events.add(SimpleConditionEvent.violated(dependency, dependency.getDescription())));
+            }
+        };
+    }
+
+    // <ROOT>.<feature>.<layer>...: a class below another feature's root package is that feature's own.
+    private static boolean intoAnotherFeature(JavaClass origin, JavaClass target) {
+        String[] to = target.getPackageName().split("\\.");
+        int feature = ROOT.split("\\.").length;
+        if (!target.getPackageName().startsWith(ROOT + ".") || to.length <= feature + 1) {
+            return false; // outside the app, or a feature's root package - its public API
+        }
+        String[] from = origin.getPackageName().split("\\.");
+        boolean sameFeature = from.length > feature && from[feature].equals(to[feature]);
+        return !"shared".equals(to[feature]) && !sameFeature;
+    }
 }
 ```
 
-`com.example.*` is one level deep: the feature root packages, where each feature publishes its ids.
+`ROOT + ".*"` is one level deep: the feature root packages, where each feature publishes its ids. Both rules were checked on planted code: a `java.sql` type in a domain, and one feature's domain reached from another feature's domain and from its handler, each fail the build.
 
 ## Packages (package by feature)
 
@@ -70,7 +106,7 @@ src/main/java/com/example/
 ```
 
 - **The feature root package is the feature's public API**, the Java counterpart of a TypeScript `index.ts`: Java cannot re-export, so what other features may use lives there physically. Sub-packages are the feature's own.
-- **One build module.** The layers are packages, and the ArchUnit rule holds the import direction.
+- **One build module.** The layers are packages, and the two ArchUnit rules hold the import direction and the feature boundary.
 
 ## Class names
 
@@ -117,7 +153,7 @@ Java makes the file name the public class name, so the TypeScript suffix rule do
 
 ## Build and runtime notes
 
-- **`-parameters`.** Spring Data matches the parameters of `restore` to fields by name. The Spring Boot Maven and Gradle plugins compile with `-parameters`; a hand-made build must add it.
+- **`-parameters`.** Spring Data matches the parameters of `restore` to fields by name, so the build must compile with `-parameters`: Maven gets it from `spring-boot-starter-parent` (importing only the Boot BOM does not), Gradle from the Spring Boot plugin. Without it Spring cannot match `restore`, and every read fails.
 - **Time** is one `Clock` bean (`Clock.systemUTC()` in `shared/infra`); handlers pass `clock.instant()` into the domain.
 - **Logs** are structured JSON through the Boot property `logging.structured.format.console=logstash`, written with SLF4J key-values (`LOG.atError().addKeyValue("code", error.code()).setCause(error).log(...)`).
 - **Two PMD rules hold the two Java traps of this house** (checked with PMD 7.17): `CompareObjectsWithEquals` — `==` on a record or an aggregate compares references, never values; `AvoidCatchingGenericException` — a `catch (RuntimeException e)` swallows a refusal and a bug together.
