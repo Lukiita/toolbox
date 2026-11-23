@@ -70,7 +70,8 @@ NO_RESULT = "no_result"
 NOT_STARTED = "not_started"
 
 Event = dict[str, object]
-# One thing the agent did, in order: {"tool": name, "input": {...}}, {"text": ...} or {"thinking": ...}.
+# One thing the agent did, in order: {"tool": name, "input": {...}}, {"text": ...} or {"thinking": ...},
+# plus its "turn" - or "subagent_call" when a subagent did it.
 Step = dict[str, object]
 
 
@@ -233,7 +234,12 @@ class RunTrace:
     def record(self, event: Event) -> None:
         self.loaded += skills_in_event(event)
         steps = [step for step in map(step_of_block, assistant_blocks(event)) if step]
-        if steps:
+        # --verbose streams a subagent's messages too, each with its own message id: they are
+        # kept, tagged with the call that spawned them, and never counted as turns of the run.
+        subagent_call = event.get("parent_tool_use_id")
+        if subagent_call:
+            self.steps += [{"subagent_call": subagent_call, **step} for step in steps]
+        elif steps:
             self.count_turn(str(assistant_message(event).get("id") or ""))
             self.steps += [{"turn": len(self.turn_message_ids), **step} for step in steps]
 
@@ -245,7 +251,7 @@ class RunTrace:
 
     def finish(self, ending: str, measured: bool, final_answer: str = "") -> "RunTrace":
         """Close the trace; with no final answer given, the agent's last text stands in for it."""
-        texts = [str(step["text"]) for step in self.steps if "text" in step]
+        texts = [str(step["text"]) for step in self.steps if "text" in step and "turn" in step]
         self.ending, self.measured = ending, measured
         self.final_answer = final_answer or (texts[-1] if texts else "")
         return self
