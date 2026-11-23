@@ -55,8 +55,9 @@ the diff touched - the list in [checks.md](checks.md) "The level of each proof":
 guard, a state transition, a dispatch, a mapping, an order - inject one to three behaviour faults
 where a wrong decision costs most: the comparison shifted by one (`>` to `>=`), the condition
 flipped, the value or error code returned, a normalisation or side effect removed, the bound moved
-one unit inside (a coupon that expires one millisecond early). Mutate in a scratch git worktree,
-never the real tree:
+one unit inside (a coupon that expires one millisecond early). Pick faults a caller can see: one
+that changes nothing a caller can reach measures nothing, so drop it and pick another on the same
+rule. Mutate in a scratch git worktree, never the real tree:
 
 1. `tmp=$(mktemp -d)` and `git worktree add "$tmp" HEAD`. If the add fails, stop: remove only a
    path this step created.
@@ -70,9 +71,8 @@ never the real tree:
    `git status --porcelain` is the same before and after, and `git stash` is never the scratch.
 
 Each mutant gets a `## Mutants` row. `Killed by` opens with the test that went red, in backticks as
-`## Checks` names it; a mutant no test kills reads `survived` and is a finding; one that changes no
-behaviour a caller can reach reads `equivalent - <why>`. A `|` inside a cell is written `\|`. A diff
-that touches no such rule writes `None - <why>`.
+`## Checks` names it; a mutant no test kills reads `survived` and is a finding. A `|` inside a cell
+is written `\|`. A diff that touches no such rule writes `None - <why>`.
 
 **Assertions that do not hold the value.** Across the `## Checks` rows, report the tests whose
 assertion is looser than the value the criterion fixes, that prove a rule on two cases out of nine,
@@ -116,7 +116,6 @@ Write `.specs/features/<feature>/verification.md`:
 | --- | --- | --- |
 | same-location guard | `transfer.aggregate.ts:31` `from === to` -> `false` | `transfers.e2e.test.ts` `rejects a transfer to the same location` |
 | Transfer in sign | `stock-map.service.ts:54` `+qty` -> `-qty` | survived |
-| zero-stock filter | `stock-map.service.ts:70` `qty === 0` -> `qty <= 0` | equivalent - quantity is never negative, `Quantity` refuses it |
 
 ## Findings
 
@@ -144,8 +143,8 @@ that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
 passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (each
-row's `Killed by` opening with a test in backticks or reading `equivalent - <why>`, or one
-`None - <why>` line). `0` the feature is done. A feature verified before the `## Mutants` section
+row's `Killed by` opening with a test in backticks, or one `None - <why>` line). `0` the feature
+is done. A feature verified before the `## Mutants` section
 existed owes it too: `None - verified before mutants`.
 
 ## Distill lessons

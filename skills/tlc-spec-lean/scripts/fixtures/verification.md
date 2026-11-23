@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | failed charge suspends | `app/billing/dunning.rb:22` `:suspended` -> `:cancelled` | `test/billing/dunning_test.rb` `test_failed_charge_suspends` |
 | suspended blocks trialing | `app/billing/transitions.rb:14` guard removed | `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |
-| unknown status recorded | `app/billing/status_map.rb:31` `record_unknown` removed | equivalent - the caller records the unknown status again one line below |
+| unknown status recorded | `app/billing/status_map.rb:31` `record_unknown` removed | `test/billing/status_map_test.rb` `test_unknown_status_is_recorded` |
 
 ## Findings
 

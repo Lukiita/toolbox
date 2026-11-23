@@ -47,8 +47,7 @@ These hold even if no reference file is read. Each one lives here; the reference
    if the claim were false, then tries examples nobody named and assertions looser than their
    criterion, and mutates every rule that changes an outcome the diff touched, in a scratch
    worktree: a mutant no test kills is a finding. The work is done when every finding is closed by
-   a commit, every mutant is killed by a named test or shown equivalent, and `proofs.md` is green
-   at `HEAD`.
+   a commit, every mutant is killed by a named test, and `proofs.md` is green at `HEAD`.
 6. A proof is the project's own test command; the skill knows no test runner. Tests that run
    together go on one `Run <name>: <command>` line, run once, and each check that reads it writes
    `Proof: run <name> | <the line the run prints when its test passes>`, pass marker included, so

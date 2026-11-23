@@ -15,8 +15,8 @@ What it checks:
   ERROR  - no `## Checks` table in verification.md, a check with no row in it, or a row with no test
   ERROR  - no `## Findings` section in verification.md, or a finding with no commit in `Closed`
   ERROR  - no `## Mutants` section in verification.md (a table, or `None - <why>`), a mutant whose
-           `Killed by` does not begin with a test in backticks and is not `equivalent - <why>`, or a
-           mutant row with more cells than its header (a `|` inside a cell is written `\|`)
+           `Killed by` does not begin with a test in backticks, or a mutant row with more cells than
+           its header (a `|` inside a cell is written `\|`)
   ERROR  - pictures owed (a criterion cites a capture, or a check is proven in the browser) and no
            screens.md, a row in it that does not read `matches`, a cited capture with no
            `<capture>.running.png`, or a picture at another size than its capture (1x, 2x, 3x pass)
@@ -299,10 +299,10 @@ def _browser_shots(fdir, name, running):
 
 
 # Local patch (toolbox UPSTREAM.md item 7): what settles a mutant. `Killed by` opens with the test that
-# went red, in backticks as `## Checks` names tests, or reads `equivalent - <why>` with a reason, not a
-# placeholder; without a table the section is one `None - <why>` line.
+# went red, in backticks as `## Checks` names tests - nothing else, `equivalent` included: a fault no
+# caller can see is dropped for another, never written down. Without a table the section is one
+# `None - <why>` line.
 KILLED_BY_TEST_RE = re.compile(r"^`([^`]+)`")
-EQUIVALENT_RE = re.compile(r"^equivalent\s*[-–—:]\s*\S.{9,}", re.IGNORECASE)
 NONE_WITH_REASON_RE = re.compile(r"^[*_\s]*none[*_\s]*[-–—:]\s*\S", re.IGNORECASE)
 NOT_A_TEST = {"survived", "killed", "none", "n/a", "na", "equivalent", "pending", "-", "—"}
 CHECK_ID_RE = re.compile(r"^\**\s*(C\d+)\s*\**\s*[-–—:]")
@@ -395,8 +395,7 @@ def _check_with_proofs(fdir, name, lines, checks_lines):
 
 
 def _mutants_settled(lines, name):
-    """Every mutant ends killed by a named test or judged equivalent: a survivor is a test that does
-    not hold its claim. Local patch (toolbox UPSTREAM.md item 7) - in the lab that motivated it, a
+    """Every mutant ends killed by a named test: a survivor is a test that does not hold its claim. Local patch (toolbox UPSTREAM.md item 7) - in the lab that motivated it, a
     reading Verifier passed three tests that a one-millisecond, a removed-trim and a swapped-code
     mutant all survived."""
     section = [ln for ln in _section(lines, "Mutants") if ln]
@@ -424,18 +423,15 @@ def _mutant_rows_settled(header, rows, name):
                           f"write a `|` inside a cell as `\\|`")
         elif not _killed_by_settles(cell):
             errors.append(f"{name}: mutant '{label}' reads '{cell or 'empty'}' and no test kills it - `Killed by` "
-                          f"opens with the test that went red, in backticks, or reads `equivalent - <why>`; run a "
-                          f"survivor again at the fix commit and write the test that goes red")
+                          f"opens with the test that went red, in backticks; run a survivor again at the fix commit "
+                          f"and write the test that goes red")
     return errors
 
 
 def _killed_by_settles(cell):
-    """True for a test named first, in backticks, or for `equivalent - <why>`; bold and italics aside."""
-    bare = cell.strip().strip("*_ ")
-    test = KILLED_BY_TEST_RE.match(bare)
-    if test:
-        return test.group(1).strip().lower() not in NOT_A_TEST
-    return bool(EQUIVALENT_RE.match(bare))
+    """True for a test named first, in backticks; bold and italics aside."""
+    test = KILLED_BY_TEST_RE.match(cell.strip().strip("*_ "))
+    return bool(test) and test.group(1).strip().lower() not in NOT_A_TEST
 
 
 def _check_feature(fdir, name):
