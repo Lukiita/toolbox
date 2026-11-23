@@ -27,7 +27,8 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
    the fix changed code re-saves every picture at the new `HEAD` and resumes the round-1 screens
    sub-agent for round 2 (it is the last), writes the closing commit into each finding, and runs the gate.
    There is no second Verifier: the script shows the proofs green at the new `HEAD`, the fixed tests
-   among them. What still fails goes to the user.
+   among them. A `survived` mutant is closed by running it again, the same way, at the fix commit and
+   writing the test that now goes red in its `Killed by` cell. What still fails goes to the user.
 
 ## What the Verifier does
 
@@ -48,6 +49,19 @@ check names: a rule on the web with no test is still a rule.
 **Own examples.** For two rules the plan states with examples, try a value neither the plan nor the
 checks name - the other side of a boundary, an empty set, a large one. Run each at `HEAD` as a
 throwaway test or a request. A rule that breaks on yours is a finding.
+
+**Mutants.** Reading a test judges it; a mutant measures it. For every rule that changes an outcome
+the diff touched - the list in [checks.md](checks.md) "The level of each proof": a boundary, a
+guard, a state transition, a dispatch, a mapping, an order - inject one to three behaviour faults
+where a wrong decision costs most: the comparison shifted by one (`>` to `>=`), the condition
+flipped, the value or error code returned, a normalisation or side effect removed, the bound moved
+one unit inside (a coupon that expires one millisecond early). Mutate in a scratch git worktree
+outside the project (`git worktree add <tmp> HEAD`), run the `Run` group that covers the rule
+there, then `git worktree remove --force <tmp>`; the real tree's `git status --porcelain` is the same
+before and after, and `git stash` is never the scratch. Each mutant gets a `## Mutants` row: `Killed
+by` names the test that went red; a mutant no test kills reads `survived` and is a finding; one that
+changes no behaviour a caller can reach reads `equivalent - <why>`. A diff that touches no such rule
+writes `None - <why>`.
 
 **Assertions that do not hold the value.** Across the `## Checks` rows, report the tests whose
 assertion is looser than the value the criterion fixes, that prove a rule on two cases out of nine,
@@ -85,18 +99,28 @@ Write `.specs/features/<feature>/verification.md`:
 | C7 | `stock-map.service.test.ts` `counts items at zero` | no - `toBeDefined()` |
 | C9 | `transfers.e2e.test.ts` `rejects a transfer to the same location` | yes |
 
+## Mutants
+
+| Rule | Mutant | Killed by |
+| --- | --- | --- |
+| same-location guard | `transfer.aggregate.ts:31` `from === to` -> `false` | `transfers.e2e.test.ts` `rejects a transfer to the same location` |
+| Transfer in sign | `stock-map.service.ts:54` `+qty` -> `-qty` | survived |
+| zero-stock filter | `stock-map.service.ts:70` `qty === 0` -> `qty <= 0` | equivalent - quantity is never negative, `Quantity` refuses it |
+
 ## Findings
 
 | Finding | Evidence | Fix | Closed |
 | --- | --- | --- | --- |
-| Transfer in is counted as out and no test fails | C1's test asserts the count, not the sign | assert the sign of a Transfer in on its destination | |
+| Transfer in is counted as out and no test fails | C1's test asserts the count, not the sign; mutant `+qty` -> `-qty` survived | assert the sign of a Transfer in on its destination | |
 | C7 asserts the count exists, not that it is 5 | `stock-map.service.test.ts:88` - `toBeDefined()` | assert `atZero` is 5 on the capture's data | |
 ```
 
 Every check gets a `## Checks` row with the test named; the gate refuses a missing row or an empty
 `Test`. With nothing to report, write `None - <one line on what was probed>` under `## Findings` and
 `**Verdict**: PASS`. Return the findings in chat. The builder fills `Closed` with the commit that
-fixes each one and the check that now proves it; the gate refuses an empty `Closed`.
+fixes each one and the check that now proves it, and the `Killed by` cell of each `survived` mutant
+with the test that kills it at that commit; the gate refuses an empty `Closed` and a mutant left
+`survived`.
 
 ## The gate
 
@@ -108,8 +132,8 @@ It reads `proofs.md` (every check and run has a passing row, written at `HEAD` o
 that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
-passed), the plan's `**Approved**:` line, and every finding closed. `0`
-the feature is done.
+passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (each
+row killed by a named test or `equivalent`, or `None - <why>`). `0` the feature is done.
 
 ## Distill lessons
 

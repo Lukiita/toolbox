@@ -45,8 +45,9 @@ These hold even if no reference file is read. Each one lives here; the reference
    and passing at `HEAD`, the build, the pictures, the walk - and the Verifier spends its time on
    judgement: it opens the test each check's proof selects and says whether that test would fail
    if the claim were false, then tries examples nobody named and assertions looser than their
-   criterion. The work is done when every finding is closed by a commit and `proofs.md` is green
-   at `HEAD`.
+   criterion, and mutates every rule that changes an outcome the diff touched, in a scratch
+   worktree: a mutant no test kills is a finding. The work is done when every finding is closed by
+   a commit, every mutant is killed by a named test, and `proofs.md` is green at `HEAD`.
 6. A proof is the project's own test command; the skill knows no test runner. Tests that run
    together go on one `Run <name>: <command>` line, run once, and each check that reads it writes
    `Proof: run <name> | <the line the run prints when its test passes>`, pass marker included, so
@@ -81,7 +82,7 @@ These hold even if no reference file is read. Each one lives here; the reference
 | Part | Runs | Cannot catch |
 | --- | --- | --- |
 | `check_proofs.py` (always) | every `Run` group and lone proof once at `HEAD`, one at a time, each check's line found in its run's output, the build, pictures and walk checked | a test that passes for the wrong reason |
-| The Verifier (always) | each check's test read against its criterion, two examples nobody named, assertions looser than their criterion, checks that contradict a binding capture ([verify.md](references/verify.md)) | a wrong rule whose test reads as right |
+| The Verifier (always) | each check's test read against its criterion, two examples nobody named, assertions looser than their criterion, one to three mutants per rule the diff touched, checks that contradict a binding capture ([verify.md](references/verify.md)) | a wrong rule whose test reads as right and that no mutant reaches |
 | The screens sub-agent (a criterion cites a capture) | an inventory of each capture against the author's picture, every row `same` or `differs`, at a named `HEAD` ([verify-screens.md](references/verify-screens.md)) | spacing, colour and type weight; detail smaller than a screenshot shows; screens no capture draws |
 
 ## Artifacts

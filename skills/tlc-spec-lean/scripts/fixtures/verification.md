@@ -21,6 +21,14 @@
 | C11 | `test/billing/dunning_test.rb` `test_provider_timeout_is_inert` | yes |
 | C12 | `test/webhooks/ingest_test.rb` `test_unsigned_delivery_is_401` | yes |
 
+## Mutants
+
+| Rule | Mutant | Killed by |
+| --- | --- | --- |
+| failed charge suspends | `app/billing/dunning.rb:22` `:suspended` -> `:cancelled` | `test/billing/dunning_test.rb` `test_failed_charge_suspends` |
+| suspended blocks trialing | `app/billing/transitions.rb:14` guard removed | `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |
+| unknown status recorded | `app/billing/status_map.rb:31` `record_unknown` removed | equivalent - the caller records the unknown status again one line below |
+
 ## Findings
 
 | Finding | Evidence | Fix | Closed |

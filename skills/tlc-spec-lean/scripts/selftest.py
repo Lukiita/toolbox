@@ -178,6 +178,21 @@ CASES = [
                          "**Open questions:** what happens on a chargeback?"),
      0, "do not read as resolved"),
 
+    # Local patch (toolbox UPSTREAM.md item 7): the Verifier mutates the rules the diff touched.
+    ("validate_verification", "verification.md", "a report with no Mutants section",
+     lambda s: re.sub(r"## Mutants\n.*?\n## Findings", "## Findings", s, flags=re.S),
+     1, "no `## Mutants` section"),
+    ("validate_verification", "verification.md", "a mutant left survived",
+     lambda s: s.replace("| `test/billing/dunning_test.rb` `test_failed_charge_suspends` |\n| suspended", "| survived |\n| suspended", 1),
+     1, "no test kills it"),
+    ("validate_verification", "verification.md", "a mutant with no test in Killed by",
+     lambda s: s.replace("| `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |\n| unknown", "| - |\n| unknown", 1),
+     1, "no test kills it"),
+
+    ("validate_verification", "verification.md", "an equivalent mutant with no reason",
+     lambda s: s.replace("| equivalent - the caller records the unknown status again one line below |", "| equivalent |", 1),
+     1, "no test kills it"),
+
     ("validate_verification", "verification.md", "self-verified report (warn)",
      lambda s: s.replace("independent sub-agent (author != verifier)", "self-verified (degraded - no sub-agent)"),
      0, "self-verified"),
@@ -459,6 +474,13 @@ NEGATIVE_CONTROLS = [
       RUNNING: lambda s: png(1024, 839)}),
     ("validate_verification", "a screen no capture draws owes no picture and no screens.md",
      {"plan.md": with_screen}),
+    ("validate_verification", "a diff with no rule to mutate writes None under Mutants",
+     {"verification.md": lambda s: re.sub(r"## Mutants\n.*?\n## Findings",
+                                          "## Mutants\n\nNone - the diff only renames a log field\n\n## Findings", s, flags=re.S)}),
+    ("validate_verification", "an equivalent mutant with its reason is accepted",
+     {"verification.md": lambda s: s.replace(
+         "| `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |\n| unknown",
+         "| equivalent - the state machine refuses the transition again before saving |\n| unknown", 1)}),
     ("validate_verification", "proofs.md green and no finding is accepted",
      {"verification.md": lambda s: s.split("## Findings")[0] + "## Findings\n\nNone - every rule probed held\n"}),
     ("validate_verification", "a browser proof whose screenshot exists is accepted",

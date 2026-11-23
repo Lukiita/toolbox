@@ -14,6 +14,8 @@ What it checks:
   ERROR  - checks.md names `Build:` commands and proofs.md has no Build row, or one that failed
   ERROR  - no `## Checks` table in verification.md, a check with no row in it, or a row with no test
   ERROR  - no `## Findings` section in verification.md, or a finding with no commit in `Closed`
+  ERROR  - no `## Mutants` section in verification.md (a table, or `None - <why>`), or a mutant
+           whose `Killed by` names no test and is not `equivalent - <why>`
   ERROR  - pictures owed (a criterion cites a capture, or a check is proven in the browser) and no
            screens.md, a row in it that does not read `matches`, a cited capture with no
            `<capture>.running.png`, or a picture at another size than its capture (1x, 2x, 3x pass)
@@ -377,7 +379,35 @@ def _check_with_proofs(fdir, name, lines, checks_lines):
         for r in rows:
             if closed is None or closed >= len(r) or not SHA_RE.search(r[closed]):
                 errors.append(f"{name}: finding '{r[0][:50]}' is not closed - fix it and write the commit in `Closed`")
+    errors += _mutants_settled(lines, name)
     return errors, warnings
+
+
+def _mutants_settled(lines, name):
+    """Every mutant ends killed by a named test or judged equivalent: a survivor is a test that does
+    not hold its claim. Local patch (toolbox UPSTREAM.md item 7) - in the lab that motivated it, a
+    reading Verifier passed three tests that a one-millisecond, a removed-trim and a swapped-code
+    mutant all survived."""
+    section = [ln for ln in _section(lines, "Mutants") if ln]
+    tables = find_tables(section)
+    if not tables and not any(ln.lower().startswith("none") for ln in section):
+        return [f"{name}: verification.md has no `## Mutants` section - mutate each rule that changes an outcome "
+                f"the diff touched and write a row per mutant, or `None - <why>` when the diff touches none"]
+    errors = []
+    for header, rows in tables:
+        mutant, killed = column(header, "mutant"), column(header, "killed")
+        if mutant is None or killed is None:
+            errors.append(f"{name}: verification.md `## Mutants` table needs `Mutant` and `Killed by` columns")
+            continue
+        for r in rows:
+            cell = r[killed].strip() if killed < len(r) else ""
+            if cell.lower().startswith("equivalent -") and len(cell) > len("equivalent -") + 2:
+                continue
+            if cell in ("", "-") or cell.lower().startswith(("survived", "equivalent")):
+                label = r[mutant][:50] if mutant < len(r) else "?"
+                errors.append(f"{name}: mutant '{label}' reads '{cell or 'empty'}' and no test kills it - run it "
+                              f"again at the fix commit and write the test that goes red in `Killed by`")
+    return errors
 
 
 def _check_feature(fdir, name):
