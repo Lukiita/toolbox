@@ -29,6 +29,9 @@ that call for different fixes - the agent answered directly (the description nev
 looked relevant), explored until --max-turns (relevant, but the files came first), or
 loaded a neighbour (the descriptions overlap) - and only the run's steps tell them
 apart. A run that loads the target is cut short there, so its transcript ends at the hit.
+A transcript holds the agent's own text and the tool inputs, local paths included, and
+the runs load the user's global CLAUDE.md: write them under a `runs/` folder, which git
+ignores anywhere in the repo, or outside it - never where a commit picks them up.
 
 Usage:
     python3 -I run_triggers.py                        # all queries, 3 runs each
