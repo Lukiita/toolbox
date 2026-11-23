@@ -209,4 +209,25 @@ What the client sees (each line is a passing HTTP test):
 | a renewal with a malformed UUID in the path | 400 |
 
 - **The controller translates and nothing else.** It calls commands and queries and never touches repositories or gateways. When a controller needs data, that is a query waiting to be written.
-- **Each feature registers the statuses of its codes** in its own `presentation` package (`SubscriptionErrorStatuses`, a `DomainErrorStatuses` bean), and the shared advice collects them ([domain-errors.md](domain-errors.md)).
+- **Authorization is checked where the aggregate is loaded.** An id in the path says which subscription; it never says the caller may touch it. The controller puts the caller's identity, from the security context, into the command, and the handler compares it with the loaded aggregate. A missing right (a token without the scope) is `ApplicationException.forbidden(…)`; a rule of the domain's own ("only the subscriber cancels") is a `DomainException` ([../domain-errors.md](../domain-errors.md) § The question that picks the type). The samples leave authentication out, and a handler without that check lets any caller act on any id.
+- **Each feature registers the statuses of its own codes**, and the shared advice collects them ([domain-errors.md](domain-errors.md)):
+
+```java
+package com.example.subscription.presentation;
+
+import com.example.shared.presentation.DomainErrorStatuses;
+import java.util.Map;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
+
+@Configuration(proxyBeanMethods = false)
+class SubscriptionErrorStatuses {
+    // Only the codes that are not a plain 422 need a line here. The method is not named after
+    // the class: a @Configuration class is itself a bean, and two beans cannot share a name.
+    @Bean
+    DomainErrorStatuses subscriptionStatuses() {
+        return new DomainErrorStatuses(Map.of("subscription.canceled", HttpStatus.CONFLICT));
+    }
+}
+```

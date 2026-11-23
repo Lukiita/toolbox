@@ -69,7 +69,7 @@ Write each answer in the project's decisions file (above), with a pointer to the
 
 - **Does `restore` validate?** Greenfield: yes, same rules as `create` — the database was born under the invariant, and a violation there is corruption worth failing loudly on. Legacy: no — a validating `restore` makes invalid rows UNREADABLE, so nobody can even load them to fix them. Lenient restore then pairs with a validating save: you can read broken data, you cannot persist more of it. The debt only shrinks — a ratchet applied to data. Full pattern in [entity-aggregate.md](references/entity-aggregate.md).
 - **Which id recipe?** TypeScript: the branded primitive unless the project has reason to pay for a class per concept — [typed-ids.md](references/typed-ids.md) prices both. Java has one recipe, a record per concept.
-- **Domain events on or off?** The `AggregateRoot` base collects them, but wire a dispatcher only when some effect genuinely needs decoupling. Publishing events nobody consumes is ceremony.
+- **Domain events on or off?** The `AggregateRoot` base collects them, but wire a dispatcher only when some effect genuinely needs decoupling. Publishing events nobody consumes is ceremony. Java: Spring Data publishes what the aggregate records on every `save`, and with no listener that costs nothing, so the decision there is whether anything listens ([java/base-classes.md](references/java/base-classes.md)).
 
 ## Where things live (package by feature)
 
