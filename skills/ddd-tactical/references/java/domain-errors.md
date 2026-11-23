@@ -5,9 +5,10 @@ The taxonomy of the TypeScript page holds: the type is picked by **who routes on
 | The caller… | Type | Lives in | HTTP |
 |---|---|---|---|
 | hits a **rule refusal** (canceled subscription, insufficient balance) | `DomainException` | `shared/domain` | 422, or the status the feature registers for the code |
-| finds the use case **blocked before the rule** (not found, forbidden, stale version) | `ApplicationException` | `shared/application` | by the code's suffix: not-found 404, forbidden 403, stale 409 |
-| **can do nothing**: a dependency is down after the adapter's retries | `InfrastructureException` (gateways); Spring's `DataAccessException` (repositories) | `shared/infra` | 503 |
-| hit a **bug** | anything else, `NullPointerException` from `requireNonNull` included | — | 500, stack logged |
+| finds the use case **blocked before the rule** (not found, forbidden, stale version) | `ApplicationException` | `shared/application` | by its outcome: not found 404, forbidden 403, stale 409 |
+| **can do nothing**: a dependency is down after the adapter's retries | `InfrastructureException` (gateways); for the database, Spring's transient and resource-failure `DataAccessException`s and `CannotCreateTransactionException` | `shared/infra` | 503 |
+| **collided with another writer** (a stale version on save, a lock timeout, a deadlock) | Spring's `ConcurrencyFailureException` | — | 409: reload and retry |
+| hit a **bug** | anything else: `NullPointerException` from `requireNonNull`, a constraint violation the domain should have refused | — | 500, stack logged |
 
 ## Why Java throws where TypeScript returns
 
@@ -56,7 +57,57 @@ public class DomainException extends RuntimeException {
 }
 ```
 
-`ApplicationException` has the same body, in `shared/application`, with codes from a small vocabulary that repeats across features: `subscription.not-found`, `subscription.forbidden`, `subscription.stale`. If a feature's list keeps growing, those are rule refusals wearing the wrong type.
+```java
+package com.example.shared.application;
+
+import java.util.Locale;
+
+/**
+ * The use case never reached the rule: not found, forbidden, stale. Thrown by handlers through
+ * one factory per outcome, so the outcome is a type the advice switches on - never a string
+ * suffix a typo could change.
+ *
+ * <pre>{@code
+ * throw ApplicationException.notFound("subscription", "no subscription for id " + id.value());
+ * }</pre>
+ */
+public class ApplicationException extends RuntimeException {
+    /** The small vocabulary of a blocked use case; each outcome answers one HTTP status. */
+    public enum Outcome { NOT_FOUND, FORBIDDEN, STALE }
+
+    private final Outcome outcome;
+    private final String code;
+
+    private ApplicationException(String concept, Outcome outcome, String message) {
+        super(message, null, false, false);
+        this.outcome = outcome;
+        this.code = concept + "." + outcome.name().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    public static ApplicationException notFound(String concept, String message) {
+        return new ApplicationException(concept, Outcome.NOT_FOUND, message);
+    }
+
+    public static ApplicationException forbidden(String concept, String message) {
+        return new ApplicationException(concept, Outcome.FORBIDDEN, message);
+    }
+
+    public static ApplicationException stale(String concept, String message) {
+        return new ApplicationException(concept, Outcome.STALE, message);
+    }
+
+    public Outcome outcome() {
+        return outcome;
+    }
+
+    /** {@code <concept>.<outcome>}, e.g. subscription.not-found - what logs and tests read. */
+    public String code() {
+        return code;
+    }
+}
+```
+
+The outcome is a type, not a string. A handler throws through one factory per outcome, and the advice switches over the enum, so a typo cannot turn a 404 into a 409, and a new outcome does not compile until it has a status. The code is still `<concept>.<outcome>` (`subscription.not-found`), for logs and tests. Three outcomes, not thirty: when a feature wants more, those are rule refusals wearing the wrong type.
 
 ```java
 package com.example.shared.infra;
@@ -123,11 +174,12 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -140,10 +192,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 class ThrownErrorAdvice extends ResponseEntityExceptionHandler {
     private static final Logger LOG = LoggerFactory.getLogger(ThrownErrorAdvice.class);
-    private static final Map<String, HttpStatus> APPLICATION_STATUS_BY_OUTCOME = Map.of(
-            "not-found", HttpStatus.NOT_FOUND,
-            "forbidden", HttpStatus.FORBIDDEN,
-            "stale", HttpStatus.CONFLICT);
 
     private final Map<String, HttpStatus> domainStatusByCode = new HashMap<>();
 
@@ -158,17 +206,21 @@ class ThrownErrorAdvice extends ResponseEntityExceptionHandler {
         return problem(status, error.code(), error.getMessage());
     }
 
-    // Routed by the suffix of '<concept>.<outcome>'; the fallback is 409 - the world moved.
+    // Exhaustive over the enum: a new outcome does not compile until it has a status here.
     @ExceptionHandler(ApplicationException.class)
     ProblemDetail onUseCaseBlocked(ApplicationException error) {
-        String outcome = error.code().substring(error.code().lastIndexOf('.') + 1);
-        HttpStatus status = APPLICATION_STATUS_BY_OUTCOME.getOrDefault(outcome, HttpStatus.CONFLICT);
+        HttpStatus status = switch (error.outcome()) {
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case STALE -> HttpStatus.CONFLICT;
+        };
         return problem(status, error.code(), error.getMessage());
     }
 
-    // Two writers raced between load and save: the client reloads and tries again.
-    @ExceptionHandler(OptimisticLockingFailureException.class)
-    ProblemDetail onConcurrentUpdate(OptimisticLockingFailureException error) {
+    // Writers collided: a stale version on save, a lock timeout, a deadlock. The client retries;
+    // nothing is down. More specific than TransientDataAccessException, so it wins over the 503 below.
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    ProblemDetail onConcurrentUpdate(ConcurrencyFailureException error) {
         return problem(HttpStatus.CONFLICT, "concurrent-update", "the resource changed meanwhile; reload and retry");
     }
 
@@ -179,7 +231,10 @@ class ThrownErrorAdvice extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, error.code(), "service temporarily unavailable");
     }
 
-    @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class})
+    // A @Transactional handler meets a dead database when the transaction begins:
+    // CannotCreateTransactionException, which is not a DataAccessException.
+    @ExceptionHandler({TransientDataAccessException.class, DataAccessResourceFailureException.class,
+            CannotCreateTransactionException.class})
     ProblemDetail onDatabaseDown(RuntimeException error) {
         LOG.atError().addKeyValue("code", "database.unavailable").setCause(error).log("database unavailable");
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "database.unavailable", "service temporarily unavailable");
@@ -213,7 +268,7 @@ import org.springframework.http.HttpStatus;
  *
  * <pre>{@code
  * @Bean
- * DomainErrorStatuses subscriptionErrorStatuses() {
+ * DomainErrorStatuses subscriptionStatuses() {
  *     return new DomainErrorStatuses(Map.of("subscription.canceled", HttpStatus.CONFLICT));
  * }
  * }</pre>
@@ -226,8 +281,8 @@ public record DomainErrorStatuses(Map<String, HttpStatus> byCode) {}
 - **Decide before you write.** A handler loads, asks the aggregate, then saves, so every refusal happens before the first write. The rollback is the safety net, never a license to write and refuse after. And a rollback undoes rows only: no external effect (a charge, an email) before the last refusal.
 - **No `try`/`catch` in handlers or controllers.** A refusal or an outage passes through untouched to the advice. A flow that genuinely routes on a refusal ("declined → mark past-due") catches that one named exception thrown by a domain object or a gateway, never a generic one: PMD's `AvoidCatchingGenericException` fails `catch (RuntimeException e)`, which swallows refusals and bugs together.
 - **Never catch an exception that crossed another bean's `@Transactional` method and carry on.** When it escapes that method, Spring marks the shared transaction rollback-only; the outer method then returns normally, and its commit throws `UnexpectedRollbackException` (verified). Let it propagate, or give the inner call its own transaction on purpose.
-- **Repositories throw Spring's `DataAccessException`.** Spring already translates driver errors into one unchecked hierarchy, the same idea as `InfrastructureException`, so a repository needs no wrapper: the advice maps the transient and resource-failure branch to 503 and `OptimisticLockingFailureException` to 409.
-- **Stale has two shapes.** The client sent the version it saw and the handler compares it with `aggregate.version()`: an `ApplicationException("<concept>.stale")`, 409. Two writers raced between load and save: Spring Data JDBC's `save` throws `OptimisticLockingFailureException`, 409 `concurrent-update` ([repository.md](repository.md)).
+- **Repositories throw Spring's `DataAccessException`.** Spring already translates driver errors into one unchecked hierarchy, the same idea as `InfrastructureException`, so a repository needs no wrapper. The advice answers 409 for a collision between writers (`ConcurrencyFailureException`), 503 for the transient and resource-failure branches, and 500 for the rest: a constraint violation means the domain let through what the database refused. A `@Transactional` handler meets a dead database before any repository call, when the transaction begins, as `CannotCreateTransactionException`. That type sits outside the `DataAccessException` tree, and the advice maps it to 503 too (each mapping verified).
+- **Stale has two shapes.** The client sent the version it saw and the handler compares it with `aggregate.version()`: `ApplicationException.stale("<concept>", …)`, 409. Two writers raced between load and save: Spring Data JDBC's `save` throws `OptimisticLockingFailureException`, 409 `concurrent-update` ([repository.md](repository.md)).
 - **A stored value that breaks a record's rule fails the read with 500.** Spring wraps the `DomainException` thrown while it builds the record, so the advice sees a bug, which corrupt data is (verified). Projects reading legacy rows: [value-object.md](value-object.md).
 
 ## Who handles what

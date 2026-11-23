@@ -46,7 +46,7 @@ public class RenewSubscriptionHandler {
     @Transactional
     public void handle(RenewSubscriptionCommand command) {
         Subscription subscription = subscriptions.findById(command.subscriptionId())
-                .orElseThrow(() -> new ApplicationException("subscription.not-found",
+                .orElseThrow(() -> ApplicationException.notFound("subscription",
                         "no subscription for id " + command.subscriptionId().value()));
         subscription.renew(clock.instant());
         subscriptions.save(subscription);
