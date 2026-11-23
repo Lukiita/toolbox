@@ -250,7 +250,7 @@ class RunTrace:
         if not message_id or not self.turn_message_ids or self.turn_message_ids[-1] != message_id:
             self.turn_message_ids.append(message_id)
 
-    def finish(self, ending: str, measured: bool, final_answer: str = "") -> "RunTrace":
+    def finish(self, ending: str, *, measured: bool, final_answer: str = "") -> "RunTrace":
         """Close the trace; with no final answer given, the agent's last text stands in for it."""
         texts = [str(step["text"]) for step in self.steps if "text" in step and "turn" in step]
         self.ending, self.measured = ending, measured
@@ -272,7 +272,7 @@ def watch_run(proc: subprocess.Popen[bytes], timeout: int) -> RunTrace:
             return trace.finish(TARGET_LOADED, measured=True)
         if event.get("type") == "result":
             answer = str(event.get("result") or "")
-            return trace.finish(str(event.get("subtype")), run_measured_something(event), answer)
+            return trace.finish(str(event.get("subtype")), measured=run_measured_something(event), final_answer=answer)
     return trace.finish(NO_RESULT, measured=False)
 
 
