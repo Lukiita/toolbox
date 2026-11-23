@@ -38,6 +38,20 @@ def shipped(script):
     """The plan and implement skills ship part of these scripts; a case for one they lack is skipped."""
     return os.path.isfile(os.path.join(HERE, script if script.endswith(".py") else script + ".py"))
 
+
+# Local patch (toolbox UPSTREAM.md item 7): the fixture's `## Mutants` section, rewritten per case.
+SECOND_MUTANT_KILLED_BY = "| `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |\n| unknown"
+
+
+def killed_by(cell):
+    """The fixture with its second mutant's `Killed by` cell replaced by `cell`."""
+    return lambda s: s.replace(SECOND_MUTANT_KILLED_BY, f"| {cell} |\n| unknown", 1)
+
+
+def mutants_section(body):
+    """The fixture with the whole `## Mutants` section replaced by `body`."""
+    return lambda s: re.sub(r"## Mutants\n.*?\n## Findings", f"## Mutants\n\n{body}\n\n## Findings", s, flags=re.S)
+
 # (validator, artifact, description, mutation, expected exit, expected message fragment)
 CASES = [
     ("validate_checks", "checks.md", "no Build line",
@@ -186,12 +200,31 @@ CASES = [
      lambda s: s.replace("| `test/billing/dunning_test.rb` `test_failed_charge_suspends` |\n| suspended", "| survived |\n| suspended", 1),
      1, "no test kills it"),
     ("validate_verification", "verification.md", "a mutant with no test in Killed by",
-     lambda s: s.replace("| `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |\n| unknown", "| - |\n| unknown", 1),
-     1, "no test kills it"),
-
+     killed_by("-"), 1, "no test kills it"),
     ("validate_verification", "verification.md", "an equivalent mutant with no reason",
      lambda s: s.replace("| equivalent - the caller records the unknown status again one line below |", "| equivalent |", 1),
      1, "no test kills it"),
+    # A survivor dressed as markdown, or a word where the test should be, is still a survivor.
+    ("validate_verification", "verification.md", "a survived mutant in backticks",
+     killed_by("`survived`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a survived mutant in bold",
+     killed_by("**survived**"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a mutant marked killed with no test named",
+     killed_by("killed"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a survivor that names a test after the word",
+     killed_by("survived - `test/billing/transitions_test.rb` is too weak"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a status word in backticks where the test goes",
+     killed_by("`n/a`"), 1, "no test kills it"),
+    # An unescaped `|` in the Mutant cell shifts the columns: `Killed by` would be read off the mutant.
+    ("validate_verification", "verification.md", "a survivor whose mutant holds an unescaped pipe",
+     lambda s: s.replace("`app/billing/transitions.rb:14` guard removed | `test/billing/transitions_test.rb` "
+                         "`test_suspended_to_trialing_is_rejected` |",
+                         "`app/billing/transitions.rb:14` `a | b` -> `a & b` | survived |", 1),
+     1, "\\|"),
+    ("validate_verification", "verification.md", "a bare None under Mutants",
+     mutants_section("None"), 1, "no `## Mutants` section"),
+    ("validate_verification", "verification.md", "a line that only starts with none",
+     mutants_section("Nonetheless the mutants were skipped"), 1, "no `## Mutants` section"),
 
     ("validate_verification", "verification.md", "self-verified report (warn)",
      lambda s: s.replace("independent sub-agent (author != verifier)", "self-verified (degraded - no sub-agent)"),
@@ -475,8 +508,16 @@ NEGATIVE_CONTROLS = [
     ("validate_verification", "a screen no capture draws owes no picture and no screens.md",
      {"plan.md": with_screen}),
     ("validate_verification", "a diff with no rule to mutate writes None under Mutants",
-     {"verification.md": lambda s: re.sub(r"## Mutants\n.*?\n## Findings",
-                                          "## Mutants\n\nNone - the diff only renames a log field\n\n## Findings", s, flags=re.S)}),
+     {"verification.md": mutants_section("None - the diff only renames a log field")}),
+    ("validate_verification", "a feature verified before mutants owes only the legacy None line",
+     {"verification.md": mutants_section("None - verified before mutants")}),
+    ("validate_verification", "a killed mutant whose cell holds an escaped pipe is read in its columns",
+     {"verification.md": lambda s: s.replace("`app/billing/transitions.rb:14` guard removed",
+                                             "`app/billing/transitions.rb:14` `a \\|\\| b` -> `a && b`", 1)}),
+    ("validate_verification", "an equivalent mutant whose reason follows a dash of any width",
+     {"verification.md": killed_by("equivalent — the state machine refuses the transition again before saving")}),
+    ("validate_verification", "a test name in bold backticks kills the mutant",
+     {"verification.md": killed_by("**`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected`**")}),
     ("validate_verification", "an equivalent mutant with its reason is accepted",
      {"verification.md": lambda s: s.replace(
          "| `test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` |\n| unknown",
