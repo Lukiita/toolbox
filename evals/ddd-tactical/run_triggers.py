@@ -83,12 +83,17 @@ class RunSettings:
     timeout: int
 
 
+def fixture_of(query: TriggerQuery) -> str:
+    """The project a query runs in; a query that names none runs in the TypeScript one."""
+    return query.get("fixture", DEFAULT_FIXTURE)
+
+
 def load_queries(ids: set[int]) -> list[TriggerQuery]:
     queries: list[TriggerQuery] = json.loads(QUERIES_FILE.read_text(encoding="utf-8"))
     unknown = ids - {query["id"] for query in queries}
     if unknown:
         sys.exit(f"unknown query ids {sorted(unknown)}, expected ids from {QUERIES_FILE.name}")
-    unknown_fixtures = {query.get("fixture", DEFAULT_FIXTURE) for query in queries} - FIXTURE_FILES.keys()
+    unknown_fixtures = {fixture_of(query) for query in queries} - FIXTURE_FILES.keys()
     if unknown_fixtures:
         sys.exit(f"unknown fixtures {sorted(unknown_fixtures)}, expected one of {sorted(FIXTURE_FILES)}")
     return [query for query in queries if not ids or query["id"] in ids]
@@ -194,7 +199,7 @@ def skills_loaded(query: TriggerQuery, settings: RunSettings) -> list[str] | Non
     proc: subprocess.Popen[bytes] | None = None
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     try:
-        materialize_fixture(workdir, query.get("fixture", DEFAULT_FIXTURE))
+        materialize_fixture(workdir, fixture_of(query))
         proc = subprocess.Popen(claude_command(query["query"], settings), stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=workdir, env=env)
         return watch_run(proc, settings.timeout)
@@ -221,8 +226,7 @@ def print_report(results: list[QueryResult]) -> None:
     for result in results:
         verdict = "TIE " if result["inconclusive"] else "PASS" if result["passed"] else "FAIL"
         expect = "yes" if result["should_trigger"] else "no "
-        fixture = result.get("fixture", DEFAULT_FIXTURE)
-        print(f"[{verdict}] {result['id']:>2} {fixture:<10} {result['hits']}/{result['runs']} invalid={result['invalid']} "
+        print(f"[{verdict}] {result['id']:>2} {fixture_of(result):<10} {result['hits']}/{result['runs']} invalid={result['invalid']} "
               f"expect={expect} {result['query'][:60]} | {result['loaded']}")
     print(f"passed {sum(result['passed'] for result in results)}/{len(results)}")
 
