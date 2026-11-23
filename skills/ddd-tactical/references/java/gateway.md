@@ -21,7 +21,7 @@ public interface PaymentGateway {
     /**
      * @throws DomainException {@code payment.declined} when the provider refuses the charge
      * @throws com.example.shared.infra.InfrastructureException {@code payment.provider-unavailable}
-     *     when the provider cannot be reached after the adapter's retries
+     *     when the provider fails, rate-limits or rejects the request, after the adapter's retries
      */
     PaymentReceipt charge(Money amount, CustomerId customer);
 }
@@ -42,50 +42,65 @@ import com.example.subscription.domain.PaymentGateway;
 import com.example.subscription.domain.PaymentReceipt;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.UUID;
 import org.springframework.core.retry.RetryPolicy;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Adapter for a payment provider's HTTP API. Translates in both directions: a refusal becomes a
- * DomainException the caller can route on; a failure, after the retries give up, becomes an
- * InfrastructureException with the provider's error as cause.
+ * DomainException the caller can route on; any failure, after the retries give up, becomes an
+ * InfrastructureException with the provider's error as cause - no provider type leaves this class.
+ *
+ * <p>Circuit breaker: none for this provider (decided per provider - see gateway.md). Fallback:
+ * none - a charge that did not happen must never look like one that did.
  */
 class HttpPaymentGateway implements PaymentGateway {
-    // Retry only what can pass on its own: 5xx and I/O (timeouts included). A decline never retries.
-    private static final RetryPolicy TRANSIENT_FAILURES = RetryPolicy.builder()
-            .includes(HttpServerErrorException.class, ResourceAccessException.class)
-            .maxRetries(2)
-            .delay(Duration.ofMillis(200))
-            .multiplier(2)
-            .build();
-
     private final RestClient provider;
-    private final RetryTemplate retry = new RetryTemplate(TRANSIENT_FAILURES);
+    private final RetryTemplate retry;
     private final Clock clock;
 
-    HttpPaymentGateway(RestClient provider, Clock clock) {
+    HttpPaymentGateway(RestClient provider, RetryTemplate retry, Clock clock) {
         this.provider = provider;
+        this.retry = retry;
         this.clock = clock;
+    }
+
+    /** Retries only what can pass on its own: 5xx, 429 and I/O (timeouts included). A decline never retries. */
+    static RetryTemplate retryOnTransientFailures(int maxRetries, Duration delay) {
+        return new RetryTemplate(RetryPolicy.builder()
+                .includes(HttpServerErrorException.class, HttpClientErrorException.TooManyRequests.class,
+                        ResourceAccessException.class)
+                .maxRetries(maxRetries)
+                .delay(delay)
+                .multiplier(2)
+                .build());
     }
 
     @Override
     public PaymentReceipt charge(Money amount, CustomerId customer) {
+        // One key for every attempt: a timeout can hide a charge the provider already took, and
+        // the key makes the provider apply a retried charge once, never twice.
+        String idempotencyKey = UUID.randomUUID().toString();
+        ChargeRequest request = new ChargeRequest(amount.cents(), amount.currency().name(), customer.value());
         try {
-            ChargeResponse response = retry.invoke(() -> post(new ChargeRequest(amount.cents(), amount.currency().name(), customer.value())));
+            ChargeResponse response = retry.invoke(() -> post(request, idempotencyKey));
             return new PaymentReceipt(response.id(), clock.instant());
-        } catch (HttpServerErrorException | ResourceAccessException failure) {
+        } catch (RestClientException failure) {
             throw new InfrastructureException("payment.provider-unavailable",
-                    "charge for customer " + customer.value() + " failed after retries", failure);
+                    "charge for customer " + customer.value() + " failed", failure);
         }
     }
 
-    private ChargeResponse post(ChargeRequest request) {
+    private ChargeResponse post(ChargeRequest request, String idempotencyKey) {
         return provider.post()
                 .uri("/charges")
+                .header("Idempotency-Key", idempotencyKey)
                 .body(request)
                 .retrieve()
                 .onStatus(status -> status.isSameCodeAs(HttpStatus.PAYMENT_REQUIRED), (req, res) -> {
@@ -101,36 +116,67 @@ class HttpPaymentGateway implements PaymentGateway {
 }
 ```
 
-- **Retry with Spring Framework 7's core `RetryTemplate`**, no extra dependency. The policy names the transient failures it retries (5xx and I/O, timeouts included), so a decline never retries. `invoke` rethrows the last failure once the retries are spent, and the one `catch` translates it: one place, and testable without a Spring context. (Spring 7 also offers `@Retryable` with `@EnableResilientMethods`; the template keeps the retry and the translation in the same method.)
+- **One idempotency key per charge, sent on every attempt.** A timeout or a 5xx can hide a charge the provider already took, and a blind retry would charge twice; the key makes the provider apply a retried charge once. The key born in the adapter covers the adapter's own retries. A retry of the whole command (a client resubmitting) needs a key tied to the business operation, such as the subscription and the period being paid, passed through the port.
+- **Retry only what can pass on its own** (5xx, 429, I/O with timeouts), with Spring Framework 7's core `RetryTemplate`: no extra dependency. `invoke` rethrows the last failure once the retries are spent. (Spring 7 also offers `@Retryable` with `@EnableResilientMethods`; the template keeps the retry and the translation in one method, testable without a Spring context.)
+- **Every provider failure is translated.** One `catch (RestClientException …)` covers 5xx, 429, any other 4xx, I/O and an unreadable answer, so no provider type crosses the port and the advice answers 503. Only a 402 is a refusal (`payment.declined`), and it is never retried. Verified: three attempts on 5xx and on 429, one on 400 and on 402, and the same key on every attempt.
+- **Circuit breaker and fallback are decided per provider, explicitly**, and written in the adapter's Javadoc. Spring has no circuit breaker; Resilience4j wraps the same call when a provider's outages last long enough that retries pile up (a dependency, so the project decides). A payment has no fallback: a charge that did not happen must never look like one that did.
 - **`Money` already is integer minor units**, the unit payment APIs expect, so nothing is converted on the way out.
-- **No circuit breaker in Spring itself.** When a provider's outages last long enough that retries pile up, add Resilience4j around the call. It is a dependency, so the project decides.
 
-## The timeout and the wiring
+## One place for the provider's limits
 
-Every external call gets a timeout: without one, a slow provider holds a request thread for as long as it likes.
+Every external call gets a timeout, and every limit of one provider lives in one properties record: the URL, both timeouts, the retries. The record also bounds the worst case of one charge. Know that bound: a gateway called inside a `@Transactional` handler holds a pooled database connection for all of it. Keep it below what the pool tolerates, and when the provider is slow, split the flow so the charge runs outside the transaction.
+
+```java
+package com.example.subscription.infra;
+
+import java.net.URI;
+import java.time.Duration;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+/**
+ * Every limit of the payment provider in one place, bound from {@code payment.provider.*}.
+ * The worst case of one charge is (connectTimeout + readTimeout) x (maxRetries + 1) plus the
+ * backoff - keep it below what the caller's transaction and connection pool tolerate.
+ */
+@ConfigurationProperties("payment.provider")
+record PaymentProviderProperties(URI baseUrl, Duration connectTimeout, Duration readTimeout, int maxRetries,
+        Duration retryDelay) {}
+```
+
+```properties
+payment.provider.base-url=https://provider.example
+payment.provider.connect-timeout=2s
+payment.provider.read-timeout=5s
+payment.provider.max-retries=2
+payment.provider.retry-delay=200ms
+```
 
 ```java
 package com.example.subscription.infra;
 
 import java.net.http.HttpClient;
 import java.time.Clock;
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(PaymentProviderProperties.class)
 class PaymentProviderConfiguration {
     @Bean
-    HttpPaymentGateway paymentGateway(RestClient.Builder builder, Clock clock,
-            @Value("${payment.provider.base-url}") String baseUrl) {
-        // Every external call gets a timeout: without one a slow provider holds a thread forever.
-        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    HttpPaymentGateway paymentGateway(RestClient.Builder builder, PaymentProviderProperties provider, Clock clock) {
+        return new HttpPaymentGateway(restClient(builder, provider),
+                HttpPaymentGateway.retryOnTransientFailures(provider.maxRetries(), provider.retryDelay()), clock);
+    }
+
+    // Every external call gets a timeout: without one a slow provider holds a thread forever.
+    private static RestClient restClient(RestClient.Builder builder, PaymentProviderProperties provider) {
+        HttpClient http = HttpClient.newBuilder().connectTimeout(provider.connectTimeout()).build();
         JdkClientHttpRequestFactory requests = new JdkClientHttpRequestFactory(http);
-        requests.setReadTimeout(Duration.ofSeconds(5));
-        return new HttpPaymentGateway(builder.baseUrl(baseUrl).requestFactory(requests).build(), clock);
+        requests.setReadTimeout(provider.readTimeout());
+        return builder.baseUrl(provider.baseUrl().toString()).requestFactory(requests).build();
     }
 }
 ```
@@ -146,7 +192,8 @@ Commands receive the gateway by its port type, through the constructor, like a r
 void setUp() {
     RestClient.Builder builder = RestClient.builder().baseUrl("http://provider");
     provider = MockRestServiceServer.bindTo(builder).build();
-    gateway = new HttpPaymentGateway(builder.build(), Clock.fixed(NOW, ZoneOffset.UTC));
+    gateway = new HttpPaymentGateway(builder.build(), HttpPaymentGateway.retryOnTransientFailures(2, Duration.ofMillis(10)),
+            Clock.fixed(NOW, ZoneOffset.UTC));
 }
 
 @Test
@@ -159,4 +206,4 @@ void anOutageRetriesThenThrowsInfrastructure() {
 }
 ```
 
-The decline case expects `ExpectedCount.once()` and a `DomainException` with code `payment.declined`, which proves a refusal never retries.
+The other cases: a decline expects `ExpectedCount.once()` and a `DomainException` with code `payment.declined`; a 429 expects three attempts; a 400 expects one attempt and an `InfrastructureException`. A matcher that collects the `Idempotency-Key` header of each request proves every attempt sends the same key.
