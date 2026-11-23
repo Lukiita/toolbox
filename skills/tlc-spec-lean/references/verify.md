@@ -87,8 +87,9 @@ discrimination sensor. Finish and remove your throwaway examples first.
    mutants again once the user has the tree back. Then write the `## Mutants` rows.
 
 Each mutant gets a `## Mutants` row. `Killed by` names the test that went red: its file, class or
-node id, then its name when apart - `` `test/x_test.rb` `test_y` ``, `` `t.py::A::test_b` ``,
-`` `TransferTest` `shouldX` `` - and nothing after; a mutant no test kills reads `survived` and is a
+node id, with `test` or `spec` in it, then its name when apart - `` `test/x_test.rb` `test_y` ``,
+`` `t.py::A::test_b` ``, `` `TransferTest` `shouldX` ``; a class named otherwise, like `TransferIT`,
+goes by its path - and nothing after; a mutant no test kills reads `survived` and is a
 finding. A `|` inside a cell is written `\|`. A diff that touches no such rule writes
 `None - <why>`.
 

@@ -240,6 +240,9 @@ CASES = [
      killed_by("`app/billing/transitions.rb:14` `guard removed`"), 1, "no test kills it"),
     ("validate_verification", "verification.md", "a report file where the test goes",
      killed_by("`proofs.md` `n/a`"), 1, "no test kills it"),
+    # A class named without test or spec (Maven Failsafe's `*IT`) is written with its path; the error says so.
+    ("validate_verification", "verification.md", "a Failsafe IT class named without its path",
+     killed_by("`TransitionsIT` `suspendedToTrialingIsRejected`"), 1, "write its path"),
     # A row no table reads - after a blank line, with no header of its own - is still a mutant.
     ("validate_verification", "verification.md", "a survived row after a blank line",
      lambda s: s.replace("\n\n## Findings", "\n\n| sign | `app/billing/dunning.rb:30` `+q` -> `-q` | survived |"
@@ -552,6 +555,8 @@ NEGATIVE_CONTROLS = [
      {"verification.md": killed_by("`e2e/billing.spec.ts:12:5` `rejects trialing after suspension`")}),
     ("validate_verification", "a JUnit class and method kill the mutant",
      {"verification.md": killed_by("`TransitionsTest` `suspendedToTrialingIsRejected`")}),
+    ("validate_verification", "a Failsafe IT class named by its path kills the mutant",
+     {"verification.md": killed_by("`src/test/java/com/loja/billing/TransitionsIT.java` `suspendedToTrialingIsRejected`")}),
     ("validate_verification", "a Go test file and function kill the mutant",
      {"verification.md": killed_by("`billing/transitions_test.go` `TestSuspendedToTrialingIsRejected`")}),
     ("validate_verification", "a test file with its line kills the mutant",

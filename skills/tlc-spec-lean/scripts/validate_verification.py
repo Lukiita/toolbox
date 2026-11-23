@@ -451,8 +451,9 @@ def _mutant_rows_settled(header, rows, name):
                           f"write a `|` inside a cell as `\\|`")
         elif not _killed_by_settles(cell):
             errors.append(f"{name}: mutant '{label}' reads '{cell or 'empty'}' and no test kills it - `Killed by` "
-                          f"names the test that went red - its file, class or node id, then its name if apart; run a "
-                          f"survivor, or a mutant not run, at the fix commit and write the test that goes red")
+                          f"names the test that went red - its file, class or node id with `test` or `spec` in it (for a "
+                          f"class named otherwise, like `TransferIT`, write its path), then its name if apart; run "
+                          f"a survivor, or a mutant not run, at the fix commit and write the test that goes red")
     return errors
 
 
