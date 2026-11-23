@@ -4,8 +4,10 @@
 Maintainer tooling: it lives outside skills/ so no project install carries it; a skill
 folder holds only what the skill needs to work.
 
-Each query runs in `claude -p` inside a throwaway copy of a small TypeScript project
-(trigger-fixture.json) and the run records every skill the agent loads. The installed
+Each query runs in `claude -p` inside a throwaway copy of a small project and the run
+records every skill the agent loads. A query names its project in `fixture`: the
+TypeScript one (trigger-fixture.json, the default) or the Java/Spring Boot one
+(trigger-fixture-java.json), so a Java phrase meets a Java codebase. The installed
 skills compete as they do in daily use, so a miss can be a neighbour winning: the
 report prints which skill each run loaded.
 
@@ -17,7 +19,7 @@ eval measures the skill in daily use, so a score is tied to that setup.
 Why the fixture, not an empty folder: a query like "the rule is scattered in the billing
 service" makes the agent look for that service first; in an empty folder it asks where
 the code is and never reaches the skill (5 of 6 false misses, 2026-11-21). It is packed
-as one JSON, not as .ts files, so the fake project stays out of the toolbox's own
+as one JSON, not as source files, so the fake project stays out of the toolbox's own
 prettier and lint runs, and its deliberately anemic code is never mistaken for real code.
 Why Sonnet by default: Haiku barely loads any skill, neighbours included, so it measures
 the model, not the description (same date).
@@ -44,7 +46,8 @@ from typing import Iterator, TypedDict
 TARGET_SKILL = "ddd-tactical"
 HERE = Path(__file__).resolve().parent
 QUERIES_FILE = HERE / "triggers.json"
-FIXTURE_FILE = HERE / "trigger-fixture.json"
+FIXTURE_FILES = {"typescript": HERE / "trigger-fixture.json", "java": HERE / "trigger-fixture-java.json"}
+DEFAULT_FIXTURE = "typescript"
 # Writing tools are removed so no run edits the fixture; the trigger decision comes first anyway.
 DISALLOWED_TOOLS = ["Bash", "Write", "Edit", "NotebookEdit"]
 # Reaching --max-turns is an answer (the agent explored and never loaded the skill);
@@ -54,16 +57,18 @@ MAX_TURNS_SUBTYPE = "error_max_turns"
 Event = dict[str, object]
 
 
-class TriggerQuery(TypedDict):
+class _TriggerQueryKeys(TypedDict):
     id: int
     should_trigger: bool
     query: str
 
 
-class QueryResult(TypedDict):
-    id: int
-    should_trigger: bool
-    query: str
+# total=False: `fixture` may be absent (Python 3.10 has no NotRequired); absent means DEFAULT_FIXTURE.
+class TriggerQuery(_TriggerQueryKeys, total=False):
+    fixture: str
+
+
+class QueryResult(TriggerQuery):
     hits: int
     runs: int
     invalid: int
@@ -83,11 +88,14 @@ def load_queries(ids: set[int]) -> list[TriggerQuery]:
     unknown = ids - {query["id"] for query in queries}
     if unknown:
         sys.exit(f"unknown query ids {sorted(unknown)}, expected ids from {QUERIES_FILE.name}")
+    unknown_fixtures = {query.get("fixture", DEFAULT_FIXTURE) for query in queries} - FIXTURE_FILES.keys()
+    if unknown_fixtures:
+        sys.exit(f"unknown fixtures {sorted(unknown_fixtures)}, expected one of {sorted(FIXTURE_FILES)}")
     return [query for query in queries if not ids or query["id"] in ids]
 
 
-def materialize_fixture(target: Path) -> None:
-    files: dict[str, str] = json.loads(FIXTURE_FILE.read_text(encoding="utf-8"))
+def materialize_fixture(target: Path, fixture: str) -> None:
+    files: dict[str, str] = json.loads(FIXTURE_FILES[fixture].read_text(encoding="utf-8"))
     for relative, content in files.items():
         path = target / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -181,13 +189,13 @@ def stop_process(proc: subprocess.Popen[bytes] | None) -> None:
     proc.wait()
 
 
-def skills_loaded(query: str, settings: RunSettings) -> list[str] | None:
+def skills_loaded(query: TriggerQuery, settings: RunSettings) -> list[str] | None:
     workdir = Path(tempfile.mkdtemp(prefix="ddd-trigger-"))
     proc: subprocess.Popen[bytes] | None = None
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     try:
-        materialize_fixture(workdir)
-        proc = subprocess.Popen(claude_command(query, settings), stdin=subprocess.DEVNULL,
+        materialize_fixture(workdir, query.get("fixture", DEFAULT_FIXTURE))
+        proc = subprocess.Popen(claude_command(query["query"], settings), stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=workdir, env=env)
         return watch_run(proc, settings.timeout)
     except OSError as error:  # e.g. `claude` not on PATH: one invalid run, not a crashed eval
@@ -213,7 +221,8 @@ def print_report(results: list[QueryResult]) -> None:
     for result in results:
         verdict = "TIE " if result["inconclusive"] else "PASS" if result["passed"] else "FAIL"
         expect = "yes" if result["should_trigger"] else "no "
-        print(f"[{verdict}] {result['id']:>2} {result['hits']}/{result['runs']} invalid={result['invalid']} "
+        fixture = result.get("fixture", DEFAULT_FIXTURE)
+        print(f"[{verdict}] {result['id']:>2} {fixture:<10} {result['hits']}/{result['runs']} invalid={result['invalid']} "
               f"expect={expect} {result['query'][:60]} | {result['loaded']}")
     print(f"passed {sum(result['passed'] for result in results)}/{len(results)}")
 
@@ -235,7 +244,7 @@ def main() -> None:
     queries = load_queries({int(i) for i in args.ids.split(",") if i})
     jobs = [query for query in queries for _ in range(args.runs)]
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        outcomes = list(pool.map(lambda job: skills_loaded(job["query"], settings), jobs))
+        outcomes = list(pool.map(lambda job: skills_loaded(job, settings), jobs))
     results = [summarize(query, [o for job, o in zip(jobs, outcomes) if job is query]) for query in queries]
     print_report(results)
     if args.out:
