@@ -15,8 +15,8 @@ What it checks:
   ERROR  - no `## Checks` table in verification.md, a check with no row in it, or a row with no test
   ERROR  - no `## Findings` section in verification.md, or a finding with no commit in `Closed`
   ERROR  - no `## Mutants` section in verification.md (a table, or `None - <why>`), a mutant whose
-           `Killed by` does not begin with a test in backticks, or a mutant row with more cells than
-           its header (a `|` inside a cell is written `\|`)
+           `Killed by` is not the test that went red as `## Checks` names one (`<file>` `<name>`), or
+           a mutant row with more cells than its header (a `|` inside a cell is written `\|`)
   ERROR  - pictures owed (a criterion cites a capture, or a check is proven in the browser) and no
            screens.md, a row in it that does not read `matches`, a cited capture with no
            `<capture>.running.png`, or a picture at another size than its capture (1x, 2x, 3x pass)
@@ -298,13 +298,12 @@ def _browser_shots(fdir, name, running):
     return errors
 
 
-# Local patch (toolbox UPSTREAM.md item 7): what settles a mutant. `Killed by` opens with the test that
-# went red, in backticks as `## Checks` names tests - nothing else, `equivalent` included: a fault no
-# caller can see is dropped for another, never written down. Without a table the section is one
-# `None - <why>` line.
-KILLED_BY_TEST_RE = re.compile(r"^`([^`]+)`")
+# Local patch (toolbox UPSTREAM.md item 7): what settles a mutant. `Killed by` is the test that went
+# red, named as `## Checks` names one - `<file>` `<name>`, the file with its extension (and line), and
+# nothing after. The form is the rule, not a list of refused words: a status in code font (`not run`,
+# `survived - why`) has no file and fails. Without a table the section is one `None - <why>` line.
+KILLED_BY_TEST_RE = re.compile(r"^`[^`\s]+\.[A-Za-z0-9]+(?::\d+)?`\s+`[^`]*\w[^`]*`$")
 NONE_WITH_REASON_RE = re.compile(r"^[*_\s]*none[*_\s]*[-–—:]\s*\S", re.IGNORECASE)
-NOT_A_TEST = {"survived", "killed", "none", "n/a", "na", "equivalent", "pending", "-", "—"}
 CHECK_ID_RE = re.compile(r"^\**\s*(C\d+)\s*\**\s*[-–—:]")
 SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
 
@@ -395,12 +394,13 @@ def _check_with_proofs(fdir, name, lines, checks_lines):
 
 
 def _mutants_settled(lines, name):
-    """Every mutant ends killed by a named test: a survivor is a test that does not hold its claim. Local patch (toolbox UPSTREAM.md item 7) - in the lab that motivated it, a
-    reading Verifier passed three tests that a one-millisecond, a removed-trim and a swapped-code
-    mutant all survived."""
-    section = [ln for ln in _section(lines, "Mutants") if ln]
-    tables = find_tables(section)
-    if not tables and not any(NONE_WITH_REASON_RE.match(ln) for ln in section):
+    """Every mutant ends killed by a named test: a survivor is a test that does not hold its claim.
+    Local patch (toolbox UPSTREAM.md item 7) - in the lab that motivated it, a reading Verifier
+    passed three tests that a one-millisecond, a removed-trim and a swapped-code mutant all
+    survived."""
+    section = _section(lines, "Mutants")
+    tables = find_tables(section)  # blank lines kept: they are what keeps two tables apart
+    if not tables and not any(NONE_WITH_REASON_RE.match(ln) for ln in section if ln):
         return [f"{name}: verification.md has no `## Mutants` section - mutate each rule that changes an outcome "
                 f"the diff touched and write a row per mutant, or `None - <why>` when the diff touches none "
                 f"(`None - verified before mutants` for a feature verified before this gate)"]
@@ -423,15 +423,14 @@ def _mutant_rows_settled(header, rows, name):
                           f"write a `|` inside a cell as `\\|`")
         elif not _killed_by_settles(cell):
             errors.append(f"{name}: mutant '{label}' reads '{cell or 'empty'}' and no test kills it - `Killed by` "
-                          f"opens with the test that went red, in backticks; run a survivor, or a mutant not run, "
-                          f"at the fix commit and write the test that goes red")
+                          f"is the test that went red, `<file>` `<name>` as in `## Checks`; run a survivor, or a "
+                          f"mutant not run, at the fix commit and write the test that goes red")
     return errors
 
 
 def _killed_by_settles(cell):
-    """True for a test named first, in backticks; bold and italics aside."""
-    test = KILLED_BY_TEST_RE.match(cell.strip().strip("*_ "))
-    return bool(test) and test.group(1).strip().lower() not in NOT_A_TEST
+    """True for `<file>` `<name>` and nothing else; bold and italics aside."""
+    return bool(KILLED_BY_TEST_RE.match(cell.strip().strip("*_ ")))
 
 
 def _check_feature(fdir, name):

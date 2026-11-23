@@ -220,6 +220,18 @@ CASES = [
      killed_by("survived - `test/billing/transitions_test.rb` is too weak"), 1, "no test kills it"),
     ("validate_verification", "verification.md", "a status word in backticks where the test goes",
      killed_by("`n/a`"), 1, "no test kills it"),
+    # A test is named as `## Checks` names it - `<file>` `<name>`, nothing after - so a status in code font fails.
+    ("validate_verification", "verification.md", "a mutant not run, in code font as verify.md prints it",
+     killed_by("`not run - baseline red`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a survivor with its reason in code font",
+     killed_by("`survived - asserts the count, not the sign`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "an equivalent claim in code font",
+     killed_by("`equivalent - no caller sees it`"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "an empty code span where the test goes",
+     killed_by("` `"), 1, "no test kills it"),
+    ("validate_verification", "verification.md", "a test named and then marked survived",
+     killed_by("`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected` - survived"),
+     1, "no test kills it"),
     # An unescaped `|` in the Mutant cell shifts the columns: `Killed by` would be read off the mutant.
     ("validate_verification", "verification.md", "a survivor whose mutant holds an unescaped pipe",
      lambda s: s.replace("`app/billing/transitions.rb:14` guard removed | `test/billing/transitions_test.rb` "
@@ -512,6 +524,7 @@ NEGATIVE_CONTROLS = [
       RUNNING: lambda s: png(1024, 839)}),
     ("validate_verification", "a screen no capture draws owes no picture and no screens.md",
      {"plan.md": with_screen}),
+    # Local patch (toolbox UPSTREAM.md item 7): what the mutants gate must accept.
     ("validate_verification", "a diff with no rule to mutate writes None under Mutants",
      {"verification.md": mutants_section("None - the diff only renames a log field")}),
     ("validate_verification", "a feature verified before mutants owes only the legacy None line",
@@ -521,6 +534,12 @@ NEGATIVE_CONTROLS = [
                                              "`app/billing/transitions.rb:14` `a \\|\\| b` -> `a && b`", 1)}),
     ("validate_verification", "a test name in bold backticks kills the mutant",
      {"verification.md": killed_by("**`test/billing/transitions_test.rb` `test_suspended_to_trialing_is_rejected`**")}),
+    ("validate_verification", "a test file with its line kills the mutant",
+     {"verification.md": killed_by("`test/billing/transitions_test.rb:14` `test_suspended_to_trialing_is_rejected`")}),
+    ("validate_verification", "two mutant tables apart are read as two tables",
+     {"verification.md": lambda s: s.replace(
+         "| unknown status recorded |",
+         "\n| Rule | Mutant | Killed by |\n| --- | --- | --- |\n| unknown status recorded |", 1)}),
     ("validate_verification", "proofs.md green and no finding is accepted",
      {"verification.md": lambda s: s.split("## Findings")[0] + "## Findings\n\nNone - every rule probed held\n"}),
     ("validate_verification", "a browser proof whose screenshot exists is accepted",
