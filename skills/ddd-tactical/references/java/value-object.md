@@ -44,23 +44,33 @@ import java.util.Objects;
  * }</pre>
  */
 public record Money(long cents, CurrencyCode currency) {
+    // 15 whole digits keep any amount far inside a long's range of cents.
+    private static final int MAX_WHOLE_DIGITS = 15;
+
     // Runs on every `new Money(...)` - the domain's, a test's, and Spring Data's when it loads a row.
     public Money {
         Objects.requireNonNull(currency, "Money needs a currency, received null");
     }
 
     /**
-     * The edge door: a decimal as the outside world speaks it (a form, a JSON body).
+     * The edge door: a decimal as the outside world speaks it (a form, a JSON body). Both checks
+     * read the value's scale and precision and never expand it: {@code 1e-999999999} written out
+     * in full is a billion characters.
      *
      * @throws DomainException {@code money.sub-cent-precision} when the value has more than two decimals
+     * @throws DomainException {@code money.out-of-range} when it has more than 15 whole digits
      */
     public static Money fromDecimal(BigDecimal value, CurrencyCode currency) {
-        BigDecimal cents = value.movePointRight(2);
-        if (cents.stripTrailingZeros().scale() > 0) {
-            throw new DomainException("money.sub-cent-precision", "received " + value.toPlainString()
-                    + ", which does not fit " + currency + " cents - round it explicitly or use cents");
+        BigDecimal exact = value.stripTrailingZeros();
+        if (exact.scale() > 2) {
+            throw new DomainException("money.sub-cent-precision",
+                    "received " + value + ", expected at most two decimals - round it explicitly or use cents");
         }
-        return new Money(cents.longValueExact(), currency);
+        if (exact.precision() - exact.scale() > MAX_WHOLE_DIGITS) {
+            throw new DomainException("money.out-of-range",
+                    "received " + value + ", expected at most " + MAX_WHOLE_DIGITS + " whole digits");
+        }
+        return new Money(exact.movePointRight(2).longValueExact(), currency);
     }
 
     /** @throws DomainException {@code money.currency-mismatch} when the currencies differ */
@@ -78,6 +88,7 @@ public record Money(long cents, CurrencyCode currency) {
 
 - **`long` does what a runtime check does in TypeScript.** A fractional cent cannot be stored in a `long`, so the "must be an integer" rule disappears into the type.
 - **The edge door takes `BigDecimal`, never `double`.** A request record declares its amount as `BigDecimal`; a `double` has already lost the cent before any check could run.
+- **The edge door reads scale and precision and never writes the number out.** Client input reaches it, and `new BigDecimal("1e-999999999").toPlainString()` is a billion characters: one request, one out-of-memory error. Above 15 whole digits it refuses with `money.out-of-range` instead of overflowing (both verified).
 - **Heavier arithmetic** (pro-rata splits, interest) uses `BigDecimal` with an explicit `RoundingMode` inside the value object or a domain service, and emerges holding a `Money`. `java.math` ships with the JDK, so the TypeScript caveat about third-party math libraries does not arise.
 
 ## Inside an aggregate: embedded columns
