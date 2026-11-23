@@ -206,6 +206,9 @@ CASES = [
      killed_by("equivalent"), 1, "no test kills it"),
     ("validate_verification", "verification.md", "an equivalent mutant with its reason",
      killed_by("equivalent - the state machine refuses the transition again before saving"), 1, "no test kills it"),
+    # A red baseline in the fresh worktree is a finding, and its mutants stay open until they run.
+    ("validate_verification", "verification.md", "a mutant not run because the baseline was red",
+     killed_by("not run - baseline red"), 1, "no test kills it"),
     # A survivor dressed as markdown, or a word where the test should be, is still a survivor.
     ("validate_verification", "verification.md", "a survived mutant in backticks",
      killed_by("`survived`"), 1, "no test kills it"),

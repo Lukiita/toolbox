@@ -27,8 +27,9 @@ a new session and write `Verifier: self-verified (degraded - no sub-agent)`; the
    the fix changed code re-saves every picture at the new `HEAD` and resumes the round-1 screens
    sub-agent for round 2 (it is the last), writes the closing commit into each finding, and runs the gate.
    There is no second Verifier: the script shows the proofs green at the new `HEAD`, the fixed tests
-   among them. A `survived` mutant is closed by running it again, the same way, at the fix commit and
-   writing the test that now goes red in its `Killed by` cell. What still fails goes to the user.
+   among them. A `survived` mutant, or one `not run`, is closed by running it, the same way, at the
+   fix commit and writing the test that goes red in its `Killed by` cell. What still fails goes to the
+   user.
 
 ## What the Verifier does
 
@@ -63,8 +64,9 @@ rule. Mutate in a scratch git worktree, never the real tree:
    path this step created.
 2. Make it runnable the way a fresh clone is - the project's install command, the ignored config
    its docs name - and run the `Run` group that covers the rule, unmutated: it must pass. A red
-   baseline makes every mutant read killed; when it cannot pass, write `None - the Run group does
-   not pass in a fresh worktree: <why>` and say so in chat.
+   baseline makes every mutant read killed. When it cannot pass, write each planned mutant's row
+   with `Killed by` reading `not run - baseline red`, and a finding: the `Run` group does not pass
+   in a fresh worktree, with what it lacks. The builder makes the setup work and runs those mutants.
 3. One mutant at a time: change the line, run the group, write the row, restore with
    `git -C "$tmp" checkout -- .` before the next.
 4. `git worktree remove --force "$tmp"` at the end, also when a run failed or hung. The real tree's
@@ -128,9 +130,9 @@ Write `.specs/features/<feature>/verification.md`:
 Every check gets a `## Checks` row with the test named; the gate refuses a missing row or an empty
 `Test`. With nothing to report, write `None - <one line on what was probed>` under `## Findings` and
 `**Verdict**: PASS`. Return the findings in chat. The builder fills `Closed` with the commit that
-fixes each one and the check that now proves it, and the `Killed by` cell of each `survived` mutant
-with the test that kills it at that commit; the gate refuses an empty `Closed` and a mutant left
-`survived`.
+fixes each one and the check that now proves it, and the `Killed by` cell of each `survived` or
+`not run` mutant with the test that kills it at that commit; the gate refuses an empty `Closed` and
+a mutant left `survived` or `not run`.
 
 ## The gate
 

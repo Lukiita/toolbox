@@ -423,8 +423,8 @@ def _mutant_rows_settled(header, rows, name):
                           f"write a `|` inside a cell as `\\|`")
         elif not _killed_by_settles(cell):
             errors.append(f"{name}: mutant '{label}' reads '{cell or 'empty'}' and no test kills it - `Killed by` "
-                          f"opens with the test that went red, in backticks; run a survivor again at the fix commit "
-                          f"and write the test that goes red")
+                          f"opens with the test that went red, in backticks; run a survivor, or a mutant not run, "
+                          f"at the fix commit and write the test that goes red")
     return errors
 
 
