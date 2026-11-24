@@ -422,6 +422,14 @@ MULTI_CASES = [
     ("validate_verification", "a report with no Findings section",
      {"verification.md": lambda s: s.split("## Findings")[0]},
      1, "no `## Findings` section"),
+    # Local patch (toolbox UPSTREAM.md item 9): `## Findings` reads GFM tables like `## Mutants` (item 7).
+    # find_tables dropped a one-row "table", so an open finding after a blank line was never read.
+    ("validate_verification", "an open finding after a blank line under Findings",
+     {"verification.md": lambda s: s + "\n| C5 misses the boundary | `test/billing/access_test.rb:52` | add the edge | |\n"},
+     1, "outside a table"),
+    ("validate_verification", "an open finding with no leading pipe under the Findings table",
+     {"verification.md": lambda s: s + "C5 misses the boundary | `test/billing/access_test.rb:52` | add the edge | -\n"},
+     1, "is not closed"),
     ("validate_verification", "proofs.md where the build failed",
      {"proofs.md": lambda s: s.replace("| Build | `bin/rubocop app/billing` | pass |", "| Build | `bin/rubocop app/billing` | **fail** - 2 offenses |")},
      1, "Build reads"),

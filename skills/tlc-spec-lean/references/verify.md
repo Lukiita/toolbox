@@ -169,7 +169,7 @@ It reads `proofs.md` (every check and run has a passing row, written at `HEAD` o
 that touch only `.specs/`), the `## Checks` table (a
 row with a test for every check),
 `screens.md` when a criterion cites a capture (round 1 or 2, judged at a `HEAD` no code commit has
-passed), the plan's `**Approved**:` line, every finding closed, and the `## Mutants` section (every
+passed), the plan's `**Approved**:` line, every finding closed (no `|` line outside a table), and the `## Mutants` section (every
 row `killed` with its test in `Killed by`, no `|` line outside a table, or one `None - <why>` line). `0` the feature
 is done. A feature verified before the `## Mutants` section
 existed owes it too: `None - verified before mutants`.
