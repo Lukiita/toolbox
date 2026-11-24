@@ -62,7 +62,7 @@ import os
 import re
 import sys
 
-from lean_config import RUN_PROOF_RE, plan_approved, plan_marks_binding, read_runs
+from lean_config import RUN_PROOF_RE, plan_approved, plan_marks_binding, read_runs, split_row
 
 REQUIRED_SECTIONS = ["Checks", "Coverage", "Swept"]
 
@@ -139,10 +139,6 @@ def _autodetect(root):
         "validate_checks: multiple features found; pass one explicitly:\n  "
         + "\n  ".join(os.path.join(base, f, "checks.md") for f in features)
     )
-
-
-def split_row(line):
-    return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
 def is_separator(line):

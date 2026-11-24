@@ -79,7 +79,7 @@ import os
 import re
 import sys
 
-from lean_config import BINDING_RE, NOT_BINDING_RE, _section, plan_marks_binding
+from lean_config import BINDING_RE, NOT_BINDING_RE, _section, plan_marks_binding, split_row
 
 # Each entry is a tuple of acceptable heading names (first is canonical).
 REQUIRED_SECTIONS = [
@@ -109,7 +109,10 @@ CID_RE = re.compile(r"\bC\d+\b")
 STATUS_RE = re.compile(r"\b[1-5]\d\d\b")
 DENIED_RE = re.compile(r"\b(3\d\d|401|403|404)\b")
 OPEN_WHO_RE = re.compile(r"^\W*(anyone|public|anonymous)\b", re.IGNORECASE)
-NONE_RE = re.compile(r"\b(none|nothing|n/?a|single module)\b", re.IGNORECASE)
+# Local patch (toolbox UPSTREAM.md item 8): a declaration opens its line (bullet, bold or code span
+# allowed), and n/a needs its slash. Matched anywhere, `n/?a` read the Portuguese "na" - and any
+# "none" in prose - as "this section is empty on purpose", which switched the section's check off.
+NONE_RE = re.compile(r"^\W*(none|nothing|n/a|single module)\b", re.IGNORECASE)
 VAGUE_RE = re.compile(
     r"\b(gracefully|properly|correctly|quickly|fast|slow|efficiently|reasonably|"
     r"appropriately|as expected|user-friendly|robust)\b",
@@ -170,10 +173,6 @@ def _autodetect(root):
         "validate_plan: multiple features found; pass one explicitly:\n  "
         + "\n  ".join(os.path.join(base, f, "plan.md") for f in features)
     )
-
-
-def split_row(line):
-    return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
 def is_separator(line):

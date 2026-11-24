@@ -34,7 +34,7 @@ import shutil
 import subprocess
 import sys
 
-from lean_config import RUN_PROOF_RE, RUN_RE
+from lean_config import RUN_PROOF_RE, RUN_RE, split_row
 
 CHECK_RE = re.compile(r"^\**\s*(C\d+)\s*\**\s*[-–—:]\s*(.+)$")
 PROOF_RE = re.compile(r"^\**\s*Proof\s*\**\s*:\s*(.+)$", re.IGNORECASE)
@@ -135,7 +135,7 @@ def screens_verdicts(fdir):
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
         for line in lines:
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            cells = split_row(line)
             if len(cells) >= 3 and ".running.png" in cells[0]:
                 rows[os.path.basename(cells[0].strip("`"))] = cells[2].lower()
     return rows

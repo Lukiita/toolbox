@@ -43,7 +43,7 @@ import subprocess
 import sys
 from typing import NamedTuple
 
-from lean_config import _section, plan_approved, plan_marks_binding, plan_owes_pictures
+from lean_config import _section, plan_approved, plan_marks_binding, plan_owes_pictures, split_row
 
 PROOF_RE = re.compile(r"^\**\s*Proof\s*\**\s*:\s*(.+)$", re.IGNORECASE)
 RUNNING_SUFFIX = ".running.png"
@@ -62,13 +62,6 @@ def _feature_dirs(root):
     if not os.path.isdir(base):
         return base, []
     return base, [d for d in sorted(os.listdir(base)) if os.path.isdir(os.path.join(base, d))]
-
-
-def split_row(line):
-    # Local patch (toolbox UPSTREAM.md item 7): `\|` is a pipe inside a cell, as in GFM, not a column -
-    # a mutant like `a || b` -> `a && b` is written with escaped pipes and must stay in its own cell.
-    cells = re.split(r"(?<!\\)\|", line.strip().strip("|"))
-    return [c.strip().replace("\\|", "|") for c in cells]
 
 
 def is_separator(line):

@@ -29,6 +29,8 @@ import subprocess
 import sys
 import tempfile
 
+from lean_config import split_row
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.join(HERE, "fixtures")
 FEATURE = "billing"
@@ -136,6 +138,18 @@ CASES = [
     ("validate_plan", "plan.md", "a restricted Surface route with no status for the callers it refuses",
      lambda s: s.replace("| `200`, `401`, `409`, `422` |", "| `200`, `409`, `422` |"),
      1, "names no code for the rest"),
+    # Local patch (toolbox UPSTREAM.md item 8): a None declaration is a line that opens with it. In a
+    # Portuguese plan, `n/?a` matched the preposition "na", and an empty header table before the real
+    # one left the routes unchecked while the gate passed.
+    ("validate_plan", "plan.md", "an empty header table and a Portuguese 'na' before the routes",
+     lambda s: s.replace("## Surface\n\n| Route",
+                         "## Surface\n\n| Route | In | Out | Status | Who |\n| --- | --- | --- | --- | --- |\n"
+                         "A API roda na rede local.\n\n| Route", 1),
+     1, "no route rows"),
+    ("validate_plan", "plan.md", "a Surface with no table whose prose says none mid-line",
+     lambda s: re.sub(r"## Surface\n.*?\n## Landing",
+                      "## Surface\n\nThe provider sends none of these ids back.\n\n## Landing", s, flags=re.S),
+     1, "no route rows"),
     ("validate_plan", "plan.md", "a Surface table with no Who column",
      lambda s: s.replace("| Status | Who |\n| --- | --- | --- | --- | --- |", "| Status |\n| --- | --- | --- | --- |")
                 .replace(" | the provider, with a valid signature; anything else gets `401` |", " |"),
@@ -508,6 +522,16 @@ NEGATIVE_CONTROLS = [
      {"plan.md": lambda s: s.replace(
          "| `200`, `401`, `409`, `422` | the provider, with a valid signature; anything else gets `401` |",
          "| `200`, `409`, `422` | anyone |")}),
+    # Local patch (toolbox UPSTREAM.md item 8): one GFM-aware split_row for every gate, and None
+    # declared at the start of a line, bullet or code span included.
+    ("validate_plan", "a Surface cell holding an escaped pipe is read in its columns",
+     {"plan.md": lambda s: s.replace("| the provider envelope as sent |", "| `{kind: a\\|b}` |", 1)}),
+    ("validate_plan", "a Surface that states None is accepted",
+     {"plan.md": lambda s: re.sub(r"## Surface\n.*?\n## Landing",
+                                  "## Surface\n\n`None - nothing consumed outside`\n\n## Landing", s, flags=re.S)}),
+    ("validate_plan", "a Landing that opens a bullet with Nothing is accepted",
+     {"plan.md": lambda s: re.sub(r"## Landing\n.*?\n## ", "## Landing\n\n- Nothing else in this change is hard "
+                                  "to reverse\n\n## ", s, count=1, flags=re.S)}),
     ("validate_checks", "a screen check citing the criterion's capture is accepted",
      {"plan.md": with_binding, "checks.md": with_screen_check}),
     ("validate_verification", "a plan with a binding source and matching pictures is accepted",
@@ -833,7 +857,7 @@ def result_rows(text):
     """{first cell: result cell} of proofs.md's table."""
     rows = {}
     for line in text.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = split_row(line)
         if line.startswith("| ") and len(cells) == 3 and cells[0] not in ("Check", "---"):
             rows[cells[0]] = cells[2]
     return rows
