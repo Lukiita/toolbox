@@ -29,9 +29,13 @@ import subprocess
 import sys
 import tempfile
 
-from lean_config import split_row
-
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Local patch (toolbox UPSTREAM.md item 8): `python3 -I` (and Python 3.11's -P) leaves the script's
+# folder off sys.path, so the import below fails. The gates run in subprocesses and find lean_config
+# on their own; only this import needs the folder named.
+sys.path.insert(0, HERE)
+
+from lean_config import split_row  # noqa: E402 - needs HERE on sys.path first
 FIXTURES = os.path.join(HERE, "fixtures")
 FEATURE = "billing"
 
