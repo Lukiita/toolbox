@@ -382,10 +382,12 @@ def _check_with_proofs(fdir, name, lines, checks_lines):
     if not findings:
         errors.append(f"{name}: verification.md has no `## Findings` section (write `None - <why>` when empty)")
     # Local patch (toolbox UPSTREAM.md item 9): read as GFM, like `## Mutants` (item 7). find_tables
-    # dropped a one-row "table", so an open finding written after a blank line was never read.
+    # dropped a one-row "table", so an open finding written after a blank line was never read. Only a
+    # stray line opening with `|` is a lost row: the `None - <what was probed>` line verify.md asks for,
+    # or a note, may name code holding a pipe (`string | null`, `a || b`).
     tables, stray = _gfm_tables(findings)
     errors += [f"{name}: `## Findings` line '{ln[:50]}' is outside a table - every finding row sits under the "
-               f"`Finding` / `Closed` header and its separator line" for ln in stray]
+               f"`Finding` / `Closed` header and its separator line" for ln in stray if ln.startswith("|")]
     for header, rows in tables:
         closed = column(header, "closed")
         for r in rows:

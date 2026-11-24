@@ -426,7 +426,7 @@ MULTI_CASES = [
     # find_tables dropped a one-row "table", so an open finding after a blank line was never read.
     ("validate_verification", "an open finding after a blank line under Findings",
      {"verification.md": lambda s: s + "\n| C5 misses the boundary | `test/billing/access_test.rb:52` | add the edge | |\n"},
-     1, "outside a table"),
+     1, "`## Findings` line"),
     ("validate_verification", "an open finding with no leading pipe under the Findings table",
      {"verification.md": lambda s: s + "C5 misses the boundary | `test/billing/access_test.rb:52` | add the edge | -\n"},
      1, "is not closed"),
@@ -579,6 +579,13 @@ NEGATIVE_CONTROLS = [
          "\n| Rule | Mutant | Status | Killed by |\n| --- | --- | --- | --- |\n| unknown status recorded |", 1)}),
     ("validate_verification", "proofs.md green and no finding is accepted",
      {"verification.md": lambda s: s.split("## Findings")[0] + "## Findings\n\nNone - every rule probed held\n"}),
+    # Local patch (toolbox UPSTREAM.md item 9): only a line opening with `|` is a row outside the table.
+    # A None line or a note may hold a pipe - a union type, `a || b` - and verify.md asks for that None line.
+    ("validate_verification", "a Findings None line naming code with a pipe is accepted",
+     {"verification.md": lambda s: s.split("## Findings")[0]
+      + "## Findings\n\nNone - probed the `string | null` return of parse\n"}),
+    ("validate_verification", "a note with a pipe after the Findings table is accepted",
+     {"verification.md": lambda s: s + "\nEvery finding closed; `a || b` in the fallback held.\n"}),
     ("validate_verification", "a browser proof whose screenshot exists is accepted",
      {"plan.md": with_screen, "screens.md": screens_md("matches"),
       "checks.md": with_browser_shot("screens/billing.running.png"), RUNNING: lambda s: "png"}),
