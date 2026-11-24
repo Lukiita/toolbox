@@ -876,7 +876,7 @@ def result_rows(text):
     """{first cell: result cell} of proofs.md's table."""
     rows = {}
     for line in text.splitlines():
-        cells = split_row(line)
+        cells = split_row(line)  # Local patch (toolbox UPSTREAM.md item 8): was a split on every `|`
         if line.startswith("| ") and len(cells) == 3 and cells[0] not in ("Check", "---"):
             rows[cells[0]] = cells[2]
     return rows

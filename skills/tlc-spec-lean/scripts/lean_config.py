@@ -27,9 +27,11 @@ APPROVED_RE = re.compile(
 
 def split_row(line):
     """The cells of one markdown table row, read as GFM does: `\\|` is a pipe inside a cell, not a column.
-    Local patch (toolbox UPSTREAM.md item 8): validate_verification.py had this reading (item 7) while
-    validate_plan.py and validate_checks.py split on every `|`, so a plan cell like `A\\|B` moved the
-    Status column and the gate blamed the wrong cell. One copy here keeps the gates reading alike.
+    Local patch (toolbox UPSTREAM.md item 7): a mutant like `a || b` -> `a && b` is written with escaped
+    pipes and must stay in its own cell. Local patch (item 8): validate_verification.py had this reading
+    while validate_plan.py, validate_checks.py, check_proofs.py and selftest.py split on every `|`, so a
+    plan cell like `A\\|B` moved the Status column and the gate blamed the wrong cell. One copy here
+    keeps the gates reading alike.
     Example: split_row("| `a \\| b` | killed |") == ["`a | b`", "killed"]"""
     cells = re.split(r"(?<!\\)\|", line.strip().strip("|"))
     return [c.strip().replace("\\|", "|") for c in cells]

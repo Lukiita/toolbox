@@ -62,6 +62,7 @@ import os
 import re
 import sys
 
+# Local patch (toolbox UPSTREAM.md item 8): split_row lives in lean_config.py, read as GFM (`\|` stays in its cell).
 from lean_config import RUN_PROOF_RE, plan_approved, plan_marks_binding, read_runs, split_row
 
 REQUIRED_SECTIONS = ["Checks", "Coverage", "Swept"]

@@ -43,6 +43,7 @@ import subprocess
 import sys
 from typing import NamedTuple
 
+# Local patch (toolbox UPSTREAM.md item 8): split_row lives in lean_config.py, read as GFM (`\|` stays in its cell).
 from lean_config import _section, plan_approved, plan_marks_binding, plan_owes_pictures, split_row
 
 PROOF_RE = re.compile(r"^\**\s*Proof\s*\**\s*:\s*(.+)$", re.IGNORECASE)

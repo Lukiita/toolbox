@@ -79,6 +79,7 @@ import os
 import re
 import sys
 
+# Local patch (toolbox UPSTREAM.md item 8): split_row lives in lean_config.py, read as GFM (`\|` stays in its cell).
 from lean_config import BINDING_RE, NOT_BINDING_RE, _section, plan_marks_binding, split_row
 
 # Each entry is a tuple of acceptable heading names (first is canonical).

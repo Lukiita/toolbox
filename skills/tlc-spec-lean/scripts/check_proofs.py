@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 
+# Local patch (toolbox UPSTREAM.md item 8): split_row lives in lean_config.py, read as GFM (`\|` stays in its cell).
 from lean_config import RUN_PROOF_RE, RUN_RE, split_row
 
 CHECK_RE = re.compile(r"^\**\s*(C\d+)\s*\**\s*[-–—:]\s*(.+)$")
@@ -135,7 +136,7 @@ def screens_verdicts(fdir):
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
         for line in lines:
-            cells = split_row(line)
+            cells = split_row(line)  # Local patch (toolbox UPSTREAM.md item 8): was a split on every `|`
             if len(cells) >= 3 and ".running.png" in cells[0]:
                 rows[os.path.basename(cells[0].strip("`"))] = cells[2].lower()
     return rows
