@@ -177,9 +177,10 @@ without tlc, since the Verifier checks the spec was met, not that nothing else
 changed.
 
 Quote the commit-message line in each finding. With `.specs/` present, this
-lens **does not run**: that is tlc's Verifier, with per-criterion tracing (and,
-in tlc-spec-driven, a discrimination sensor) — duplicating it creates
-contradictions between layers.
+lens **does not run**: that is tlc's independent check — tlc-spec-driven's
+Verifier, with per-criterion tracing and a discrimination sensor, or
+tlc-spec-lean's reviewer, reading the request sentence by sentence against
+what was built — duplicating it creates contradictions between layers.
 
 ### 4. Triage — yourself, no new agent
 
@@ -278,8 +279,8 @@ This is half the quality of the review. Do not flag:
   noise. Do not run the build yourself.
 - **A pre-existing problem**, on a line this diff did not touch.
 - **Test coverage, unmet spec, weak test.** In a project running the spec-verify
-  flow that is the Verifier's job, with its discrimination sensor and
-  per-criterion tracing. Duplicating it creates contradictions between layers.
+  flow that is the independent checker's job (tlc-spec-driven's Verifier,
+  tlc-spec-lean's reviewer). Duplicating it creates contradictions between layers.
 - **Style nitpicks** a senior would not raise in a real review.
 - **Your preference** against an established project convention.
 - An odd but **clearly intentional** change within scope.
