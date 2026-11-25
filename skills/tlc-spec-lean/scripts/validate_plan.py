@@ -20,8 +20,8 @@ The failures it exists to catch are the ones that make a plan lie rather than in
     decision and a description of what happened;
   - columns and types inside the stored shape, which is the exact detail that goes stale
     and then misleads the next reader with the authority of a written diagram;
-  - a `Surface` row with no statuses, since the statuses are what becomes a Coverage set
-    in checks.md - drop them here and the join has nothing to enumerate;
+  - a `Surface` row with no statuses, since the statuses are the outcomes the build has to
+    produce and the review checks;
   - a departure from a binding source the user never approved.
 
 Pure standard library, zero dependencies. Operates only on the plan.md markdown
@@ -42,7 +42,7 @@ What it checks:
   ERROR  - a Surface row whose Status cell names no status code
   ERROR  - a Surface table with no Who column, a blank Who, or a Who other than `anyone`
            whose Status names no code for the callers who may not (3xx, 401, 403, 404)
-  ERROR  - a check id written into Surface, which cannot exist before checks.md does
+  ERROR  - a check id written into Surface: the statuses are the outcome, ids belong nowhere
   ERROR  - a capture a criterion cites that does not exist, or a link where a file belongs
   ERROR  - Sources marks a source binding, but there is no Differences from the source section
   ERROR  - a Differences row whose Confirmed cell is not `y` - departing from a binding source
@@ -109,7 +109,15 @@ CID_RE = re.compile(r"\bC\d+\b")
 STATUS_RE = re.compile(r"\b[1-5]\d\d\b")
 DENIED_RE = re.compile(r"\b(3\d\d|401|403|404)\b")
 OPEN_WHO_RE = re.compile(r"^\W*(anyone|public|anonymous)\b", re.IGNORECASE)
-NONE_RE = re.compile(r"\b(none|nothing|n/?a|single module)\b", re.IGNORECASE)
+# Local patch (toolbox UPSTREAM.md item 4): a declaration opens its line, and n/a needs its slash.
+# Matched anywhere, `n/?a` read the Portuguese "na" - and any "none" in prose - as "this section is
+# empty on purpose", which switched the section's check off. Before the word: markup (bullet, bold,
+# `_italics_`, code span), a list number, and the template's own label (`Or:`, `**Landing:**`).
+NONE_RE = re.compile(
+    r"^[\W_]*(?:\d+[.)][\W_]*)?(?:(?:or|surface|landing|differences(?: from the source)?)[\W_]*:[\W_]*)?"
+    r"(none|nothing|n/a|single module)\b",
+    re.IGNORECASE,
+)
 VAGUE_RE = re.compile(
     r"\b(gracefully|properly|correctly|quickly|fast|slow|efficiently|reasonably|"
     r"appropriately|as expected|user-friendly|robust)\b",
@@ -173,7 +181,12 @@ def _autodetect(root):
 
 
 def split_row(line):
-    return [c.strip() for c in line.strip().strip("|").split("|")]
+    """The cells of one markdown table row, read as GFM does: `\\|` is a pipe inside a cell, not a column.
+    Local patch (toolbox UPSTREAM.md item 4): split on every `|`, a Surface cell like `A\\|B` moved
+    the Status column and the gate blamed the wrong cell.
+    Example: split_row("| `a \\| b` | 200 |") == ["`a | b`", "200"]"""
+    cells = re.split(r"(?<!\\)\|", line.strip().strip("|"))
+    return [c.strip().replace("\\|", "|") for c in cells]
 
 
 def is_separator(line):
@@ -634,7 +647,7 @@ def check_file(path):
                 )
                 break
 
-    # Surface: statuses are what becomes a Coverage set in checks.md.
+    # Surface: each route's statuses are what the build and the review hold it to.
     surf = present.get("Surface")
     if surf:
         body = [lines[i].strip() for i in range(*surf) if lines[i].strip()]
@@ -655,7 +668,7 @@ def check_file(path):
             if not STATUS_RE.search(status_cell):
                 errors.append(
                     f"Surface '{cells[0][:48]}': Status names no status code - those statuses are the "
-                    "set that owes a Coverage row in checks.md"
+                    "outcomes the build has to produce and the review checks"
                 )
                 continue
             if who_col is None:
@@ -666,14 +679,14 @@ def check_file(path):
             elif not OPEN_WHO_RE.search(who) and not DENIED_RE.search(status_cell):
                 errors.append(
                     f"Surface '{cells[0][:48]}': only '{who[:40]}' may call it, but Status names no code "
-                    "for the rest (a 3xx, 401, 403 or 404) - that status is the Coverage member proving "
+                    "for the rest (a 3xx, 401, 403 or 404) - that status is what proves "
                     "the door is shut"
                 )
         for i in range(*surf):
             if CID_RE.search(lines[i]):
                 errors.append(
-                    f"L{i + 1}: Surface names a check id, but checks.md does not exist yet - each route's "
-                    "statuses become a Coverage set there instead"
+                    f"L{i + 1}: Surface names a check id - the route's statuses are the outcome; "
+                    "ids belong to no artifact of this skill"
                 )
                 break
         if not rows and not declares_none:
@@ -762,4 +775,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # Windows writes piped output in the ANSI code page, which cannot encode every character a plan holds.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     raise SystemExit(main())
