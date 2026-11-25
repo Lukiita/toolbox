@@ -23,12 +23,13 @@ Edit only the body of `## Decisions`; overwriting the file loses the log.
 Where the substance lives (the `domain-modeling` skill): what a domain word means is never an
 entry - it goes to the `CONTEXT.md` glossary. Where the repo keeps its decisions elsewhere - an ADR
 directory (`docs/adr/` or its own) or another log - the decision is written there and its `AD-NNN`
-row is a one-line pointer (`see docs/adr/NNNN-slug.md`): `validate_plan.py` looks up the `AD-NNN`
+row is a one-line pointer (`see docs/adr/NNNN-slug.md`) that keeps its `Status` column: `validate_plan.py` looks up the `AD-NNN`
 behind a `Differences from the source` row in `.specs/STATE.md` only, so the row stays, the record
 keeps the substance, and nothing is written twice.
 
-A decision belongs here when a future feature has to conform to it: a convention, a pattern, a
-constraint. Write it when the choice is made. An answer that departs from a binding source is one
+A decision belongs here when a future feature has to conform to it and it passes the same
+three-part test as an ADR: hard to reverse, surprising without context, a real trade-off. A
+convention that fails the test is a rule for the project's `AGENTS.md`, not an entry. Write it when the choice is made. An answer that departs from a binding source is one
 too: the Decision says what the product shows instead, the Rationale quotes the question and the
 option chosen, and the plan's `## Differences from the source` rows cite the id. A `Landing` door
 that reaches past the feature gets a row in each place: the shape in `Landing`, the constraint here.
@@ -54,10 +55,13 @@ when there is no plan:
 | `**Review:**` not yet `sent at <hash>` | Build: the first slice no commit message names yet; the uncommitted changes in the tree belong to it - read them before building on them |
 | `**Review:** sent at <hash>` and no `review.md` | wait for the reviewer; send it again only when it cannot return - a new session - and say so on the line |
 | `review.md` and no `**Fix pass:** done` line | the fix pass |
-| `**Fix pass:** done` | the capability sync, then the report |
+| `**Fix pass:** done` | the report |
 
 ## `.specs/capabilities/`
 
 The living behavioural contract, one file per domain area, owned by the `capability-sync` skill.
-Plan reads the areas a feature touches ([plan.md](plan.md)). After the fix pass is committed, fold
-the feature's criteria in through that skill; every file there must pass its `capabilities.py check`.
+Plan reads the areas a feature touches ([plan.md](plan.md)). The fix pass folds the plan's criteria
+in through that skill, in its own commit, so the tree ends clean and a resume never syncs twice
+([review.md](review.md)); a criterion a finding you keep names stays out, and a change that skipped
+the plan folds nothing - `request.md` holds no criteria. Every file there must pass its
+`capabilities.py check`.
