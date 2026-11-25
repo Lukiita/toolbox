@@ -109,10 +109,15 @@ CID_RE = re.compile(r"\bC\d+\b")
 STATUS_RE = re.compile(r"\b[1-5]\d\d\b")
 DENIED_RE = re.compile(r"\b(3\d\d|401|403|404)\b")
 OPEN_WHO_RE = re.compile(r"^\W*(anyone|public|anonymous)\b", re.IGNORECASE)
-# Local patch (toolbox UPSTREAM.md item 4): a declaration opens its line (bullet, bold or code span
-# allowed), and n/a needs its slash. Matched anywhere, `n/?a` read the Portuguese "na" - and any
-# "none" in prose - as "this section is empty on purpose", which switched the section's check off.
-NONE_RE = re.compile(r"^\W*(none|nothing|n/a|single module)\b", re.IGNORECASE)
+# Local patch (toolbox UPSTREAM.md item 4): a declaration opens its line, and n/a needs its slash.
+# Matched anywhere, `n/?a` read the Portuguese "na" - and any "none" in prose - as "this section is
+# empty on purpose", which switched the section's check off. Before the word: markup (bullet, bold,
+# `_italics_`, code span), a list number, and the template's own label (`Or:`, `**Landing:**`).
+NONE_RE = re.compile(
+    r"^[\W_]*(?:\d+[.)][\W_]*)?(?:(?:or|surface|landing|differences(?: from the source)?)[\W_]*:[\W_]*)?"
+    r"(none|nothing|n/a|single module)\b",
+    re.IGNORECASE,
+)
 VAGUE_RE = re.compile(
     r"\b(gracefully|properly|correctly|quickly|fast|slow|efficiently|reasonably|"
     r"appropriately|as expected|user-friendly|robust)\b",

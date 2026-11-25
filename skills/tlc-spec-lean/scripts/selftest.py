@@ -445,6 +445,18 @@ NEGATIVE_CONTROLS = [
     ("validate_plan", "a Surface that states None is accepted",
      {"plan.md": lambda s: re.sub(r"## Surface\n.*?\n## Landing",
                                   "## Surface\n\n`None - nothing consumed outside`\n\n## Landing", s, flags=re.S)}),
+    ("validate_plan", "a Surface None in underscore italics is accepted",
+     {"plan.md": lambda s: re.sub(r"## Surface\n.*?\n## Landing",
+                                  "## Surface\n\n_None - nothing consumed outside_\n\n## Landing", s, flags=re.S)}),
+    ("validate_plan", "a Landing None after its own bold label is accepted",
+     {"plan.md": lambda s: re.sub(r"## Landing\n.*?\n## ", "## Landing\n\n**Landing:** None - every change here "
+                                  "is reversible\n\n## ", s, count=1, flags=re.S)}),
+    ("validate_plan", "a numbered Landing None is accepted",
+     {"plan.md": lambda s: re.sub(r"## Landing\n.*?\n## ", "## Landing\n\n1. None - every change here "
+                                  "is reversible\n\n## ", s, count=1, flags=re.S)}),
+    ("validate_plan", "the template's `Or: None` Differences line is accepted",
+     {"plan.md": lambda s: with_binding(s).replace(
+         DIFFERENCES, "## Differences from the source\n\nOr: None - the product matches the source\n\n")}),
     ("validate_plan", "a Landing that opens a bullet with Nothing is accepted",
      {"plan.md": lambda s: re.sub(r"## Landing\n.*?\n## ", "## Landing\n\n- Nothing else in this change is hard "
                                   "to reverse\n\n## ", s, count=1, flags=re.S)}),
