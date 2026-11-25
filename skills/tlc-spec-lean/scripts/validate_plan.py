@@ -109,7 +109,10 @@ CID_RE = re.compile(r"\bC\d+\b")
 STATUS_RE = re.compile(r"\b[1-5]\d\d\b")
 DENIED_RE = re.compile(r"\b(3\d\d|401|403|404)\b")
 OPEN_WHO_RE = re.compile(r"^\W*(anyone|public|anonymous)\b", re.IGNORECASE)
-NONE_RE = re.compile(r"\b(none|nothing|n/?a|single module)\b", re.IGNORECASE)
+# Local patch (toolbox UPSTREAM.md item 4): a declaration opens its line (bullet, bold or code span
+# allowed), and n/a needs its slash. Matched anywhere, `n/?a` read the Portuguese "na" - and any
+# "none" in prose - as "this section is empty on purpose", which switched the section's check off.
+NONE_RE = re.compile(r"^\W*(none|nothing|n/a|single module)\b", re.IGNORECASE)
 VAGUE_RE = re.compile(
     r"\b(gracefully|properly|correctly|quickly|fast|slow|efficiently|reasonably|"
     r"appropriately|as expected|user-friendly|robust)\b",
@@ -173,7 +176,12 @@ def _autodetect(root):
 
 
 def split_row(line):
-    return [c.strip() for c in line.strip().strip("|").split("|")]
+    """The cells of one markdown table row, read as GFM does: `\\|` is a pipe inside a cell, not a column.
+    Local patch (toolbox UPSTREAM.md item 4): split on every `|`, a Surface cell like `A\\|B` moved
+    the Status column and the gate blamed the wrong cell.
+    Example: split_row("| `a \\| b` | 200 |") == ["`a | b`", "200"]"""
+    cells = re.split(r"(?<!\\)\|", line.strip().strip("|"))
+    return [c.strip().replace("\\|", "|") for c in cells]
 
 
 def is_separator(line):

@@ -120,6 +120,18 @@ CASES = [
     ("validate_plan", "plan.md", "a restricted Surface route with no status for the callers it refuses",
      lambda s: s.replace("| `200`, `401`, `409`, `422` |", "| `200`, `409`, `422` |"),
      1, "names no code for the rest"),
+    # Local patch (toolbox UPSTREAM.md item 4): a None declaration is a line that opens with it. In a
+    # Portuguese plan, `n/?a` matched the preposition "na", and an empty header table before the real
+    # one left the routes unchecked while the gate passed.
+    ("validate_plan", "plan.md", "an empty header table and a Portuguese 'na' before the routes",
+     lambda s: s.replace("## Surface\n\n| Route",
+                         "## Surface\n\n| Route | In | Out | Status | Who |\n| --- | --- | --- | --- | --- |\n"
+                         "A API roda na rede local.\n\n| Route", 1),
+     1, "no route rows"),
+    ("validate_plan", "plan.md", "a Surface with no table whose prose says none mid-line",
+     lambda s: re.sub(r"## Surface\n.*?\n## Landing",
+                      "## Surface\n\nThe provider sends none of these ids back.\n\n## Landing", s, flags=re.S),
+     1, "no route rows"),
     ("validate_plan", "plan.md", "a Surface table with no Who column",
      lambda s: s.replace("| Status | Who |\n| --- | --- | --- | --- | --- |", "| Status |\n| --- | --- | --- | --- |")
                 .replace(" | the provider, with a valid signature; anything else gets `401` |", " |"),
@@ -426,6 +438,16 @@ MULTI_CASES = [
 # Negative controls: a gate that fires where it should not is the same bug as one that never
 # fires - it just fails loudly instead of silently.
 NEGATIVE_CONTROLS = [
+    # Local patch (toolbox UPSTREAM.md item 4): `\|` is a pipe inside a cell, as GFM reads it, and a
+    # None declaration opens its line - a bullet, bold or a code span allowed.
+    ("validate_plan", "a Surface cell holding an escaped pipe is read in its columns",
+     {"plan.md": lambda s: s.replace("| the provider envelope as sent |", "| `{kind: a\\|b}` |", 1)}),
+    ("validate_plan", "a Surface that states None is accepted",
+     {"plan.md": lambda s: re.sub(r"## Surface\n.*?\n## Landing",
+                                  "## Surface\n\n`None - nothing consumed outside`\n\n## Landing", s, flags=re.S)}),
+    ("validate_plan", "a Landing that opens a bullet with Nothing is accepted",
+     {"plan.md": lambda s: re.sub(r"## Landing\n.*?\n## ", "## Landing\n\n- Nothing else in this change is hard "
+                                  "to reverse\n\n## ", s, count=1, flags=re.S)}),
     ("validate_checks", "a run proof needs no test selector - its expected line is one",
      {"checks.md": lambda s: s.replace("test_failed_charge_suspends = .", "test_failed_charge_suspends PASS")},
      "names no test selector"),
