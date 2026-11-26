@@ -121,7 +121,10 @@ it gets no agent of its own.
 
 **Reviewer B — project rules.** Checks the diff against the repo's written rules
 — `CLAUDE.md` / `AGENTS.md`, at the root and in the touched directories — and
-`.specs/capabilities/`, when they exist. Six questions:
+`.specs/capabilities/` when the repo runs tlc-spec-driven: its `AGENTS.md` names
+the tlc flow, and without that line it is tlc-spec-driven. A repo running
+tlc-spec-lean keeps no capabilities, so a folder left there is stale - skip it.
+Six questions:
 
 1. Was a written rule violated? **Quote the rule verbatim** — a rule that cannot
    be quoted probably does not exist.

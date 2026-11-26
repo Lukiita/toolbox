@@ -25,7 +25,7 @@ Script patches carry a `Local patch (toolbox UPSTREAM.md item N)` comment, so a 
 
 | Item on the 3.2.0 base | Why it left |
 | --- | --- |
-| 1. `capability-sync` integration: Plan read `.specs/capabilities/`, the fix pass folded the criteria in (was item 3 on 2.2.0) | retired 2026-11-25, decision by Lucas. Across five projects, 84 capability regression checks found one real regression the suite missed (project-d, a closed registration back in the inspection queue), and it was tlc-spec-driven's Verifier probing the old guarantee that caught it. Lean 3.x's reviewer has a fixed prompt and runs no such check, so here the skill only added upkeep. `capability-sync` stays for tlc-spec-driven. Nothing updates a lean repo's `.specs/capabilities/` any more, yet `code-review` still reads it as the system's promises, so a stale file there flags an intended change as a regression: a lean repo archives or deletes the folder. |
+| 1. `capability-sync` integration: Plan read `.specs/capabilities/`, the fix pass folded the criteria in (was item 3 on 2.2.0) | retired 2026-11-25, decision by Lucas. Across five projects, 84 capability regression checks found one real regression the suite missed (project-d, a closed registration back in the inspection queue), and it was tlc-spec-driven's Verifier probing the old guarantee that caught it. Lean 3.x's reviewer has a fixed prompt and runs no such check, so here the skill only added upkeep. `capability-sync` stays for tlc-spec-driven. Nothing updates a lean repo's `.specs/capabilities/` any more, yet `code-review` still reads it as the system's promises, so the `code-review` skill reads them only in a tlc-spec-driven repo, and a lean repo deletes the folder. |
 
 ## Retired at 3.2.0
 
