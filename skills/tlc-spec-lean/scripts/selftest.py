@@ -151,6 +151,15 @@ CASES = [
     ("validate_plan", "plan.md", "a Domain model row that names no invariant",
      lambda s: s.replace("| one delivery per provider delivery id |", "| - |", 1),
      1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model row whose invariant is still the template's placeholder",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| <the rule it never lets break> |", 1),
+     1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model row whose invariant is a dash in a code span",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| `-` |", 1),
+     1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model row whose invariant reads none",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| none |", 1),
+     1, "names no invariant"),
     ("validate_plan", "plan.md", "a Surface table with no Who column",
      lambda s: s.replace("| Status | Who |\n| --- | --- | --- | --- | --- |", "| Status |\n| --- | --- | --- | --- |")
                 .replace(" | the provider, with a valid signature; anything else gets `401` |", " |"),
@@ -461,9 +470,19 @@ NEGATIVE_CONTROLS = [
     # boundary and no illegal state.
     ("validate_plan", "a plan with no Domain model section is accepted",
      {"plan.md": lambda s: re.sub(r"## Domain model\n.*?\n## Surface", "## Surface", s, count=1, flags=re.S)}),
-    ("validate_plan", "a Domain model in Portuguese prose with English headers is accepted",
-     {"plan.md": lambda s: s.replace("`Subscription` guards its own status;",
-                                     "`Subscription` protege o próprio status;", 1)}),
+    ("validate_plan", "a Domain model with Portuguese cells under English headers is accepted",
+     {"plan.md": lambda s: s.replace("| a suspended subscription grants no access; only a successful charge makes it active again |",
+                                     "| uma assinatura suspensa não dá acesso; só uma cobrança aprovada a reativa |", 1)}),
+    ("validate_plan", "a Domain model drawn as classDiagram-v2 is accepted",
+     {"plan.md": lambda s: s.replace("```mermaid\nclassDiagram\n", "```mermaid\nclassDiagram-v2\n", 1)}),
+    ("validate_plan", "a Domain model diagram that opens with a mermaid comment is accepted",
+     {"plan.md": lambda s: s.replace("```mermaid\nclassDiagram\n", "```mermaid\n%% the aggregates\nclassDiagram\n", 1)}),
+    ("validate_plan", "a Shape subheading named Domain model notes, with no Domain model section, is accepted",
+     {"plan.md": lambda s: re.sub(r"## Domain model\n.*?\n## Surface", "## Surface", s, count=1, flags=re.S)
+                            .replace("**Changes underneath**", "### Domain model notes\n\nNo aggregate changes.\n\n"
+                                     "**Changes underneath**", 1)}),
+    ("validate_plan", "a plan titled with the words Domain model is accepted",
+     {"plan.md": lambda s: s.replace("# Dunning on failed charge", "# Domain model for dunning", 1)}),
     # Local patch (toolbox UPSTREAM.md item 4): `\|` is a pipe inside a cell, as GFM reads it, and a
     # None declaration opens its line - a bullet, bold or a code span allowed.
     ("validate_plan", "a Surface cell holding an escaped pipe is read in its columns",

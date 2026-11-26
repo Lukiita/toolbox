@@ -59,7 +59,8 @@ What it checks:
   ERROR  - a Shape path with no mermaid drawing, or a module on the path the drawings never name
   ERROR  - a Shape with no `erDiagram` and no `Data: none - <why>`, or an erDiagram with no `New:` line
   ERROR  - a Domain model section with no `classDiagram`, a table without the four columns, no rows,
-           or a row whose `Invariants it protects` is blank (the section itself is optional)
+           or a row whose `Invariants it protects` is blank (the section itself is optional; local
+           patch, toolbox UPSTREAM.md item 5)
   ERROR  - a capture under captures/ that the plan does not show as an image (`![..](captures/..)`)
   WARN   - a path hop, or a flowchart node, naming a module marked neither existing
            nor as a Landing door
@@ -438,7 +439,24 @@ DOMAIN_MODEL_COLUMNS = (
     "invariants it protects",
     "illegal state made unrepresentable",
 )
-EMPTY_CELL_RE = re.compile(r"^[\s\-\u2013\u2014]*$")
+# An invariant cell that says nothing: blank, a dash (in a code span too), "none", or the template's
+# own `<placeholder>` left unfilled.
+EMPTY_INVARIANT_RE = re.compile(
+    r"^[\s`*_\-\u2013\u2014]*(?:none|nothing|n/a|nenhum|nenhuma)?[\s`*_.\-\u2013\u2014]*$", re.IGNORECASE
+)
+# Only the template's own heading opens the section: a title or a `### Domain model notes` under
+# Shape that merely starts with the words would make an optional section look present.
+DOMAIN_MODEL_HEADING_RE = re.compile(r"^##\s+Domain model\s*$", re.IGNORECASE)
+CLASS_DIAGRAM_RE = re.compile(r"^\s*classDiagram(?:-v2)?\b")
+
+
+def domain_model_bounds(lines):
+    """(start, end) of the body under `## Domain model`, or None; the next `#` or `##` heading closes it."""
+    start = next((i + 1 for i, ln in enumerate(lines) if DOMAIN_MODEL_HEADING_RE.match(ln.strip())), None)
+    if start is None:
+        return None
+    end = next((j for j in range(start, len(lines)) if re.match(r"^#{1,2}\s+\S", lines[j])), len(lines))
+    return (start, end)
 
 
 def check_domain_model(lines, plan_path):
@@ -447,11 +465,13 @@ def check_domain_model(lines, plan_path):
     the global AGENTS.md asks before the first function: the aggregate, the invariant it protects,
     the illegal state its types refuse. A row with no invariant is a class, not an aggregate.
     Example: check_domain_model(lines, "plan.md") == [] for the template's filled section."""
-    bounds = section_bounds(lines, "Domain model")
+    bounds = domain_model_bounds(lines)
     if bounds is None:
         return []
     errors = []
-    if not any(kind == "classDiagram" for _, kind, _ in mermaid_blocks(raw_lines(plan_path), bounds)):
+    # Scan the whole block: a `%%` comment or a front-matter title may come before the diagram's kind.
+    blocks = mermaid_blocks(raw_lines(plan_path), bounds)
+    if not any(CLASS_DIAGRAM_RE.match(x) for _, _, body in blocks for x in body):
         errors.append("Domain model has no `classDiagram` - draw the aggregates, value objects and domain "
                       "services, composition inside a boundary and reference by id between them")
     header = next((split_row(lines[i]) for i in range(*bounds) if lines[i].strip().startswith("|")), [])
@@ -465,7 +485,7 @@ def check_domain_model(lines, plan_path):
     for r in rows:
         cells = split_row(r)
         invariants = cells[2] if len(cells) > 2 else ""
-        if EMPTY_CELL_RE.match(invariants):
+        if EMPTY_INVARIANT_RE.match(invariants) or PLACEHOLDER_RE.match(invariants):
             errors.append(f"Domain model '{cells[0][:40]}' names no invariant - say which rule it protects, "
                           "or it is not an aggregate")
     return errors
@@ -679,7 +699,7 @@ def check_file(path):
     shape = present.get("Shape")
     if shape:
         errors += check_drawings(lines, shape, path)
-    errors += check_domain_model(lines, path)
+    errors += check_domain_model(lines, path)  # Local patch (toolbox UPSTREAM.md item 5)
 
     # Stored shape: no columns, no types. In mermaid that detail is an attribute block.
     if shape:
