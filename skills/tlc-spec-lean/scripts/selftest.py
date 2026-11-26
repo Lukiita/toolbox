@@ -132,6 +132,25 @@ CASES = [
      lambda s: re.sub(r"## Surface\n.*?\n## Landing",
                       "## Surface\n\nThe provider sends none of these ids back.\n\n## Landing", s, flags=re.S),
      1, "no route rows"),
+    # Local patch (toolbox UPSTREAM.md item 5): a Domain model section, when present, draws the
+    # aggregates in a classDiagram and names each one's boundary, invariants and illegal state.
+    ("validate_plan", "plan.md", "a Domain model with no classDiagram",
+     lambda s: re.sub(r"```mermaid\nclassDiagram\n.*?```\n\n", "", s, count=1, flags=re.S),
+     1, "no `classDiagram`"),
+    ("validate_plan", "plan.md", "a Domain model table missing the illegal-state column",
+     lambda s: s.replace(" | Illegal state made unrepresentable |\n| --- | --- | --- | --- |", " |\n| --- | --- | --- |", 1),
+     1, "needs the columns"),
+    ("validate_plan", "plan.md", "a Domain model table with its headers translated",
+     lambda s: s.replace("| Aggregate or service | Inside the boundary | Invariants it protects |",
+                         "| Agregado ou serviço | Dentro da fronteira | Invariantes que protege |", 1),
+     1, "needs the columns"),
+    ("validate_plan", "plan.md", "a Domain model table with no rows",
+     lambda s: re.sub(r"(\| Illegal state made unrepresentable \|\n\| --- \| --- \| --- \| --- \|\n).*?\n\n",
+                      r"\1\n", s, count=1, flags=re.S),
+     1, "no rows"),
+    ("validate_plan", "plan.md", "a Domain model row that names no invariant",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| - |", 1),
+     1, "names no invariant"),
     ("validate_plan", "plan.md", "a Surface table with no Who column",
      lambda s: s.replace("| Status | Who |\n| --- | --- | --- | --- | --- |", "| Status |\n| --- | --- | --- | --- |")
                 .replace(" | the provider, with a valid signature; anything else gets `401` |", " |"),
@@ -438,6 +457,13 @@ MULTI_CASES = [
 # Negative controls: a gate that fires where it should not is the same bug as one that never
 # fires - it just fails loudly instead of silently.
 NEGATIVE_CONTROLS = [
+    # Local patch (toolbox UPSTREAM.md item 5): the section is optional, and a domain service owes no
+    # boundary and no illegal state.
+    ("validate_plan", "a plan with no Domain model section is accepted",
+     {"plan.md": lambda s: re.sub(r"## Domain model\n.*?\n## Surface", "## Surface", s, count=1, flags=re.S)}),
+    ("validate_plan", "a Domain model in Portuguese prose with English headers is accepted",
+     {"plan.md": lambda s: s.replace("`Subscription` guards its own status;",
+                                     "`Subscription` protege o próprio status;", 1)}),
     # Local patch (toolbox UPSTREAM.md item 4): `\|` is a pipe inside a cell, as GFM reads it, and a
     # None declaration opens its line - a bullet, bold or a code span allowed.
     ("validate_plan", "a Surface cell holding an escaped pipe is read in its columns",

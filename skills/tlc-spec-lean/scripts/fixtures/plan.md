@@ -53,6 +53,39 @@ erDiagram
 New: `WebhookDelivery` and its link to `Subscription`. One-way constraints: `provider_delivery_id` unique (door 2), `status` not null with `suspended`
 in the enum (door 1).
 
+## Domain model
+
+`Subscription` guards its own status; a delivery is its own aggregate and points at the subscription by id.
+
+```mermaid
+classDiagram
+    class Subscription {
+        <<aggregate root>>
+        applyLocalStatus(status)
+    }
+    class WebhookDelivery {
+        <<aggregate root>>
+    }
+    class SubscriptionStatus {
+        <<enum>>
+        ACTIVE
+        SUSPENDED
+    }
+    class StatusMap {
+        <<domain service>>
+        localStatus(providerStatus)
+    }
+    Subscription *-- SubscriptionStatus
+    WebhookDelivery ..> Subscription : SubscriptionId
+    StatusMap ..> SubscriptionStatus : maps to
+```
+
+| Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made unrepresentable |
+| --- | --- | --- | --- |
+| `Subscription` (root) | `status` | a suspended subscription grants no access; only a successful charge makes it active again | a status outside the enum - `status` has no setter, only `applyLocalStatus` |
+| `WebhookDelivery` (root) | `provider_delivery_id`, the envelope | one delivery per provider delivery id | - |
+| `Billing::StatusMap` (domain service) | - | a provider status with no mapping is recorded, never guessed | - |
+
 ## Surface
 
 | Route | In | Out | Status | Who |

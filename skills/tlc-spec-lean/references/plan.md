@@ -167,8 +167,9 @@ a question.
 
 # What is being built
 
-Three sections, each with a rule about what stays out: no component catalogue, no columns, no
-types. Those are reversible and settled in the diff.
+Three sections - four when the feature creates or changes an aggregate - each with a rule about
+what stays out: no component catalogue, no columns, no types. Those are reversible and settled in
+the diff.
 
 ## Shape - the path and what it disturbs
 
@@ -202,6 +203,27 @@ each reader that will see the new data. Each reader named gets a criterion or an
 row.
 
 When stored data changes, the `erDiagram` also carries the one-way constraints `Landing` settled.
+
+## Domain model - only when the feature creates or changes an aggregate
+
+Only when the feature creates or changes an aggregate, a value object with a rule, or a domain
+service. Before the first function, three questions have an answer: which aggregate, which
+invariant it protects, which illegal state its types refuse. Here they have one place, so the person
+approving the plan reads the model instead of rebuilding it from `Landing`, the criteria and the
+`stateDiagram`.
+
+A `classDiagram` of the aggregate roots, value objects, enums and domain services: composition
+(`*--`) inside a boundary, reference by id (`..>`) between aggregates, and the methods that change
+state - no getters, no columns. Then one row per aggregate or domain service, under
+`Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made
+unrepresentable` - the headers in English like the section headings, the cells in the project's
+language. A domain service writes `-` where it has no boundary or no illegal state; every row names
+an invariant, or it is not an aggregate.
+
+Each invariant is a rule (rule 2): it gets a test that fails if the rule is wrong. An illegal state
+the types already refuse - no setter, a type that only takes four digits - gets no test, because
+the code that would build it does not compile; the plan review is where it is checked. Columns,
+field types and the schema stay out: what is one-way there is a `Landing` door.
 
 ## Surface - the signature
 
@@ -291,6 +313,27 @@ stateDiagram-v2
     [*] --> <State>
     <State> --> <State> : <trigger>
 ```
+
+<Only when the feature creates or changes an aggregate:>
+
+## Domain model
+
+```mermaid
+classDiagram
+    class <Aggregate> {
+        <<aggregate root>>
+        <command>(<input>)
+    }
+    class <ValueObject> {
+        <<value object>>
+    }
+    <Aggregate> *-- <ValueObject>
+    <Aggregate> ..> <OtherAggregate> : <OtherAggregate>Id
+```
+
+| Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made unrepresentable |
+| --- | --- | --- | --- |
+| `<Aggregate>` (root) | <what lives inside> | <the rule it never lets break> | <the state its types refuse, or `-`> |
 
 ## Surface
 

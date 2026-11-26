@@ -58,6 +58,8 @@ What it checks:
   WARN   - no Sources section ('nothing' is valid, a missing section is not)
   ERROR  - a Shape path with no mermaid drawing, or a module on the path the drawings never name
   ERROR  - a Shape with no `erDiagram` and no `Data: none - <why>`, or an erDiagram with no `New:` line
+  ERROR  - a Domain model section with no `classDiagram`, a table without the four columns, no rows,
+           or a row whose `Invariants it protects` is blank (the section itself is optional)
   ERROR  - a capture under captures/ that the plan does not show as an image (`![..](captures/..)`)
   WARN   - a path hop, or a flowchart node, naming a module marked neither existing
            nor as a Landing door
@@ -428,6 +430,47 @@ def _drawn(name, text):
     return any(x and x.lower() in text for x in (name, base, stem))
 
 
+# Local patch (toolbox UPSTREAM.md item 5): the Domain model table, in this order. Headers stay in
+# English like section headings; the prose in the cells follows the project.
+DOMAIN_MODEL_COLUMNS = (
+    "aggregate or service",
+    "inside the boundary",
+    "invariants it protects",
+    "illegal state made unrepresentable",
+)
+EMPTY_CELL_RE = re.compile(r"^[\s\-\u2013\u2014]*$")
+
+
+def check_domain_model(lines, plan_path):
+    """Local patch (toolbox UPSTREAM.md item 5). The section is optional - the script cannot tell a
+    feature with an aggregate from one without - but once written it answers the three questions
+    the global AGENTS.md asks before the first function: the aggregate, the invariant it protects,
+    the illegal state its types refuse. A row with no invariant is a class, not an aggregate.
+    Example: check_domain_model(lines, "plan.md") == [] for the template's filled section."""
+    bounds = section_bounds(lines, "Domain model")
+    if bounds is None:
+        return []
+    errors = []
+    if not any(kind == "classDiagram" for _, kind, _ in mermaid_blocks(raw_lines(plan_path), bounds)):
+        errors.append("Domain model has no `classDiagram` - draw the aggregates, value objects and domain "
+                      "services, composition inside a boundary and reference by id between them")
+    header = next((split_row(lines[i]) for i in range(*bounds) if lines[i].strip().startswith("|")), [])
+    if tuple(h.lower() for h in header[:4]) != DOMAIN_MODEL_COLUMNS:
+        wanted = " | ".join(c.capitalize() for c in DOMAIN_MODEL_COLUMNS)
+        return errors + [f"Domain model table needs the columns `{wanted}`, in English, in that order - "
+                         f"got `{' | '.join(header) or 'no table'}`"]
+    rows = first_table(lines, bounds)
+    if not rows:
+        errors.append("Domain model table has no rows - one per aggregate or domain service")
+    for r in rows:
+        cells = split_row(r)
+        invariants = cells[2] if len(cells) > 2 else ""
+        if EMPTY_CELL_RE.match(invariants):
+            errors.append(f"Domain model '{cells[0][:40]}' names no invariant - say which rule it protects, "
+                          "or it is not an aggregate")
+    return errors
+
+
 def check_drawings(lines, shape, plan_path):
     """The plan is read by the person who approves it, and a drawing is read before a list. The path
     and the data are drawn, and the drawing names the modules the list does, so the two cannot
@@ -636,6 +679,7 @@ def check_file(path):
     shape = present.get("Shape")
     if shape:
         errors += check_drawings(lines, shape, path)
+    errors += check_domain_model(lines, path)
 
     # Stored shape: no columns, no types. In mermaid that detail is an attribute block.
     if shape:
