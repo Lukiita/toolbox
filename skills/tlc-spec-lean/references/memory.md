@@ -1,7 +1,6 @@
 # Memory
 
-Decisions that constrain future features outlive a session in `.specs/STATE.md`, and what the
-system guarantees today in `.specs/capabilities/`. The user's
+Decisions that constrain future features outlive a session in `.specs/STATE.md`. The user's
 request is in the feature's `request.md`. Where a feature stopped is in its `plan.md` lines - in
 `request.md`'s, when the change skipped the plan - and in git.
 
@@ -56,12 +55,3 @@ when there is no plan:
 | `**Review:** sent at <hash>` and no `review.md` | wait for the reviewer; send it again only when it cannot return - a new session - and say so on the line |
 | `review.md` and no `**Fix pass:** done` line | the fix pass |
 | `**Fix pass:** done` | the report |
-
-## `.specs/capabilities/`
-
-The living behavioural contract, one file per domain area, owned by the `capability-sync` skill.
-Plan reads the areas a feature touches ([plan.md](plan.md)). The fix pass folds the plan's criteria
-in through that skill, in its own commit, so the tree ends clean and a resume never syncs twice
-([review.md](review.md)); a criterion a finding you keep names stays out, and a change that skipped
-the plan folds nothing - `request.md` holds no criteria. Every file there must pass its
-`capabilities.py check`.

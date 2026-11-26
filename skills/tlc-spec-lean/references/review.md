@@ -52,9 +52,7 @@ report.
 
 Read `review.md`. Fix what you agree is wrong in one pass, under the same rules as the build. Then
 write the `**Fix pass:**` line - `done - <what it changed>`, or `done - no changes needed` - in the
-file that holds the `**Review:**` line. With a plan, fold its criteria into `.specs/capabilities/`
-through the `capability-sync` skill before that commit, leaving out any criterion a finding you keep
-names ([memory.md](memory.md)). Then commit. The line, not a later commit, records that the
+file that holds the `**Review:**` line, and commit. The line, not a later commit, records that the
 pass happened, so an empty review closes too; it still ends with the build committed and the tree
 clean, including what the reviewer's browser left behind.
 

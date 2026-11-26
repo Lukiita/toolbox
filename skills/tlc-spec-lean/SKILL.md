@@ -69,7 +69,6 @@ These hold even if no reference file is read.
 ```
 .specs/
 ├── STATE.md                    # Decisions log (AD-NNN)
-├── capabilities/               # what the system guarantees today - capability-sync skill, synced in the fix pass
 └── features/<feature>/
     ├── request.md              # the user's request, verbatim, saved before anything else
     ├── plan.md                 # problem, shape, surface, doors, criteria; approval, settled, review, fix pass lines
@@ -90,7 +89,7 @@ review with `request.md` as its only spec. `request.md` then carries the `**Revi
 | Build | slice by slice, S1 first: code and tests through every layer, used in a browser when there is a screen, one commit per slice | [build.md](references/build.md) |
 | Review | a fresh sub-agent's verdict, then one fix pass and the report | [review.md](references/review.md) |
 
-Decisions, capabilities and resuming: [memory.md](references/memory.md).
+Decisions and resuming: [memory.md](references/memory.md).
 
 ## Scripts
 
@@ -103,7 +102,6 @@ Windows, where `python3` may be the Microsoft Store alias, run `python` or `py -
 | --- | --- |
 | Before presenting the plan | `validate_plan.py <feature>` |
 | Before each commit, when the repo uses Conventional Commits or has no convention | `check_commit.py --message "<msg>"` - it also names untracked files and what follows the commit |
-| In the fix pass, before its commit, when there is a plan | the `capability-sync` skill, then `python3 <skill-dir>/../capability-sync/scripts/capabilities.py check` ([memory.md](references/memory.md)) |
 | After editing a script or the plan template | `selftest.py` |
 
 ## Requires
