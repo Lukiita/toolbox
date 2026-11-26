@@ -121,7 +121,10 @@ it gets no agent of its own.
 
 **Reviewer B — project rules.** Checks the diff against the repo's written rules
 — `CLAUDE.md` / `AGENTS.md`, at the root and in the touched directories — and
-`.specs/capabilities/`, when they exist. Six questions:
+`.specs/capabilities/` when the repo runs tlc-spec-driven: its `AGENTS.md` names
+the tlc flow, and without that line it is tlc-spec-driven. A repo running
+tlc-spec-lean keeps no capabilities, so a folder left there is stale - skip it.
+Six questions:
 
 1. Was a written rule violated? **Quote the rule verbatim** — a rule that cannot
    be quoted probably does not exist.
@@ -155,8 +158,8 @@ it gets no agent of its own.
    touched file nothing there explains — a deleted queue, a schema or config
    change, a rewritten neighbour function, a refactor hitching a ride — is
    drift: the agent passed through and altered what it was not asked to. Files
-   the tlc flow itself writes (`.specs/STATE.md`, `.specs/capabilities/`, the
-   feature's own artifacts) are in scope by definition. Quote the hunk and say
+   the tlc flow itself writes (`.specs/STATE.md`, the feature's own artifacts,
+   and `.specs/capabilities/` in tlc-spec-driven) are in scope by definition. Quote the hunk and say
    which purpose it fails to serve.
 
 Without the files behind questions 1 and 2, the other four and common sense

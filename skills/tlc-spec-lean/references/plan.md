@@ -21,8 +21,6 @@ Artifacts).
   and the Shape use its canonical terms, never a synonym it marks _Avoid_. A new term, or a clash
   with one, is settled through `domain-modeling` before the plan is presented - a plan in
   off-glossary words bakes the ambiguity into every check.
-- Read `.specs/capabilities/` for the areas this feature touches: what the system guarantees
-  today. A criterion that changes a guarantee is a change underneath - name it in `Shape`.
 - Open every binding source in full - every capture, frame and state - before the first
   criterion.
 
