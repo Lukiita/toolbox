@@ -439,19 +439,23 @@ DOMAIN_MODEL_COLUMNS = (
     "invariants it protects",
     "illegal state made unrepresentable",
 )
-# An invariant cell that says nothing: blank, a dash (in a code span too), "none", or the template's
-# own `<placeholder>` left unfilled.
+# An invariant cell that says nothing: blank, a dash (in a code span too), a "none" word in English or
+# Portuguese, a to-do marker, or the template's own `<placeholder>` left unfilled. A real rule that
+# names fields in angle brackets - `<total> equals the sum of <items>` - is not a placeholder.
 EMPTY_INVARIANT_RE = re.compile(
-    r"^[\s`*_\-\u2013\u2014]*(?:none|nothing|n/a|nenhum|nenhuma)?[\s`*_.\-\u2013\u2014]*$", re.IGNORECASE
+    r"^[\s`*_.?\-\u2013\u2014]*(?:none|nothing|n/a|tbd|todo|nenhum|nenhuma|nada)?[\s`*_.?\-\u2013\u2014]*$",
+    re.IGNORECASE,
 )
-# Only the template's own heading opens the section: a title or a `### Domain model notes` under
-# Shape that merely starts with the words would make an optional section look present.
-DOMAIN_MODEL_HEADING_RE = re.compile(r"^##\s+Domain model\s*$", re.IGNORECASE)
+INVARIANT_PLACEHOLDER_RE = re.compile(r"^\s*`?<[^<>]+>`?\s*$")
+# `## Domain model` (or `###`), alone or followed by a separator - ` - billing`, `:`. A title, or a
+# `### Domain model notes` under Shape, only starts with the words and does not open the section.
+DOMAIN_MODEL_HEADING_RE = re.compile(r"^#{2,3}\s+Domain model\s*(?:$|[-:(\u2013\u2014])", re.IGNORECASE)
 CLASS_DIAGRAM_RE = re.compile(r"^\s*classDiagram(?:-v2)?\b")
 
 
 def domain_model_bounds(lines):
-    """(start, end) of the body under `## Domain model`, or None; the next `#` or `##` heading closes it."""
+    """(start, end) of the body under the Domain model heading, or None; a `#` or `##` heading closes it.
+    Example: domain_model_bounds(["## Domain model - billing", "x", "## Surface"]) == (1, 2)"""
     start = next((i + 1 for i, ln in enumerate(lines) if DOMAIN_MODEL_HEADING_RE.match(ln.strip())), None)
     if start is None:
         return None
@@ -459,19 +463,36 @@ def domain_model_bounds(lines):
     return (start, end)
 
 
+def _domain_model_drawn(raw, bounds):
+    """True when a `classDiagram` line sits in the section - read from the raw file, so a fence written
+    ```Mermaid or a `%%` comment before the diagram's kind still counts.
+    Example: _domain_model_drawn(["```mermaid", "classDiagram-v2", "```"], (0, 3)) is True"""
+    return any(CLASS_DIAGRAM_RE.match(raw[i]) for i in range(*bounds))
+
+
+def _empty_invariant_errors(rows):
+    """One error per row whose `Invariants it protects` cell says nothing.
+    Example: _empty_invariant_errors(["| `A` (root) | x | none | - |"]) names `A` and 'none'"""
+    errors = []
+    for cells in (split_row(r) for r in rows):
+        invariant = cells[2] if len(cells) > 2 else ""
+        if EMPTY_INVARIANT_RE.match(invariant) or INVARIANT_PLACEHOLDER_RE.match(invariant):
+            errors.append(f"Domain model '{cells[0][:40]}' names no invariant (got '{invariant[:40]}') - "
+                          "write the rule it protects; a row that guards nothing does not belong here")
+    return errors
+
+
 def check_domain_model(lines, plan_path):
     """Local patch (toolbox UPSTREAM.md item 5). The section is optional - the script cannot tell a
     feature with an aggregate from one without - but once written it answers the three questions
     the global AGENTS.md asks before the first function: the aggregate, the invariant it protects,
-    the illegal state its types refuse. A row with no invariant is a class, not an aggregate.
+    the illegal state it refuses.
     Example: check_domain_model(lines, "plan.md") == [] for the template's filled section."""
     bounds = domain_model_bounds(lines)
     if bounds is None:
         return []
     errors = []
-    # Scan the whole block: a `%%` comment or a front-matter title may come before the diagram's kind.
-    blocks = mermaid_blocks(raw_lines(plan_path), bounds)
-    if not any(CLASS_DIAGRAM_RE.match(x) for _, _, body in blocks for x in body):
+    if not _domain_model_drawn(raw_lines(plan_path), bounds):
         errors.append("Domain model has no `classDiagram` - draw the aggregates, value objects and domain "
                       "services, composition inside a boundary and reference by id between them")
     header = next((split_row(lines[i]) for i in range(*bounds) if lines[i].strip().startswith("|")), [])
@@ -481,14 +502,8 @@ def check_domain_model(lines, plan_path):
                          f"got `{' | '.join(header) or 'no table'}`"]
     rows = first_table(lines, bounds)
     if not rows:
-        errors.append("Domain model table has no rows - one per aggregate or domain service")
-    for r in rows:
-        cells = split_row(r)
-        invariants = cells[2] if len(cells) > 2 else ""
-        if EMPTY_INVARIANT_RE.match(invariants) or PLACEHOLDER_RE.match(invariants):
-            errors.append(f"Domain model '{cells[0][:40]}' names no invariant - say which rule it protects, "
-                          "or it is not an aggregate")
-    return errors
+        return errors + ["Domain model table has no rows - one per aggregate or domain service"]
+    return errors + _empty_invariant_errors(rows)
 
 
 def check_drawings(lines, shape, plan_path):

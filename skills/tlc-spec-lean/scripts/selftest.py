@@ -160,6 +160,23 @@ CASES = [
     ("validate_plan", "plan.md", "a Domain model row whose invariant reads none",
      lambda s: s.replace("| one delivery per provider delivery id |", "| none |", 1),
      1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model row whose invariant reads nada",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| nada |", 1),
+     1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model row whose invariant reads TBD",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| TBD |", 1),
+     1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model row whose invariant is the placeholder in a code span",
+     lambda s: s.replace("| one delivery per provider delivery id |", "| `<the rule it never lets break>` |", 1),
+     1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model heading with a suffix still gets checked",
+     lambda s: s.replace("## Domain model\n", "## Domain model - billing\n", 1)
+                .replace("| one delivery per provider delivery id |", "| - |", 1),
+     1, "names no invariant"),
+    ("validate_plan", "plan.md", "a Domain model heading with a colon still gets checked",
+     lambda s: s.replace("## Domain model\n", "## Domain model:\n", 1)
+                .replace("| one delivery per provider delivery id |", "| - |", 1),
+     1, "names no invariant"),
     ("validate_plan", "plan.md", "a Surface table with no Who column",
      lambda s: s.replace("| Status | Who |\n| --- | --- | --- | --- | --- |", "| Status |\n| --- | --- | --- | --- |")
                 .replace(" | the provider, with a valid signature; anything else gets `401` |", " |"),
@@ -481,6 +498,11 @@ NEGATIVE_CONTROLS = [
      {"plan.md": lambda s: re.sub(r"## Domain model\n.*?\n## Surface", "## Surface", s, count=1, flags=re.S)
                             .replace("**Changes underneath**", "### Domain model notes\n\nNo aggregate changes.\n\n"
                                      "**Changes underneath**", 1)}),
+    ("validate_plan", "an invariant naming fields in angle brackets is accepted",
+     {"plan.md": lambda s: s.replace("| one delivery per provider delivery id |",
+                                     "| <total> equals the sum of <items> |", 1)}),
+    ("validate_plan", "a Domain model diagram fenced as Mermaid with a capital is accepted",
+     {"plan.md": lambda s: s.replace("```mermaid\nclassDiagram\n", "```Mermaid\nclassDiagram\n", 1)}),
     ("validate_plan", "a plan titled with the words Domain model is accepted",
      {"plan.md": lambda s: s.replace("# Dunning on failed charge", "# Domain model for dunning", 1)}),
     # Local patch (toolbox UPSTREAM.md item 4): `\|` is a pipe inside a cell, as GFM reads it, and a
