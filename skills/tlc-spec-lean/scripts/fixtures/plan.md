@@ -82,8 +82,8 @@ classDiagram
 
 | Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made unrepresentable |
 | --- | --- | --- | --- |
-| `Subscription` (root) | `status` | a suspended subscription grants no access; only a successful charge makes it active again | a status outside the enum - `status` has no setter, only `applyLocalStatus` |
-| `WebhookDelivery` (root) | `provider_delivery_id`, the envelope | one delivery per provider delivery id | - |
+| `Subscription` (root) | the subscription's status | a suspended subscription grants no access; only a successful charge makes it active again | a status outside the enum - `status` has no setter, only `applyLocalStatus` |
+| `WebhookDelivery` (root) | the provider's delivery id, the envelope | one delivery per provider delivery id | - |
 | `Billing::StatusMap` (domain service) | - | a provider status with no mapping is recorded, never guessed | - |
 
 ## Surface

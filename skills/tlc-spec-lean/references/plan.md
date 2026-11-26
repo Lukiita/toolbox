@@ -167,9 +167,9 @@ a question.
 
 # What is being built
 
-Three sections - four when the feature creates or changes an aggregate - each with a rule about
-what stays out: no component catalogue, no columns, no types. Those are reversible and settled in
-the diff.
+Three sections, each with a rule about what stays out: no component catalogue, no columns, no
+types. Those are reversible and settled in the diff. A fourth, Domain model, comes only when the feature creates or changes an aggregate, a value object with a rule, or a domain service:
+it names the domain's classes on purpose, and still keeps columns and field types out.
 
 ## Shape - the path and what it disturbs
 
@@ -204,26 +204,30 @@ row.
 
 When stored data changes, the `erDiagram` also carries the one-way constraints `Landing` settled.
 
-## Domain model - only when the feature creates or changes an aggregate
+## Domain model - only when the feature creates or changes an aggregate, a value object with a rule, or a domain service
 
-Only when the feature creates or changes an aggregate, a value object with a rule, or a domain
-service. Before the first function, three questions have an answer: which aggregate, which
+Before the first function, three questions have an answer: which aggregate, which
 invariant it protects, which illegal state its types refuse. Here they have one place, so the person
 approving the plan reads the model instead of rebuilding it from `Landing`, the criteria and the
 `stateDiagram`.
 
 A `classDiagram` of the aggregate roots, value objects, enums and domain services: composition
 (`*--`) inside a boundary, reference by id (`..>`) between aggregates, and the methods that change
-state - no getters, no columns. Then one row per aggregate or domain service, under
-`Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made
-unrepresentable` - the headers in English like the section headings, the cells in the project's
-language. A domain service writes `-` where it has no boundary or no illegal state; every row names
-an invariant, or it is not an aggregate.
+state - no getters, no columns. Then one row per aggregate or domain service, under this header,
+in English like the section headings, with the cells in the project's language:
+
+`| Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made unrepresentable |`
+
+Every row, a domain service's too, names the rule it protects. A domain service writes `-` where it
+has no boundary or no illegal state. Inside the boundary names domain parts - the status, the
+delivery id - never column names.
 
 Each invariant is a rule (rule 2): it gets a test that fails if the rule is wrong. An illegal state
-the types already refuse - no setter, a type that only takes four digits - gets no test, because
-the code that would build it does not compile; the plan review is where it is checked. Columns,
-field types and the schema stay out: what is one-way there is a `Landing` door.
+refused when the program runs - a value object whose constructor rejects a fifth digit, an installment
+11 of 10 - is a rule too: its test tries to build that state and expects the refusal. Only one
+refused before the program runs gets no test: there is no setter to call, no constructor that takes
+the value, so the code that would build it does not compile, and the plan review is where it is
+checked. Columns, field types and the schema stay out: what is one-way there is a `Landing` door.
 
 ## Surface - the signature
 
@@ -314,7 +318,7 @@ stateDiagram-v2
     <State> --> <State> : <trigger>
 ```
 
-<Only when the feature creates or changes an aggregate:>
+<Only when the feature creates or changes an aggregate, a value object with a rule, or a domain service:>
 
 ## Domain model
 
