@@ -9,8 +9,6 @@ metadata:
 
 Feature specs freeze: `.specs/features/X/spec.md` describes one change and never moves again. Nothing merges those deltas into a picture of what the system does **today**. Capabilities are that picture — one file per durable domain area, updated every time a feature's verified behavior lands. They are what lets a Verifier check that a new feature didn't break an old guarantee ("regression anchoring"), and what future Specify/Design phases read as ground truth.
 
-tlc-spec-lean does not call this skill (toolbox decision, 2026-11-25): what paid off here was tlc-spec-driven's Verifier probing old guarantees, and lean's reviewer runs no such check. A lean repo that already keeps `.specs/capabilities/` can still edit it through this skill by hand.
-
 Two rules follow from that purpose:
 
 - **Only verified behavior enters.** The input is a feature's verification evidence — `validation.md`'s evidence table in tlc-spec-driven — not its intentions. If a criterion didn't pass, it doesn't sync.

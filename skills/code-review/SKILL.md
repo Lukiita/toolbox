@@ -155,8 +155,8 @@ it gets no agent of its own.
    touched file nothing there explains — a deleted queue, a schema or config
    change, a rewritten neighbour function, a refactor hitching a ride — is
    drift: the agent passed through and altered what it was not asked to. Files
-   the tlc flow itself writes (`.specs/STATE.md`, `.specs/capabilities/`, the
-   feature's own artifacts) are in scope by definition. Quote the hunk and say
+   the tlc flow itself writes (`.specs/STATE.md`, the feature's own artifacts,
+   and `.specs/capabilities/` in tlc-spec-driven) are in scope by definition. Quote the hunk and say
    which purpose it fails to serve.
 
 Without the files behind questions 1 and 2, the other four and common sense
