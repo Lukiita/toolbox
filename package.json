@@ -1,6 +1,6 @@
 {
   "name": "@lukiita/toolbox",
-  "version": "2.0.1",
+  "version": "3.0.0",
   "description": "Lucas's agent toolbox as a versioned library: skills, agent hooks and the quality ratchet, config-driven.",
   "license": "MIT",
   "type": "module",
