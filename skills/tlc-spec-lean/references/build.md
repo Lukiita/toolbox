@@ -47,7 +47,9 @@ out to be a layer ("the API", "the screen"), cut it again by outcome before buil
 ## Tests
 
 Write each test from a criterion and its concrete value, not from the implementation (rule 2). Each
-rule the `Shape` puts in the tested layer has a test that would fail if the rule were wrong:
+rule the `Shape` puts in the tested layer - and each invariant, and each illegal state refused when
+the program runs, in the plan's `## Domain model` (local patch, toolbox UPSTREAM.md item 5) - has a
+test that would fail if the rule were wrong:
 both sides of a filter, a tie in a sort, a match in the middle of a string. Extra tests are welcome.
 
 Each slice's tests run green before its commit. Before the last commit, run the repo's own test,

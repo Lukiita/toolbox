@@ -168,8 +168,9 @@ a question.
 # What is being built
 
 Three sections, each with a rule about what stays out: no component catalogue, no columns, no
-types. Those are reversible and settled in the diff. A fourth, Domain model, comes only when the feature creates or changes an aggregate, a value object with a rule, or a domain service:
-it names the domain's classes on purpose, and still keeps columns and field types out.
+types. Those are reversible and settled in the diff. A fourth, Domain model, comes only when the
+feature creates or changes an aggregate or a domain service: it names the domain's classes on
+purpose, and still keeps columns and field types out.
 
 ## Shape - the path and what it disturbs
 
@@ -204,10 +205,12 @@ row.
 
 When stored data changes, the `erDiagram` also carries the one-way constraints `Landing` settled.
 
-## Domain model - only when the feature creates or changes an aggregate, a value object with a rule, or a domain service
+## Domain model - only when the feature creates or changes an aggregate - a value object inside one included - or a domain service
 
-Before the first function, three questions have an answer: which aggregate, which
-invariant it protects, which illegal state its types refuse. Here they have one place, so the person
+A value object with a rule lives inside an aggregate's boundary, and that aggregate is what keeps
+the rule: changing the value object changes the aggregate, and its row is the aggregate's. Before
+the first function, three questions have an answer: which aggregate, which invariant it protects,
+which illegal state it refuses. Here they have one place, so the person
 approving the plan reads the model instead of rebuilding it from `Landing`, the criteria and the
 `stateDiagram`.
 
@@ -318,7 +321,7 @@ stateDiagram-v2
     <State> --> <State> : <trigger>
 ```
 
-<Only when the feature creates or changes an aggregate, a value object with a rule, or a domain service:>
+<Only when the feature creates or changes an aggregate - a value object inside one included - or a domain service:>
 
 ## Domain model
 
@@ -337,7 +340,7 @@ classDiagram
 
 | Aggregate or service | Inside the boundary | Invariants it protects | Illegal state made unrepresentable |
 | --- | --- | --- | --- |
-| `<Aggregate>` (root) | <what lives inside> | <the rule it never lets break> | <the state its types refuse, or `-`> |
+| `<Aggregate>` (root) | <what lives inside> | <the rule it never lets break> | <the state it refuses, or `-`> |
 
 ## Surface
 

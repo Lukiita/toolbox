@@ -72,7 +72,7 @@ These hold even if no reference file is read.
 ├── capabilities/               # what the system guarantees today - capability-sync skill, synced in the fix pass
 └── features/<feature>/
     ├── request.md              # the user's request, verbatim, saved before anything else
-    ├── plan.md                 # problem, shape, domain model (only with an aggregate), surface, doors, criteria; approval, settled, review, fix pass lines
+    ├── plan.md                 # problem, shape, domain model (with an aggregate or domain service), surface, doors, criteria; approval, settled, review, fix pass lines
     ├── captures/               # binding source files
     └── review.md               # the reviewer's verdict and findings
 ```
